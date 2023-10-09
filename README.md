@@ -1,2 +1,2 @@
-# OLE
+# OLÉ
 Online Learning Emulator
