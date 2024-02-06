@@ -186,6 +186,8 @@ def test_emulator(self,emulator_state):
 
             emulator_sample_loglikes.append(sum(likelihoods))
 
+        emulator_sample_loglikes = np.array(emulator_sample_loglikes)
+
         # check whether the emulator is good enough
         if not self.emulator.check_quality_criterium(emulator_sample_loglikes):
             print("Emulator not good enough")
