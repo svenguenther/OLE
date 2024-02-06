@@ -1,5 +1,5 @@
 # This file contains a plain theory class that can be used to compute observables.
-from .utils.base import BaseClass
+from OLE.utils.base import BaseClass
 
 class Theory(BaseClass):
 

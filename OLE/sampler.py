@@ -191,17 +191,14 @@ class Sampler(BaseClass):
 
         self.increment(self.logger)
         return state['loglike']
-
     
-    def compute_loglike_from_parameters_differentiable(self, parameters):
+    def emulate_loglike_from_parameters_differentiable(self, parameters):
+        # this function is similar to the compute_loglike_from_parameters, but it returns the loglike and does not automaticailly add the state to the emulator. Thus it is differentiable.
+        # if RNG is not None, we provide the mean estimate, otherwise we sample from the emulator
         self.start()
 
         # rescale the parameters
         parameters = parameters * self.proposal_lengths
-        print(parameters)
-        # every 100 self.n calls, state the n
-        if self.n % 100 == 0:
-            self.info("Current sampler call: %d", self.n)
 
         # Run the sampler.
         state = {'parameters': {}, 'quantities': {}, 'loglike': None}
@@ -210,69 +207,68 @@ class Sampler(BaseClass):
         for i, key in enumerate(self.parameter_dict.keys()):
             state['parameters'][key] = jnp.array([parameters[i]])
 
-        self.debug("Calculating loglike for parameters: %s", state['parameters'])
-
         # compute logprior
         logprior = self.compute_logprior(state)
         self.debug("logprior: %f for parameters: %s", logprior, state['parameters'])
-
-        # if logprior < -999999999999999999999999999999999.:
-        #     self.increment(self.logger)
-        #     return logprior
-
-        # compute the observables. First check whether emulator is already trained
-        if not self.emulator.trained:
-
-            self.debug("emulator not trained yet -> use theory code")
-            state = self.theory.compute(state)
-            self.debug("state after theory: %s for parameters: %s", state['quantities'], state['parameters'])
-            
-            state = self.likelihood.loglike_state(state)
-            self.debug("loglike after theory: %f for parameters: %s", state['loglike'][0], state['parameters'])
-
-            state['loglike'] = state['loglike'] + logprior
-            self.emulator.add_state(state)
-        else:
-            # here we need to test the emulator for its performance
-            emulator_sample_states = self.emulator.emulate_samples(state['parameters'], self.emulator.hyperparameters['N_quality_samples'])
-            emulator_sample_loglikes = jnp.array([self.likelihood.loglike_state(_)['loglike'] for _ in emulator_sample_states])
-
-
-            
-            # Add the point to the quality points
-            # self.emulator.add_quality_point(state['parameters'])
         
-            self.debug("emulator available - check emulation performance")
-            state = self.emulator.emulate(state['parameters'])
-            self.debug("state after emulator: %s for parameters: %s", state['quantities'], state['parameters'])
+        self.debug("emulator available - check emulation performance")
+        state = self.emulator.emulate(state['parameters'])
+        self.debug("state after emulator: %s for parameters: %s", state['quantities'], state['parameters'])
 
-            state = self.likelihood.loglike_state(state)
-            self.debug("loglike after theory: %f for parameters: %s", state['loglike'][0], state['parameters'])
+        state = self.likelihood.loglike_state(state)
+        self.debug("loglike after theory: %f for parameters: %s", state['loglike'][0], state['parameters'])
 
-            state['loglike'] = state['loglike'] + logprior
-            self.debug("emulator prediction: %s", state['quantities'])
-
-
-        # if we have a minimal number of states in the cache, we can train the emulator
-        if (len(self.emulator.data_cache.states) >= self.emulator.hyperparameters['min_data_points']) and not self.emulator.trained:
-            self.debug("Training emulator")
-            self.emulator.train()
-            self.debug("Emulator trained")
+        state['loglike'] = state['loglike'] + logprior
+        self.debug("emulator prediction: %s", state['quantities'])
 
         self.increment(self.logger)
         return state['loglike']
 
 
 
+    def sample_emulate_loglike_from_parameters_differentiable(self, parameters, N=1, key=None):
+        # this function is similar to the compute_loglike_from_parameters, but it returns the loglike and does not automaticailly add the state to the emulator. Thus it is differentiable.
+        # if RNG is not None, we provide the mean estimate, otherwise we sample from the emulator
+        self.start()
+
+        # rescale the parameters
+        parameters = parameters * self.proposal_lengths
+
+        # Run the sampler.
+        state = {'parameters': {}, 'quantities': {}, 'loglike': None}
+
+        # translate the parameters to the state
+        for i, key in enumerate(self.parameter_dict.keys()):
+            state['parameters'][key] = jnp.array([parameters[i]])
+
+        # compute logprior
+        logprior = self.compute_logprior(state)
+        self.debug("logprior: %f for parameters: %s", logprior, state['parameters'])
+        
+        self.debug("emulator available - check emulation performance")
+        states = self.emulator.emulate_samples(state['parameters'], N)
+
+        loglikes = [self.likelihood.loglike_state(_)['loglike'] + logprior for _ in states]
+
+        self.increment(self.logger)
+        return loglikes
+
+
+
+
     def compute_total_loglike_from_parameters(self, parameters):
         res = self.compute_loglike_from_parameters(parameters)
-        print(res)
         return res.sum()
     
-    def compute_total_loglike_from_parameters_differentiable(self, parameters):
-        res = self.compute_loglike_from_parameters_differentiable(parameters)
-        print(res)
+    def emulate_total_loglike_from_parameters_differentiable(self, parameters):
+        res = self.emulate_loglike_from_parameters_differentiable(parameters)
         return res.sum()
+    
+    def sample_emulate_total_loglike_from_parameters_differentiable(self, parameters, N=1):
+        res = [_.sum() for _ in self.sample_emulate_loglike_from_parameters_differentiable(parameters, N=N)]
+        print('res')
+        print(res)
+        return res
 
     def compute_logprior(self, state):
         # To be implemented.
@@ -440,7 +436,7 @@ class NUTSSampler(Sampler):
         self.info("Emulator trained - Start NUTS sampler now!")
 
         # create differentiable loglike
-        self.logp_and_grad = jax.jit(jax.value_and_grad(self.compute_total_loglike_from_parameters_differentiable))
+        self.logp_and_grad = jax.jit(jax.value_and_grad(self.emulate_total_loglike_from_parameters_differentiable))
 
         self.theta0 = bestfit
 
@@ -467,7 +463,7 @@ class NUTSSampler(Sampler):
 
         thetas[0] = bestfit
 
-        testing_flag = Ture
+        testing_flag = True
 
         # run the warmup
         for i in range(nrounds):
@@ -510,19 +506,25 @@ class NUTSSampler(Sampler):
 
                 # If we want to do some performance checks, we can do it here
                 #
-
-                loglike = self.compute_total_loglike_from_parameters(thetas[i*self.NUTS_batch_size+j])
+                print('thetas')
+                print(thetas[i*self.NUTS_batch_size+j])
+                loglike, _ = self.logp_and_grad(thetas[i*self.NUTS_batch_size+j])
+                logp[i*self.NUTS_batch_size+j] = loglike
                 print('loglike')
                 print(loglike)
 
+                # sample multiple points from the emulator and check the performance
+
                 if testing_flag:
                     # here we need to test the emulator for its performance
+                    emulator_sample_states = self.sample_emulate_total_loglike_from_parameters_differentiable(thetas[i*self.NUTS_batch_size+j], self.emulator.hyperparameters['N_quality_samples'])
+
                     emulator_sample_states = self.emulator.emulate_samples(state['parameters'], self.emulator.hyperparameters['N_quality_samples'])
                     emulator_sample_loglikes = jnp.array([self.likelihood.loglike_state(_)['loglike'] for _ in emulator_sample_states])
             
             # check whether the emulator is good enough
             if not self.emulator.check_quality_criterium(emulator_sample_loglikes):
-
+                return False
                 
                 
 

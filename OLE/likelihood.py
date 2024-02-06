@@ -1,5 +1,5 @@
 # This file contains a plain likelihood class that can be used to compute the loglikelihood.
-from .utils.base import BaseClass
+from OLE.utils.base import BaseClass
 
 class Likelihood(BaseClass):
     
