@@ -150,6 +150,9 @@ class data_processor(BaseClass):
 
         # if there is a plotting directory, plot the raw output data and the normalized output data
         if self.hyperparameters['plotting_directory'] is not None:
+            # check that the directory exists
+            if not os.path.exists(self.hyperparameters['plotting_directory']):
+                os.makedirs(self.hyperparameters['plotting_directory'])
             data_plot_raw(self.output_data_raw, self.quantity_name, self.hyperparameters['plotting_directory']+ "/raw_data_"+self.quantity_name)
             data_plot_normalized(self.output_data_normalized, self.quantity_name, self.hyperparameters['plotting_directory']+ "/normalized_data_"+self.quantity_name)
 

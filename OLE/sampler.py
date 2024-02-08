@@ -14,6 +14,7 @@ import jax
 import fasteners
 from jax.numpy import ndarray
 import jax.lax as lax
+import random
 
 import numpy as np
 
@@ -76,13 +77,19 @@ class Sampler(BaseClass):
 
         # save proposal lengths. They are useful to normalize the parameters
         self.proposal_lengths = jnp.ones(len(self.parameter_dict))
+        self.proposal_means = jnp.zeros(len(self.parameter_dict))
         for i, key in enumerate(self.parameter_dict.keys()):
             if type(self.parameter_dict[key]) is list:
-                continue #self.proposal_lengths = 1#self.proposal_lengths.at[i].set(self.parameter_dict[key])
+                continue 
             elif 'proposal' in list(self.parameter_dict[key].keys()):
                 self.proposal_lengths = self.proposal_lengths.at[i].set(self.parameter_dict[key]['proposal'])
             else:
                 raise ValueError("Parameter %s is not defined correctly. Please check the parameter_dict."%key)
+            
+            if 'ref' in list(self.parameter_dict[key].keys()):
+                self.proposal_means = self.proposal_means.at[i].set(self.parameter_dict[key]['ref']['mean'])
+            else:
+                self.proposal_means = self.proposal_means.at[i].set(0.5*(self.parameter_dict[key]['prior']['min']+self.parameter_dict[key]['prior']['max']))
 
 
         pass
@@ -119,9 +126,11 @@ class Sampler(BaseClass):
     def compute_loglike_from_parameters(self, parameters):
         self.start()
 
+        RNGkey = jax.random.PRNGKey(time.clock_gettime_ns(0))
+
         # rescale the parameters
-        parameters = parameters * self.proposal_lengths
-        print(parameters)
+        parameters = parameters * self.proposal_lengths + self.proposal_means
+
         # every 100 self.n calls, state the n
         if self.n % 100 == 0:
             self.info("Current sampler call: %d", self.n)
@@ -139,10 +148,6 @@ class Sampler(BaseClass):
         logprior = self.compute_logprior(state)
         self.debug("logprior: %f for parameters: %s", logprior, state['parameters'])
 
-        # if logprior < -999999999999999999999999999999999.:
-        #     self.increment(self.logger)
-        #     return logprior
-
         # compute the observables. First check whether emulator is already trained
         if not self.emulator.trained:
 
@@ -157,9 +162,9 @@ class Sampler(BaseClass):
             self.emulator.add_state(state)
         else:
             # here we need to test the emulator for its performance
-            emulator_sample_states = self.emulator.emulate_samples(state['parameters'], self.emulator.hyperparameters['N_quality_samples'])
+            emulator_sample_states, RNGkey = self.emulator.emulate_samples(state['parameters'], self.emulator.hyperparameters['N_quality_samples'], RNGkey=RNGkey)
             emulator_sample_loglikes = jnp.array([self.likelihood.loglike_state(_)['loglike'] for _ in emulator_sample_states])
-            
+            print("emulator_sample_loglikes: ", emulator_sample_loglikes)
             # check whether the emulator is good enough
             if not self.emulator.check_quality_criterium(emulator_sample_loglikes):
                 print("Emulator not good enough")
@@ -191,14 +196,14 @@ class Sampler(BaseClass):
 
         self.increment(self.logger)
         return state['loglike']
-    
+
     def emulate_loglike_from_parameters_differentiable(self, parameters):
         # this function is similar to the compute_loglike_from_parameters, but it returns the loglike and does not automaticailly add the state to the emulator. Thus it is differentiable.
         # if RNG is not None, we provide the mean estimate, otherwise we sample from the emulator
         self.start()
 
         # rescale the parameters
-        parameters = parameters * self.proposal_lengths
+        parameters = parameters * self.proposal_lengths + self.proposal_means
 
         # Run the sampler.
         state = {'parameters': {}, 'quantities': {}, 'loglike': None}
@@ -226,13 +231,13 @@ class Sampler(BaseClass):
 
 
 
-    def sample_emulate_loglike_from_parameters_differentiable(self, parameters, N=1, key=None):
+    def sample_emulate_loglike_from_parameters_differentiable(self, parameters, N=1, RNGkey=jax.random.PRNGKey(int(time.time()))):
         # this function is similar to the compute_loglike_from_parameters, but it returns the loglike and does not automaticailly add the state to the emulator. Thus it is differentiable.
         # if RNG is not None, we provide the mean estimate, otherwise we sample from the emulator
         self.start()
 
         # rescale the parameters
-        parameters = parameters * self.proposal_lengths
+        parameters = parameters * self.proposal_lengths + self.proposal_means
 
         # Run the sampler.
         state = {'parameters': {}, 'quantities': {}, 'loglike': None}
@@ -246,7 +251,7 @@ class Sampler(BaseClass):
         self.debug("logprior: %f for parameters: %s", logprior, state['parameters'])
         
         self.debug("emulator available - check emulation performance")
-        states = self.emulator.emulate_samples(state['parameters'], N)
+        states, RNGkey = self.emulator.emulate_samples(state['parameters'], N, RNGkey=RNGkey)
 
         loglikes = [self.likelihood.loglike_state(_)['loglike'] + logprior for _ in states]
 
@@ -264,10 +269,9 @@ class Sampler(BaseClass):
         res = self.emulate_loglike_from_parameters_differentiable(parameters)
         return res.sum()
     
-    def sample_emulate_total_loglike_from_parameters_differentiable(self, parameters, N=1):
+    def sample_emulate_total_loglike_from_parameters_differentiable(self, parameters):
+        N = self.emulator.hyperparameters['N_quality_samples']
         res = [_.sum() for _ in self.sample_emulate_loglike_from_parameters_differentiable(parameters, N=N)]
-        print('res')
-        print(res)
         return res
 
     def compute_logprior(self, state):
@@ -329,16 +333,16 @@ class EnsembleSampler(Sampler):
                 if 'ref' in list(self.parameter_dict[key].keys()):
                     RNG = jax.random.PRNGKey(initial_seed+i*self.nwalkers+j)
                     proposal= self.parameter_dict[key]['ref']['mean'] + self.parameter_dict[key]['ref']['std']*jax.random.normal(RNG)
-                    pos = pos.at[j,i].add(proposal/self.proposal_lengths[i])
+                    pos = pos.at[j,i].add((proposal-self.proposal_means[i])/self.proposal_lengths[i])
                 else:
                     RNG = jax.random.PRNGKey(initial_seed+i*self.nwalkers+j)
                     proposal = self.parameter_dict[key]['prior']['min'] + (self.parameter_dict[key]['prior']['max']-self.parameter_dict[key]['prior']['min'])*jax.random.uniform(RNG)
-                    pos = pos.at[j,i].add(proposal/self.proposal_lengths[i])
+                    pos = pos.at[j,i].add((proposal-self.proposal_means[i])/self.proposal_lengths[i])
 
         self.sampler.run_mcmc(pos, nsteps, **kwargs, tune=True)
 
         # save the chain and the logprobability
-        self.chain = self.sampler.get_chain()*self.proposal_lengths # rescale chains
+        self.chain = self.sampler.get_chain()*self.proposal_lengths + self.proposal_means # rescale chains
 
         self.logprobability = self.sampler.get_log_prob()
 
@@ -383,8 +387,6 @@ class NUTSSampler(Sampler):
         # Initialize the position of the walkers.
         pos = jnp.zeros((self.nwalkers, self.ndim))
 
-
-
         import time 
 
         initial_seed = int(time.time()+get_mpi_rank())
@@ -395,11 +397,11 @@ class NUTSSampler(Sampler):
                 if 'ref' in list(self.parameter_dict[key].keys()):
                     RNG, subkey = jax.random.split(RNG)
                     proposal= self.parameter_dict[key]['ref']['mean'] + self.parameter_dict[key]['ref']['std']*jax.random.normal(subkey)
-                    pos = pos.at[j,i].add(proposal/self.proposal_lengths[i])
+                    pos = pos.at[j,i].add((proposal-self.proposal_means[i])/self.proposal_lengths[i])
                 else:
                     RNG, subkey = jax.random.split(RNG)
                     proposal = self.parameter_dict[key]['prior']['min'] + (self.parameter_dict[key]['prior']['max']-self.parameter_dict[key]['prior']['min'])*jax.random.uniform(subkey)
-                    pos = pos.at[j,i].add(proposal/self.proposal_lengths[i])
+                    pos = pos.at[j,i].add((proposal-self.proposal_means[i])/self.proposal_lengths[i])
 
         # run the warmup
         current_loglikes = -jnp.inf*jnp.ones(self.nwalkers)
@@ -436,7 +438,8 @@ class NUTSSampler(Sampler):
         self.info("Emulator trained - Start NUTS sampler now!")
 
         # create differentiable loglike
-        self.logp_and_grad = jax.jit(jax.value_and_grad(self.emulate_total_loglike_from_parameters_differentiable))
+        self.logp_and_grad = jax.jit(jax.value_and_grad(self.emulate_total_loglike_from_parameters_differentiable))     # this is the differentiable loglike
+        self.logp_sample = jax.jit(self.sample_emulate_total_loglike_from_parameters_differentiable)                    # this samples N realizations from the emulator to estimate the uncertainty
 
         self.theta0 = bestfit
 
@@ -453,7 +456,7 @@ class NUTSSampler(Sampler):
 
         # puntjes
         thetas = np.zeros((self.M_adapt + nsteps + 1, self.ndim))
-        logp = np.zeros(self.M_adapt + nsteps + 1)
+        logps = np.zeros(self.M_adapt + nsteps + 1)
 
         # number of rounds for the NUTS sampler to run and check the performance of the emulator
         nrounds = int(np.ceil((self.M_adapt + nsteps + 1)/self.NUTS_batch_size))
@@ -481,98 +484,87 @@ class NUTSSampler(Sampler):
                 n = 1 # Length of the trajectory
                 s = 1 # Stop indicator
                 thetas[i*self.NUTS_batch_size+j+1] = thetas[i*self.NUTS_batch_size+j] # If everything fails, the new sample is our last position
-
+                start = time.time()
                 while s == 1:
                     # Choose a direction
                     RNG, v = self._draw_direction(RNG)
+
+                    print(k)
                     
                     # Double the trajectory length in that direction
                     if v == -1:
-                        RNG, theta_m, r_m, _, _, theta_f, n_f, s_f, alpha, n_alpha = self._build_tree(theta_m, r_m, u, v, j, eps, logjoint0, RNG)
+                        RNG, theta_m, r_m, _, _, theta_f, n_f, s_f, alpha, n_alpha = self._build_tree(theta_m, r_m, u, v, k, eps, logjoint0, RNG)
                     else:
-                        RNG, _, _, theta_p, r_p, theta_f, n_f, s_f, alpha, n_alpha = self._build_tree(theta_p, r_p, u, v, j, eps, logjoint0, RNG)
+                        RNG, _, _, theta_p, r_p, theta_f, n_f, s_f, alpha, n_alpha = self._build_tree(theta_p, r_p, u, v, k, eps, logjoint0, RNG)
 
                     # Update theta with probability n_f / n, to effectively sample a point from the trajectory;
                     # Update the current length of the trajectory;
                     # Update the stopping indicator: check it the trajectory is making a U-turn.
-                    RNG, thetas[i*self.NUTS_batch_size+j+1], n, s, j = self._trajectory_iteration_update(thetas[i*self.NUTS_batch_size+j+1], n, s, j, theta_m, r_m, theta_p, r_p, theta_f, n_f, s_f, RNG)
+                    RNG, thetas[i*self.NUTS_batch_size+j+1], n, s, k = self._trajectory_iteration_update(thetas[i*self.NUTS_batch_size+j+1], n, s, k, theta_m, r_m, theta_p, r_p, theta_f, n_f, s_f, RNG)
 
                 if i*self.NUTS_batch_size+j+1 <= self.M_adapt:
                     # Dual averaging scheme to adapt the step size 'epsilon'.
                     H_bar, eps_bar, eps = self._adapt(mu, eps_bar, H_bar, t_0, kappa, gamma, alpha, n_alpha, i*self.NUTS_batch_size+j+1)
-                    print(eps)
                 elif i*self.NUTS_batch_size+j+1 == self.M_adapt + 1:
                     eps = eps_bar
 
-                # If we want to do some performance checks, we can do it here
-                #
-                print('thetas')
-                print(thetas[i*self.NUTS_batch_size+j])
-                loglike, _ = self.logp_and_grad(thetas[i*self.NUTS_batch_size+j])
-                logp[i*self.NUTS_batch_size+j] = loglike
-                print('loglike')
-                print(loglike)
+                print("Round %d/%d, sample %d/%d, time: %f"%(i+1, nrounds, j+1, self.NUTS_batch_size, time.time()-start))
 
+
+                start = time.time()
                 # sample multiple points from the emulator and check the performance
-
+                # note that the runtime of testing is about the same as the runtime of the emulator for one round 
                 if testing_flag:
-                    # here we need to test the emulator for its performance
-                    emulator_sample_states = self.sample_emulate_total_loglike_from_parameters_differentiable(thetas[i*self.NUTS_batch_size+j], self.emulator.hyperparameters['N_quality_samples'])
+                    # if the emulator is not good enough, we need to run the theory code and add the state to the emulator
+                    state = {'parameters': {}, 'quantities': {}, 'loglike': None}
 
-                    emulator_sample_states = self.emulator.emulate_samples(state['parameters'], self.emulator.hyperparameters['N_quality_samples'])
-                    emulator_sample_loglikes = jnp.array([self.likelihood.loglike_state(_)['loglike'] for _ in emulator_sample_states])
-            
-            # check whether the emulator is good enough
-            if not self.emulator.check_quality_criterium(emulator_sample_loglikes):
-                return False
-                
-                
+                    # translate the parameters to the state
+                    for k, key in enumerate(self.parameter_dict.keys()):
+                        state['parameters'][key] = jnp.array([thetas[i*self.NUTS_batch_size+j][k]*self.proposal_lengths[k] + self.proposal_means[k]])
 
+                    if self.emulator.require_quality_check(state['parameters']):
+                        # here we need to test the emulator for its performance
+                        loglikes = self.logp_sample(thetas[i*self.NUTS_batch_size+j])
 
-            # Do updates here :) 
+                        print('loglikes: ', loglikes)
 
 
+                        # check whether the emulator is good enough
+                        if not self.emulator.check_quality_criterium(jnp.array(loglikes)):
 
+                            state = self.theory.compute(state)
+                            state = self.likelihood.loglike_state(state)
+                            logprior = self.compute_logprior(state)
+                            state['loglike'] = state['loglike'] + logprior
+                            self.emulator.add_state(state)
+
+                            print("Emulator not good enough")
+
+                            # update the differential loglikes
+                            self.logp_and_grad = jax.jit(jax.value_and_grad(self.emulate_total_loglike_from_parameters_differentiable))     # this is the differentiable loglike
+                            self.logp_sample = jax.jit(self.sample_emulate_total_loglike_from_parameters_differentiable)                    # this samples N realizations from the emulator to estimate the uncertainty
+                        else:
+                            print("Emulator good enough")
+                            # Add the point to the quality points
+                            self.emulator.add_quality_point(state['parameters'])
+
+                print("Testing time: ", time.time()-start)
         print(thetas)
 
-        import sys
-        sys.exit()
-
-
-
-
-
-
-        # build sampler 
-        start = time.time()
-        self.sampler = NUTS(bestfit, logp=self.compute_total_loglike_from_parameters_differentiable, target_acceptance=self.target_acceptance, M_adapt= self.M_adapt)
-        print("Time to build sampler: ", time.time()-start)
-        
-        key = random.PRNGKey(0)
-        start = time.time()
-        for i in range(10):
-            key, samples, step_size = self.sampler.sample(10, key)
-        print("Time to run sampler: ", time.time()-start)
-
-        print(samples)
-        print(key)
-        print(step_size)
-
-
         # save the chain and the logprobability
-        self.chain = samples*self.proposal_lengths # rescale chains
+        self.chain = thetas*self.proposal_lengths + self.proposal_means # rescale chains
 
         # Append the chains to chain.txt using a lock
         lock = fasteners.InterProcessLock('chain.txt.lock')
 
-        self.logprobability = np.zeros(len(samples))
+        self.logprobability = np.zeros(len(thetas))
+
         with lock:
             _ = self.hyperparameters['output_directory'] + '/chain_%d.txt'%get_mpi_rank()
             with open(self.hyperparameters['output_directory'] + '/chain.txt', 'ab') as f:
                 np.savetxt(f, np.hstack([self.logprobability.reshape(-1)[:,None], self.chain.reshape((-1,self.ndim))]) )
             with open(_, 'ab') as f:
                 np.savetxt(f, np.hstack([self.logprobability.reshape(-1)[:,None], self.chain.reshape((-1,self.ndim))]) )
-
 
     # supportive functions for the sampler
     def _findReasonableEpsilon(self, theta: ndarray, key: ndarray) -> Tuple[ndarray, float]:
@@ -999,6 +991,7 @@ class EvaluateSampler(Sampler):
         def sample(self, input_dicts, **kwargs):
             # Run the sampler.
             # Initialize the position of the walkers.
+            RNGkey = jax.random.PRNGKey(random.randint(0, 10000000))
 
             # check whether input_dicts is a list or a single dictionary
             if isinstance(input_dicts, list):
@@ -1056,7 +1049,7 @@ class EvaluateSampler(Sampler):
                             state = self.likelihood.loglike_state(state)
                             state['loglike'] = state['loglike'] + logprior
                         else:
-                            state = self.emulator.emulate_samples(state['parameters'],1)[0]
+                            state, RNGkey = self.emulator.emulate_samples(state['parameters'],1,RNGkey=RNGkey)[0]
                             state = self.likelihood.loglike_state(state)
                             state['loglike'] = state['loglike'] + logprior
 

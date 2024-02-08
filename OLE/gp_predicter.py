@@ -16,11 +16,6 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 import optax as ox
 
-global RANDOM_KEY 
-RANDOM_KEY = random.PRNGKey(42)
-global SUB_KEY
-SUB_KEY = 0
-
 from jax import grad
 
 with install_import_hook("gpjax", "beartype.beartype"):
@@ -99,7 +94,7 @@ class GP_predictor(BaseClass):
         
         return output_data
     
-    def sample_prediction(self, parameters, N):
+    def sample_prediction(self, parameters, N, RNGkey=random.PRNGKey(int(time.time()))):
         # Predict the quantity for the given parameters.
         # First we normalize the parameters.
         parameters_normalized = self.data_processor.normalize_input_data(parameters)
@@ -107,14 +102,15 @@ class GP_predictor(BaseClass):
         # Then we predict the output data for the normalized parameters.
         output_data_compressed = jnp.zeros((N, len(self.GPs)))
         for i in range(len(self.GPs)):
-            output_data_compressed = output_data_compressed.at[:,[i]].set(self.GPs[i].sample(parameters_normalized, N).transpose())    # this is the time consuming part
+            _, RNGkey = self.GPs[i].sample(parameters_normalized, N, RNGkey=RNGkey)
+            output_data_compressed = output_data_compressed.at[:,[i]].set(_.transpose())    # this is the time consuming part
 
         # Untransform the output data.
         output_data_normalized = jnp.array([self.data_processor.decompress_data(output_data_compressed[i,:]) for i in range(N)])
 
         # Then we denormalize the output data.
         output_data = self.data_processor.denormalize_data(output_data_normalized)
-        return output_data
+        return output_data, RNGkey
     
     def predict_gradients(self, parameters):
         # Predict the quantity for the given parameters.
@@ -253,41 +249,6 @@ class GP(BaseClass):
             key=jr.PRNGKey(0),
         )
 
-
-        # DEEEEEBUG
-        # predict on the training data
-        # latent_dist = self.opt_posterior.predict(self.D.X, train_data=self.D)  
-        # predictive_dist = self.opt_posterior.likelihood(latent_dist)
-
-        # predictive_std = predictive_dist.stddev()
-        # predictive_mean = predictive_dist.mean()
-
-        # Kxx = self.opt_posterior.compute_Kxx(self.D)
-        # ac = self.opt_posterior.calculate_mean_single_from_Kxx(self.input_data[0,None], self.D, Kxx)
-
-
-        # DOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOo
-        # print('predictive_std')
-        # print(predictive_std)
-        # print('ac')
-        # print(ac)
-        # print('predictive_mean')
-        # print(predictive_mean)
-        # print('output_data')
-        # print(self.output_data)
-
-        # dim = 5
-
-        # fig,ax = plt.subplots()
-        # ax.plot(self.input_data[:,dim], self.output_data, 'o')
-        # ax.errorbar(self.input_data[:,dim], predictive_mean, yerr=predictive_std, fmt='o')
-
-        # plt.savefig('test.png')
-
-
-        # import sys 
-        # sys.exit()
-
         pass
 
 
@@ -318,9 +279,7 @@ class GP(BaseClass):
             predictive_std = predictive_dist.stddev()
             return ac, predictive_std[0]
         
-    def sample(self, input_data, N):
-        global RANDOM_KEY
-        global SUB_KEY
+    def sample(self, input_data, N, RNGkey=random.PRNGKey(int(time.time()))):
         # Predict the output data for the given input data.
 
         if self.recompute_kernel_matrix:
@@ -337,8 +296,10 @@ class GP(BaseClass):
         predictive_std = predictive_dist.stddev()
         predictive_mean = predictive_dist.mean()
 
-        RANDOM_KEY, SUB_KEY = random.split(RANDOM_KEY)
-        return random.normal(key= SUB_KEY, shape=(1,N)) * jnp.sqrt(predictive_std[0]) + ac
+        # generate new key
+        RNGkey, subkey = random.split(RNGkey)
+
+        return random.normal(key= subkey, shape=(1,N)) * jnp.sqrt(predictive_std[0]) + ac, RNGkey
         
     def predict_gradient(self, input_data):
         # Predict the gradient of the output data for the given input data.

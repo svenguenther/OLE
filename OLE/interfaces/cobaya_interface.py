@@ -1,4 +1,5 @@
 import jax.numpy as jnp
+import jax
 import numpy as np
 import time
 import logging
@@ -115,13 +116,27 @@ def check_cache_and_compute(self, params_values_dict,
 
                 # import sys
                 # sys.exit()
-                self.emulator.add_state(emulator_state)
+                added = self.emulator.add_state(emulator_state)
 
                 # if the emulator is not trained, train it, if enough states are available
                 if not self.emulator.trained:
                     if len(self.emulator.data_cache.states) >= self.emulator.hyperparameters['min_data_points']:
                         self.emulator.train()
+                        def emulate_samples(parameters):
+                            key = jax.random.PRNGKey(int(time.clock_gettime_ns(0)))
+                            return self.emulator.emulate_samples(parameters, self.emulator.hyperparameters['N_quality_samples'], key)
+                        self.jit_emulator_samples = jax.jit(emulate_samples)
+                        self.jit_emulate = jax.jit(self.emulator.emulate)
                         self.log.info("Emulator trained")
+                else:
+                    if added:
+                        # here we need to re jit 
+                        def emulate_samples(parameters):
+                            key = jax.random.PRNGKey(int(time.clock_gettime_ns(0)))
+                            return self.emulator.emulate_samples(parameters, self.emulator.hyperparameters['N_quality_samples'], key)
+                        self.jit_emulator_samples = jax.jit(emulate_samples)
+                        self.jit_emulate = jax.jit(self.emulator.emulate)
+
 
     # make this state the current one
     self._states.appendleft(state)
@@ -170,9 +185,10 @@ def test_emulator(self,emulator_state):
     if self.emulator.require_quality_check(emulator_state['parameters']):
         # if yes. We sample multiple emulator states and estiamte the accuracy on the loglikelihood prediction!
         # if not, we trust the emulator and we can just run it
-
         # sample multiple spectra
-        emulator_sample_states = self.emulator.emulate_samples(emulator_state['parameters'], self.emulator.hyperparameters['N_quality_samples'])
+        #emulator_sample_states = self.emulator.emulate_samples(emulator_state['parameters'], self.emulator.hyperparameters['N_quality_samples'])
+        emulator_sample_states, _ = self.jit_emulator_samples(emulator_state['parameters'])
+        print(emulator_sample_states)
 
         # compute the likelihoods
         emulator_sample_loglikes = []
@@ -183,7 +199,7 @@ def test_emulator(self,emulator_state):
 
             self.skip_theory_state_from_emulator = cobaya_sample_state
             likelihoods = list(self.provider.model._loglikes_input_params(self.provider.params, cached = False, return_derived = False))
-
+            print(likelihoods)
             emulator_sample_loglikes.append(sum(likelihoods))
 
         emulator_sample_loglikes = np.array(emulator_sample_loglikes)
@@ -202,7 +218,8 @@ def test_emulator(self,emulator_state):
 
     # now run the emulator
     a = time.time()
-    predictions = self.emulator.emulate(emulator_state['parameters'])
+    # predictions = self.emulator.emulate(emulator_state['parameters'])
+    predictions = self.jit_emulate(emulator_state['parameters'])
     b = time.time()
     print("Run the emulator: ", b-a)
     return True, predictions

@@ -14,8 +14,10 @@ import time
 import warnings
 import logging
 import jax.numpy as jnp
+import jax
 
 from copy import deepcopy
+from copy import copy
 
 from .utils.base import BaseClass
 from .utils.mpi import *
@@ -79,7 +81,7 @@ class Emulator(BaseClass):
             # here we define the quality threshold for the emulator. If the emulator is below this threshold, it is retrained. We destinguish between a constant, a linear and a quadratic threshold
             'quality_threshold_constant': 0.1,
             'quality_threshold_linear': 0.0,
-            'quality_threshold_quadratic': 0.0,
+            'quality_threshold_quadratic': 0.01,
 
             # the radius around the checked points for which we do not need to check the quality criterium
             'quality_points_radius': 0.3,
@@ -151,6 +153,9 @@ class Emulator(BaseClass):
         pass
 
     def add_state(self, state):
+        # returns True if the state was added to the data cache and the emulator was updated
+        # returns False if the state was not added to the data cache and the emulator was not updated
+
         # new state
         new_state = deepcopy(state)
 
@@ -171,9 +176,11 @@ class Emulator(BaseClass):
                 self.train()
             else:
                 self.update()
-
-        # here we need to interact with the cache
-        pass
+            
+        if state_added:
+            return True
+        else:
+            return False
 
     def update(self):
         # Update the emulator. This means that the emulator is retrained.
@@ -245,22 +252,31 @@ class Emulator(BaseClass):
         return output_state
     
     # function to get N samples from the same input parameters
-    def emulate_samples(self, parameters, N):
+    def emulate_samples(self, parameters, N, RNGkey=jax.random.PRNGKey(0)):
         # Prepare list of N output states
-        output_states = [deepcopy(self.ini_state) for i in range(N)]
-        for state in output_states:
-            state['parameters'] = parameters
+        output_states = []
+        for i in range(N):
+            state, RNGkey = self.emulate_sample(parameters, RNGkey=RNGkey)
+
+
+        return output_states, RNGkey
+    
+    # function to get 1 sample from the same input parameters
+    def emulate_sample(self, parameters, RNGkey=jax.random.PRNGKey(0)):
+        # Prepare list of N output states
+
+        state = {'parameters': {}, 'quantities': {}}
+        state['parameters'] = parameters
 
         # Emulate the quantities for the given parameters.
         input_data = jnp.array([[value[0] for key, value in parameters.items() if key in self.input_parameters]])
 
         for quantity, emulator in self.emulators.items():
-            emulator_output = emulator.sample_prediction(input_data, N)
+            emulator_output, RNGkey = emulator.sample_prediction(input_data, 1, RNGkey=RNGkey)
             
-            for i, output_state in enumerate(output_states):
-                output_states[i]['quantities'][quantity] = emulator_output[i,:]
+            state['quantities'][quantity] = emulator_output[0,:]
 
-        return output_states
+        return state, RNGkey
     
     def check_quality_criterium(self, loglikes):
         # check whether the emulator is good enough to be used
@@ -301,7 +317,7 @@ class Emulator(BaseClass):
         # if we return True, the emulator is expected to perform poorly and we need to check the quality criterium
 
         # The idea is that we collect all points which were checked by the quality criterium and then check whether the new point is within the convex hull of the checked points.
-        input_data = jnp.array([[value[0] for key, value in parameters.items()]])
+        input_data = jnp.array([[value[0] for key, value in parameters.items() if key in self.input_parameters]])
 
         # normalize the input data
         quantity = list(self.emulators.keys())[0]

@@ -149,12 +149,6 @@ def calculate_mean_single_from_Kxx(
     # std
     std = self.prior.kernel.cross_covariance(t,t) - jnp.matmul(Sigma_inv_Kxt.T, Kxt)
 
-    print('mean')
-    print(mean)
-    print('std')
-    print(std)
-
-
     return jnp.atleast_1d(mean.squeeze())[0]
 
 
