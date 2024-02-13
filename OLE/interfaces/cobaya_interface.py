@@ -225,6 +225,7 @@ def test_emulator(self,emulator_state):
     a = time.time()
     # predictions = self.emulator.emulate(emulator_state['parameters'])
     predictions = self.jit_emulate(emulator_state['parameters'])
+    self.log.info("Emulator predictions: ", predictions)
     b = time.time()
     print("Run the emulator: ", b-a)
     return True, predictions
