@@ -264,7 +264,7 @@ class GP(BaseClass):
 
         if self.recompute_kernel_matrix:
             Kxx = self.opt_posterior.compute_Kxx(self.D)
-            self.recompute_kernel_matrix = False
+            #self.recompute_kernel_matrix = False    # TODO: This leads to memory leaks in jit mode
             self.Kxx = Kxx
         else:
             Kxx = self.Kxx

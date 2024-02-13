@@ -122,18 +122,24 @@ def check_cache_and_compute(self, params_values_dict,
                 if not self.emulator.trained:
                     if len(self.emulator.data_cache.states) >= self.emulator.hyperparameters['min_data_points']:
                         self.emulator.train()
+
                         def emulate_samples(parameters):
                             key = jax.random.PRNGKey(int(time.clock_gettime_ns(0)))
                             return self.emulator.emulate_samples(parameters, self.emulator.hyperparameters['N_quality_samples'], key)
+                        
+                        self.jit_emulator_samples = emulate_samples#jax.jit(emulate_samples)
                         self.jit_emulator_samples = jax.jit(emulate_samples)
                         self.jit_emulate = jax.jit(self.emulator.emulate)
                         self.log.info("Emulator trained")
                 else:
                     if added:
+
                         # here we need to re jit 
                         def emulate_samples(parameters):
                             key = jax.random.PRNGKey(int(time.clock_gettime_ns(0)))
                             return self.emulator.emulate_samples(parameters, self.emulator.hyperparameters['N_quality_samples'], key)
+                        
+                        self.jit_emulator_samples = emulate_samples#jax.jit(emulate_samples)
                         self.jit_emulator_samples = jax.jit(emulate_samples)
                         self.jit_emulate = jax.jit(self.emulator.emulate)
 
@@ -188,7 +194,6 @@ def test_emulator(self,emulator_state):
         # sample multiple spectra
         #emulator_sample_states = self.emulator.emulate_samples(emulator_state['parameters'], self.emulator.hyperparameters['N_quality_samples'])
         emulator_sample_states, _ = self.jit_emulator_samples(emulator_state['parameters'])
-        print(emulator_sample_states)
 
         # compute the likelihoods
         emulator_sample_loglikes = []

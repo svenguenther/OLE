@@ -257,7 +257,7 @@ class Emulator(BaseClass):
         output_states = []
         for i in range(N):
             state, RNGkey = self.emulate_sample(parameters, RNGkey=RNGkey)
-
+            output_states.append(state)
 
         return output_states, RNGkey
     
