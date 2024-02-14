@@ -1,11 +1,11 @@
 # This file contains a sampler class that interacts with the emulator, the theory code and the likelihood.
 # The NUTS sampler is based upon jaxnuts: https://github.com/guillaume-plc/jaxnuts
-from .utils.base import BaseClass
-from .utils.mpi import *
-from .theory import Theory
-from .likelihood import Likelihood
-from .emulator import Emulator
-from .utils.mpi import *
+from OLE.utils.base import BaseClass
+from OLE.utils.mpi import *
+from OLE.theory import Theory
+from OLE.likelihood import Likelihood
+from OLE.emulator import Emulator
+from OLE.utils.mpi import *
 
 from functools import partial
 from typing import Tuple

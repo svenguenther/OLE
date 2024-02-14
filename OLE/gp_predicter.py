@@ -10,10 +10,7 @@ config.update("jax_enable_x64", True)
 from jax import jit, random
 import jax.numpy as jnp
 import numpy as np
-import jax.random as jr
 from jaxtyping import install_import_hook
-import matplotlib as mpl
-import matplotlib.pyplot as plt
 import optax as ox
 
 from jax import grad
@@ -25,10 +22,10 @@ import time
 
 # Path: OLE/gp_predicter.py
 
-from .utils.base import BaseClass
-from .data_processing import data_processor
+from OLE.utils.base import BaseClass
+from OLE.data_processing import data_processor
 
-from .interfaces import gpjax_interface
+from OLE.interfaces import gpjax_interface
 
 class GP_predictor(BaseClass):
 
@@ -245,8 +242,8 @@ class GP(BaseClass):
             train_data=self.D,
             optim=ox.adam(learning_rate=lr),
             num_iters=self.hyperparameters['num_iters'],
-            safe=True,
-            key=jr.PRNGKey(0),
+            safe=False,
+            key=random.PRNGKey(0),
         )
 
         pass

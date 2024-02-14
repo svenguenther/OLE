@@ -1,5 +1,5 @@
-from .utils.base import BaseClass
-from .utils.mpi import *
+from OLE.utils.base import BaseClass
+from OLE.utils.mpi import *
 import sys
 import time
 import pickle

@@ -2,7 +2,7 @@
 # Each quantity may have different number of dimensions. Thus, each data processing requires a different preprocessing and potentially PCA data compression.
 # This class additionally stores all relevant data
 
-from .utils.base import BaseClass
+from OLE.utils.base import BaseClass
 import numpy as np
 import jax.numpy as jnp
 import os

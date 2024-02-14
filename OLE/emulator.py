@@ -19,10 +19,10 @@ import jax
 from copy import deepcopy
 from copy import copy
 
-from .utils.base import BaseClass
-from .utils.mpi import *
-from .data_cache import DataCache
-from .gp_predicter import GP_predictor
+from OLE.utils.base import BaseClass
+from OLE.utils.mpi import *
+from OLE.data_cache import DataCache
+from OLE.gp_predicter import GP_predictor
 
 class Emulator(BaseClass): 
 
