@@ -18,6 +18,33 @@ def check_cache_and_compute(self, params_values_dict,
 
     params_values_dict can be safely modified and stored.
     """
+
+    # there is a possibility when using the emulator to load an initial state from the cache of the emulator, which then allows to perform the sampling without a single call to the theory
+    if self.emulate:
+        if self.emulator is None:
+            # if self.emulator_settings has the key, 'load_initial_state', we can load the initial state from the emulator
+            if 'load_initial_state' in self.emulator_settings.keys():
+                if self.emulator_settings['load_initial_state']:
+                    # import the emulator
+                    from OLE.emulator import Emulator
+
+                    # initialize the emulator
+                    self.emulator = Emulator(**self.emulator_settings)
+                    self.emulator.initialize(emulator_state=None, **self.emulator_settings)
+
+                    def emulate_samples(parameters):
+                        key = jax.random.PRNGKey(int(time.clock_gettime_ns(0)))
+                        return self.emulator.emulate_samples(parameters, self.emulator.hyperparameters['N_quality_samples'], key)
+                    
+                    self.jit_emulator_samples = emulate_samples#jax.jit(emulate_samples)
+                    self.jit_emulator_samples = jax.jit(emulate_samples)
+                    self.jit_emulate = jax.jit(self.emulator.emulate)
+                    self.log.info("Emulator trained")
+
+                    self._current_state = self.emulator.data_cache.states[0]
+
+
+
     start = time.time()
     if self.skip_theory_state_from_emulator is not None:
         # we are in the emulator and we need to use the emulator state
@@ -71,6 +98,8 @@ def check_cache_and_compute(self, params_values_dict,
 
             # logging.disable(logging.CRITICAL)
             successful_emulation, emulator_state = self.test_emulator(emulator_state)
+            print('successful_emulation')
+            print(successful_emulation)
             # logging.disable(logging.NOTSET)
 
             if successful_emulation:
@@ -224,8 +253,8 @@ def test_emulator(self,emulator_state):
     # now run the emulator
     a = time.time()
     # predictions = self.emulator.emulate(emulator_state['parameters'])
+    
     predictions = self.jit_emulate(emulator_state['parameters'])
-    self.log.info("Emulator predictions: ", predictions)
     b = time.time()
     print("Run the emulator: ", b-a)
     return True, predictions
@@ -260,6 +289,9 @@ def translate_cobaya_state_to_emulator_state(state):
     emulator_state['parameters'] = {}
     emulator_state['quantities'] = {}
     emulator_state['loglike'] = None
+
+    # try to read the parameters and quantities from the cobaya state
+    #try:
     for key, value in state.items():
 
         if key == 'params':
@@ -279,7 +311,9 @@ def translate_cobaya_state_to_emulator_state(state):
                         emulator_state['quantities'][key3] = jnp.array([value3])
                 else:
                     emulator_state['quantities'][key2] = jnp.array([value2])
-
+        else:
+            if len(value) > 1:
+                emulator_state['quantities'][key] = jnp.array([value])
 
     # recheck the dimensionality of the emulator_state. All quantities should be 1D arrays
     for key, value in emulator_state['quantities'].items():

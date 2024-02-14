@@ -44,11 +44,18 @@ class Sampler(BaseClass):
 
         
 
-        test_state = self.test_pipeline()
 
         # remove the parameters from the test state which are not in self.theory.requirements
         # initialize the emulator
         self.emulator = Emulator(**kwargs)
+
+        test_state = None
+
+        if 'load_initial_state' not in kwargs:
+            test_state = self.test_pipeline()
+        else:
+            if not kwargs['load_initial_state']:
+                test_state = self.test_pipeline()
 
         if len(self.theory.requirements) > 0:
             self.emulator.initialize(test_state, input_parameters=self.theory.requirements, **kwargs)
@@ -356,10 +363,6 @@ class EnsembleSampler(Sampler):
                 np.savetxt(f, np.hstack([self.logprobability.reshape(-1)[:,None], self.chain.reshape((-1,self.ndim))]) )
 
 
-                        
-from jaxnuts.sampler import NUTS
-
-
 class NUTSSampler(Sampler):
     # the nuts sampler samples with an Ensemble sampler and once the emulator is trained, it will switch to the NUTS sampler to make use of the gradients.
 
@@ -461,9 +464,6 @@ class NUTSSampler(Sampler):
         # number of rounds for the NUTS sampler to run and check the performance of the emulator
         nrounds = int(np.ceil((self.M_adapt + nsteps + 1)/self.NUTS_batch_size))
 
-        print("nrounds: ", nrounds)
-        print("NUTS_batch_size: ", self.NUTS_batch_size)
-
         thetas[0] = bestfit
 
         testing_flag = True
@@ -488,8 +488,6 @@ class NUTSSampler(Sampler):
                 while s == 1:
                     # Choose a direction
                     RNG, v = self._draw_direction(RNG)
-
-                    print(k)
                     
                     # Double the trajectory length in that direction
                     if v == -1:
@@ -525,9 +523,6 @@ class NUTSSampler(Sampler):
                     if self.emulator.require_quality_check(state['parameters']):
                         # here we need to test the emulator for its performance
                         loglikes = self.logp_sample(thetas[i*self.NUTS_batch_size+j])
-
-                        print('loglikes: ', loglikes)
-
 
                         # check whether the emulator is good enough
                         if not self.emulator.check_quality_criterium(jnp.array(loglikes)):
@@ -976,7 +971,6 @@ class EvaluateSampler(Sampler):
             if self.use_emulator:
                 self.info("Training emulator")
                 parameter_list = jnp.array([self.parameter_dict[key]['ref']['mean'] for key in self.parameter_dict.keys()])
-                print(parameter_list)
                 self.compute_total_loglike_from_parameters(parameter_list/self.proposal_lengths)
                 self.info("Emulator trained")
 

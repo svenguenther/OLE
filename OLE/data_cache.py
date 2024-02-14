@@ -131,6 +131,8 @@ class DataCache(BaseClass):
         self.info("Added state to cache: %s", state['parameters'])
         self.info("Cache size: %d/%d", len(self.states), self.hyperparameters['cache_size'])
 
+        print("new_state: ", new_state)
+
         # if there exists a chache file, store the cache in the file
         if os.path.exists(self.hyperparameters['cache_file']):
             self.synchronize_to_cache(new_state)

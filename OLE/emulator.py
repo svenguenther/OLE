@@ -63,7 +63,7 @@ class Emulator(BaseClass):
 
         pass
 
-    def initialize(self, ini_state, **kwargs):
+    def initialize(self, ini_state=None, **kwargs):
         # default hyperparameters
         defaulthyperparameters = {
             # kernel
@@ -74,6 +74,23 @@ class Emulator(BaseClass):
 
             # the number of data points in cache before the emulator is to be trained
             'min_data_points': 80,
+
+
+            # veto list of parameters which are not to be emulated.
+            'veto_list': None,
+
+            # logfile for emulator
+            'logfile': None,
+
+            # Load initial state from cache. Usually, before we can use the emulator we need to have a state in the cache to determine the dimensionality of the quantities.
+            # However, if we have a state in the cache, we can load the initial state from the cache. And not a single theory call has to be made.
+            'load_initial_state': False,
+
+
+            ## TESTING:
+
+            # should we test the performance of the emulator once it is trained? If Flase, the following parameters are not needed
+            'test_emulator': True,
 
             # numer of test samples to determine the quality of the emulator
             'N_quality_samples': 5,
@@ -86,12 +103,6 @@ class Emulator(BaseClass):
             # the radius around the checked points for which we do not need to check the quality criterium
             'quality_points_radius': 0.3,
 
-            # veto list of parameters which are not to be emulated.
-            'veto_list': None,
-
-            # logfile for emulator
-            'logfile': None,
-
         }
 
         # The hyperparameters are a dictionary of the hyperparameters for the different quantities. The keys are the names of the quantities.
@@ -100,11 +111,18 @@ class Emulator(BaseClass):
         for key, value in kwargs.items():
             self.hyperparameters[key] = value
 
+        # If load_initial_state is True, we load the initial state from the cache
+        if self.hyperparameters['load_initial_state']:
+            self.data_cache.load_cache()
+            self.ini_state = self.data_cache.states[0].copy()
+        else:
+            self.ini_state = ini_state
+
         # Add initial state to the data cache
         self.data_cache.initialize(ini_state)
 
         # Initialize the emulator with an initial state. In this state the parameters and the quantitites which are to be emulated are defined. They also come with an example value to determine the dimensionality of the quantities.
-        self.ini_state = ini_state
+        ini_state = self.ini_state
 
         # if there is a input_parameters list in the kwargs, we use this list to determine the order of the input parameters
         if 'input_parameters' in kwargs:
@@ -149,6 +167,12 @@ class Emulator(BaseClass):
 
         # initialize the points which were already tested with the quality criterium
         self.quality_points = []
+        
+
+        # if we fulfill the minimum number of data points, we train the emulator
+        if len(self.data_cache.states) >= self.hyperparameters['min_data_points']:
+            self.data_cache.load_cache()
+            self.train()
         
         pass
 
@@ -315,6 +339,11 @@ class Emulator(BaseClass):
         # check whether the emulator is expected to perform well for the given parameters.
         # if we return False, the emulator is expected to perform well and we do not need to check the quality criterium
         # if we return True, the emulator is expected to perform poorly and we need to check the quality criterium
+
+        # if we do not require a quality check, we return False
+        if not self.hyperparameters['test_emulator']:
+            self.debug("Quality check not required. Test emulator is False")
+            return False
 
         # The idea is that we collect all points which were checked by the quality criterium and then check whether the new point is within the convex hull of the checked points.
         input_data = jnp.array([[value[0] for key, value in parameters.items() if key in self.input_parameters]])

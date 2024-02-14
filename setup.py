@@ -9,8 +9,15 @@ setup(
     author_email='sven.guenther@rwth-aachen.de',
     license='...',
     packages=['OLE'],
-    install_requires=['mpi4py>=2.0',
-                      'numpy',                     
+    install_requires=[
+                    'numpy',
+                    'jax>=0.4.23',
+                    'jaxlib>=0.4.23',
+                    'tqdm',
+                    'gpjax>=0.8.0',
+                    'fasteners',
+                    'emcee',
+                    'python>=3.10',
                       ],
 
     classifiers=[
@@ -18,10 +25,6 @@ setup(
         'Intended Audience :: Science/Research',
         'License :: OSI Approved :: BSD License',  
         'Operating System :: POSIX :: Linux',        
-        'Programming Language :: Python :: 2',
-        'Programming Language :: Python :: 2.7',
-        'Programming Language :: Python :: 3',
-        'Programming Language :: Python :: 3.4',
-        'Programming Language :: Python :: 3.5',
+        'Programming Language :: Python :: 3.10',
     ],
 )
