@@ -17,7 +17,6 @@ setup(
                     'gpjax>=0.8.0',
                     'fasteners',
                     'emcee',
-                    'python>=3.10',
                       ],
 
     classifiers=[
