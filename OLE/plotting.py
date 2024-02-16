@@ -83,3 +83,24 @@ def pca_parameter_plot(x,y, x_label, y_label, title,file_name):
     plt.ylabel(y_label)
     plt.savefig(file_name)
     plt.close()
+
+def loss_plot(loss, title, file_name):
+    plt.figure()
+    plt.grid()
+    plt.title(title)
+    epoch = range(len(loss))
+    plt.plot(epoch, loss)
+    plt.xlabel('Iteration')
+    plt.ylabel('Loss')
+    plt.savefig(file_name)
+    plt.close()
+
+def plot_pca_components_test_set(true, pred, pred_std, title, file_name):
+    # plot residuals  
+    plt.figure()
+    plt.grid()
+    plt.title(title)
+    plt.errorbar(true, true-pred, yerr=pred_std, fmt='o')
+    plt.xlabel('True')
+    plt.ylabel('Residuals')
+    plt.savefig(file_name)

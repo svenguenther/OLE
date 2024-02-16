@@ -263,7 +263,7 @@ class Emulator(BaseClass):
 
     def emulate(self, parameters):
         # Prepare output state
-        output_state = self.ini_state.copy()
+        output_state = {'quantities':{}} #self.ini_state.copy()
         output_state['parameters'] = parameters
 
         # Emulate the quantities for the given parameters.

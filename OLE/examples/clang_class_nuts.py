@@ -163,9 +163,6 @@ class my_likelihood(Likelihood):
 
         loglike = self.candl_like.log_like(candl_input)
 
-        if jnp.isnan(loglike):
-            loglike = -1e100
-
         return jnp.array([loglike])
 
 
@@ -200,6 +197,7 @@ emulator_settings = {
     'quality_threshold_quadratic': 0.001,
 
     # related so sampler
+    'explained_variance_cutoff': 0.99999,
 
     # number of walker
     'nwalkers': 10,
@@ -212,6 +210,9 @@ emulator_settings = {
 
     # M adapt
     'M_adapt': 1000,
+
+    # 'plotting_directory': './plots_sampler_clang_nuts',
+    # 'testset_fraction': 0.1,
 }
 
 
@@ -270,6 +271,11 @@ my_parameters = {'h': {'prior': {'min': 0.64, 'max': 0.72},
                     'Tcal220': {'prior': {'min': 0.0, 'max': 2.0}, 'ref': {'mean': 1.0, 'std': 0.1}, 'proposal': 0.01},
                     'Tcal90': {'prior': {'min': 0.0, 'max': 2.0}, 'ref': {'mean': 1.0, 'std': 0.1}, 'proposal': 0.01}
 }
+
+for key in my_parameters:
+    my_parameters[key]['proposal'] = my_parameters[key]['proposal']/10.0
+    my_parameters[key]['ref']['std'] = my_parameters[key]['proposal']/10.0
+    
 
 start = time.time()
 

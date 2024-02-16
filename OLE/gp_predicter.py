@@ -5,6 +5,8 @@
 # use GPJax to fit the data
 from jax.config import config
 
+import os
+
 config.update("jax_enable_x64", True)
 
 from jax import jit, random
@@ -24,6 +26,7 @@ import time
 
 from OLE.utils.base import BaseClass
 from OLE.data_processing import data_processor
+from OLE.plotting import loss_plot, plot_pca_components_test_set
 
 from OLE.interfaces import gpjax_interface
 
@@ -187,6 +190,13 @@ class GP(BaseClass):
             'learning_rate': 0.02,
             # Number of iterations
             'num_iters': 100,
+
+            # plotting directory
+            'plotting_directory': None,
+
+            # testset fraction. If we have a testset, which is not None, then we will use this fraction of the data as a testset
+            'testset_fraction': None,
+            
         }
 
         # The hyperparameters are a dictionary of the hyperparameters for the different quantities. The keys are the names of the quantities.
@@ -207,6 +217,16 @@ class GP(BaseClass):
         self.input_data = input_data
         self.output_data = output_data[:,None]
         self.D = gpx.Dataset(self.input_data, self.output_data)
+        self.test_D = None
+
+
+        # if we have a test fraction, then we will split the data into a training and a test set
+        if self.hyperparameters['testset_fraction'] is not None:
+            self.debug('Splitting data into training and test set')
+            train_indices, test_indices = np.split(np.random.permutation(self.D.n), [int((1-self.hyperparameters['testset_fraction'])*self.D.n)])
+            self.D = gpx.Dataset(self.input_data[train_indices], self.output_data[train_indices])
+            self.test_D = gpx.Dataset(self.input_data[test_indices], self.output_data[test_indices])
+
         pass
 
     def train(self):
@@ -245,6 +265,17 @@ class GP(BaseClass):
             safe=False,
             key=random.PRNGKey(0),
         )
+
+        # some debugging output
+        if self.hyperparameters['plotting_directory'] is not None:
+            # creat directory if not exist
+            import os
+            if not os.path.exists(self.hyperparameters['plotting_directory']+ "/loss/"):
+                os.makedirs(self.hyperparameters['plotting_directory']+ "/loss/")
+            loss_plot(history, self._name , self.hyperparameters['plotting_directory']+'/loss/' + self._name + '_loss.png')
+
+            if self.hyperparameters['testset_fraction'] is not None:
+                self.run_test_set_tests()
 
         pass
 
@@ -303,3 +334,30 @@ class GP(BaseClass):
         gradient = grad(self.opt_posterior.predict_mean_single)
 
         return gradient(input_data, self.D)
+
+
+
+    # Some debugging functions
+    def run_test_set_tests(self):
+        # This function is used to test the test set.
+        means = jnp.zeros(self.test_D.n)
+        stds = jnp.zeros(self.test_D.n)
+
+        # predict the test set
+        for i in range(self.test_D.n):
+            mean, std = self.predict(jnp.array([self.test_D.X[i]]), return_std=True)
+            means = means.at[i].set(mean)
+            stds = stds.at[i].set(std)
+            self.debug('Predicted: ', mean, ' True: ', self.test_D.y[i], ' Error: ', mean - self.test_D.y[i])
+
+        # calculate the mean squared error
+        mse = jnp.mean((mean - self.test_D.y)**2)
+
+        # test that the directory exists
+        if not os.path.exists(self.hyperparameters['plotting_directory']+ "/test_set_prediction/"):
+            os.makedirs(self.hyperparameters['plotting_directory']+ "/test_set_prediction/")
+
+        plot_pca_components_test_set(jnp.array(self.test_D.y)[:,0], means, stds,self._name , self.hyperparameters['plotting_directory']+'/test_set_prediction/'+self._name+'.png')
+
+        # plot the mean and the std
+        pass

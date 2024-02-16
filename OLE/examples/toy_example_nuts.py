@@ -145,7 +145,9 @@ emulator_settings = {
     'debug': False,
 
     # plotting directory
-    'plotting_directory': './plots_sampler_test_nuts',
+    'plotting_directory': './plots_sampler_toy_nuts',
+
+    'testset_fraction': 0.1,
 
 }
 

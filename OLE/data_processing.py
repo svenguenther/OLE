@@ -7,7 +7,7 @@ import numpy as np
 import jax.numpy as jnp
 import os
 
-from .plotting import data_plot_raw, data_plot_normalized, pca_parameter_plot
+from OLE.plotting import data_plot_raw, data_plot_normalized, pca_parameter_plot
 
 class data_processor(BaseClass):
 
