@@ -19,6 +19,8 @@ import jax
 from copy import deepcopy
 from copy import copy
 
+from functools import partial
+
 from OLE.utils.base import BaseClass
 from OLE.utils.mpi import *
 from OLE.data_cache import DataCache
@@ -200,6 +202,8 @@ class Emulator(BaseClass):
                 self.train()
             else:
                 self.update()
+
+        
             
         if state_added:
             return True
@@ -210,6 +214,8 @@ class Emulator(BaseClass):
         # Update the emulator. This means that the emulator is retrained.
         # Load the data from the cache.
         self.debug("Loading data from cache")
+
+        self.write_to_log("Update emulator\n")
 
         # Train the emulator.
         for quantity, emulator in self.emulators.items():
@@ -233,6 +239,8 @@ class Emulator(BaseClass):
     def train(self):
         # Load the data from the cache.
         self.debug("Loading data from cache")
+
+        self.write_to_log("Training emulator\n")
 
         # Train the emulator.
         for quantity, emulator in self.emulators.items():
@@ -261,6 +269,7 @@ class Emulator(BaseClass):
         self.trained = True
         pass
 
+    @partial(jax.jit, static_argnums=0)
     def emulate(self, parameters):
         # Prepare output state
         output_state = {'quantities':{}} #self.ini_state.copy()
@@ -273,19 +282,25 @@ class Emulator(BaseClass):
             emulator_output = emulator.predict(input_data)
             output_state['quantities'][quantity] = emulator_output
 
+        # write to log
+        self.write_parameter_dict_to_log(parameters)
+
         return output_state
     
     # function to get N samples from the same input parameters
-    def emulate_samples(self, parameters, N, RNGkey=jax.random.PRNGKey(0)):
+    @partial(jax.jit, static_argnums=0)
+    def emulate_samples(self, parameters, RNGkey=jax.random.PRNGKey(0)):
         # Prepare list of N output states
         output_states = []
-        for i in range(N):
+
+        for i in range(self.hyperparameters['N_quality_samples']):
             state, RNGkey = self.emulate_sample(parameters, RNGkey=RNGkey)
             output_states.append(state)
 
         return output_states, RNGkey
     
     # function to get 1 sample from the same input parameters
+    @partial(jax.jit, static_argnums=0)
     def emulate_sample(self, parameters, RNGkey=jax.random.PRNGKey(0)):
         # Prepare list of N output states
 
@@ -296,7 +311,7 @@ class Emulator(BaseClass):
         input_data = jnp.array([[value[0] for key, value in parameters.items() if key in self.input_parameters]])
 
         for quantity, emulator in self.emulators.items():
-            emulator_output, RNGkey = emulator.sample_prediction(input_data, 1, RNGkey=RNGkey)
+            emulator_output, RNGkey = emulator.sample_prediction(input_data, RNGkey=RNGkey)
             
             state['quantities'][quantity] = emulator_output[0,:]
 
@@ -317,10 +332,14 @@ class Emulator(BaseClass):
 
         delta_loglike = jnp.abs(mean_loglike - max_loglike)
 
+        # write testing to log
+
         # if the mean loglike is above the maximum found loglike we only check the constant term
         if mean_loglike > max_loglike:
             if std_loglike > self.hyperparameters['quality_threshold_constant']:
                 self.debug("Emulator quality criterium NOT fulfilled")
+                _ = "Quality criterium NOT fulfilled; Max loglike: %f, delta loglikes: " % (max_loglike) + " ".join([str(loglike) for loglike in loglikes]) + "\n"
+                self.write_to_log(_)
                 return False
         else:
             # calculate the absolute difference between the mean loglike and the maximum loglike
@@ -329,9 +348,13 @@ class Emulator(BaseClass):
             # the full criterium 
             if std_loglike > self.hyperparameters['quality_threshold_constant'] + self.hyperparameters['quality_threshold_linear']*delta_loglike + self.hyperparameters['quality_threshold_quadratic']*delta_loglike**2:
                 self.debug("Emulator quality criterium NOT fulfilled")
+                _ = "Quality criterium NOT fulfilled; Max loglike: %f, delta loglikes: " % (max_loglike) + " ".join([str(loglike) for loglike in loglikes]) + "\n"
+                self.write_to_log(_)
                 return False
 
         self.debug("Emulator quality criterium fulfilled")
+        _ = "Quality criterium fulfilled; Max loglike: %f, delta loglikes: " % (max_loglike) + " ".join([str(loglike) for loglike in loglikes]) + "\n"
+        self.write_to_log(_)
         return True
     
 
@@ -343,6 +366,7 @@ class Emulator(BaseClass):
         # if we do not require a quality check, we return False
         if not self.hyperparameters['test_emulator']:
             self.debug("Quality check not required. Test emulator is False")
+            self.write_to_log("Quality check not required. Test emulator is False")
             return False
 
         # The idea is that we collect all points which were checked by the quality criterium and then check whether the new point is within the convex hull of the checked points.
@@ -363,12 +387,18 @@ class Emulator(BaseClass):
             # if the distance is smaller than a threshold, we return True
             if jnp.any(distances < self.hyperparameters['quality_points_radius']):
                 self.debug("Quality check not required. Point is close to already checked points")
+                self.write_to_log("Quality check not required. Point is close to already checked points: " + " ".join([key+ ': ' +str(value) for key, value in parameters.items()]) + "\n")
                 return False
             else:
                 self.debug("Quality check required. Point is far from already checked points")
+                self.write_to_log("Quality check required. Point is far from already checked points: " + " ".join([key+ ': ' +str(value) for key, value in parameters.items()]) + "\n")
                 return True
         
     def add_quality_point(self, parameters):
+        # if there is no distance to check, there is no point in storing these points
+        if self.hyperparameters['quality_points_radius'] == 0.0:
+            return
+
         input_data = jnp.array([[value[0] for key, value in parameters.items() if key in self.input_parameters]])
 
         # normalize the input data
@@ -397,13 +427,22 @@ class Emulator(BaseClass):
 
     def write_to_log(self, message):
         # write the message to the logfile
+        if self.hyperparameters['logfile'] is None:
+            return
+        
         file_name = self.hyperparameters['logfile']+'_'+str(get_mpi_rank())+'.log'
         with open(file_name, 'a') as logfile:
+            # add timestamp to message
+            message = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()) + " " + message
             logfile.write(message)
 
         pass
 
-
+    def write_parameter_dict_to_log(self, parameters):
+        # write the parameters to the logfile
+        _ = "Emulated state: " + " ".join([str(key) + ": " + str(value) for key, value in parameters.items()]) + "\n"
+        self.write_to_log(_)
+        pass
 
 
 

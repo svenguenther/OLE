@@ -15,6 +15,8 @@ import numpy as np
 from jaxtyping import install_import_hook
 import optax as ox
 
+from functools import partial
+
 from jax import grad
 
 with install_import_hook("gpjax", "beartype.beartype"):
@@ -75,6 +77,7 @@ class GP_predictor(BaseClass):
 
         pass
 
+    @partial(jit, static_argnums=0) 
     def predict(self, parameters):
         # Predict the quantity for the given parameters.
         # First we normalize the parameters.
@@ -94,24 +97,26 @@ class GP_predictor(BaseClass):
         
         return output_data
     
-    def sample_prediction(self, parameters, N, RNGkey=random.PRNGKey(int(time.time()))):
+    @partial(jit, static_argnums=0) 
+    def sample_prediction(self, parameters, RNGkey=random.PRNGKey(int(time.time()))):
         # Predict the quantity for the given parameters.
         # First we normalize the parameters.
         parameters_normalized = self.data_processor.normalize_input_data(parameters)
 
         # Then we predict the output data for the normalized parameters.
-        output_data_compressed = jnp.zeros((N, len(self.GPs)))
+        output_data_compressed = jnp.zeros((1, len(self.GPs)))
         for i in range(len(self.GPs)):
-            _, RNGkey = self.GPs[i].sample(parameters_normalized, N, RNGkey=RNGkey)
+            _, RNGkey = self.GPs[i].sample(parameters_normalized, RNGkey=RNGkey)
             output_data_compressed = output_data_compressed.at[:,[i]].set(_.transpose())    # this is the time consuming part
 
         # Untransform the output data.
-        output_data_normalized = jnp.array([self.data_processor.decompress_data(output_data_compressed[i,:]) for i in range(N)])
+        output_data_normalized = jnp.array([self.data_processor.decompress_data(output_data_compressed[i,:]) for i in range(1)])
 
         # Then we denormalize the output data.
         output_data = self.data_processor.denormalize_data(output_data_normalized)
         return output_data, RNGkey
     
+    @partial(jit, static_argnums=0) 
     def predict_gradients(self, parameters):
         # Predict the quantity for the given parameters.
         # First we normalize the parameters.
@@ -173,7 +178,6 @@ class GP_predictor(BaseClass):
         # Set the parameters of the emulator.
         self.data_processor.set_parameters(parameters)
         pass
-
 
 
 
@@ -279,8 +283,8 @@ class GP(BaseClass):
 
         pass
 
-
-    def predict(self, input_data, return_std=False):
+    @partial(jit, static_argnums=0) 
+    def predict(self, input_data):
         # Predict the output data for the given input data.
 
 
@@ -298,16 +302,23 @@ class GP(BaseClass):
             Kxx = self.Kxx
 
         ac = self.opt_posterior.calculate_mean_single_from_Kxx(input_data, self.D, Kxx)
-
-        if not return_std:
-            return ac
-        else:
-            latent_dist = self.opt_posterior.predict(input_data, train_data=self.D)
-            predictive_dist = self.opt_posterior.likelihood(latent_dist)
-            predictive_std = predictive_dist.stddev()
-            return ac, predictive_std[0]
+        return ac
         
-    def sample(self, input_data, N, RNGkey=random.PRNGKey(int(time.time()))):
+    @partial(jit, static_argnums=0) 
+    def predict_value_and_std(self, input_data, return_std=False):
+        # Predict the output data for the given input data.
+        Kxx = self.opt_posterior.compute_Kxx(self.D)
+
+        ac = self.opt_posterior.calculate_mean_single_from_Kxx(input_data, self.D, Kxx)
+
+        latent_dist = self.opt_posterior.predict(input_data, train_data=self.D)
+        predictive_dist = self.opt_posterior.likelihood(latent_dist)
+        predictive_std = predictive_dist.stddev()
+        return ac, predictive_std[0]
+
+
+    @partial(jit, static_argnums=0) 
+    def sample(self, input_data, RNGkey=random.PRNGKey(int(time.time()))):
         # Predict the output data for the given input data.
 
         if self.recompute_kernel_matrix:
@@ -327,7 +338,7 @@ class GP(BaseClass):
         # generate new key
         RNGkey, subkey = random.split(RNGkey)
 
-        return random.normal(key= subkey, shape=(1,N)) * jnp.sqrt(predictive_std[0]) + ac, RNGkey
+        return random.normal(key= subkey, shape=(1,1)) * jnp.sqrt(predictive_std[0]) + ac, RNGkey
         
     def predict_gradient(self, input_data):
         # Predict the gradient of the output data for the given input data.
@@ -345,7 +356,7 @@ class GP(BaseClass):
 
         # predict the test set
         for i in range(self.test_D.n):
-            mean, std = self.predict(jnp.array([self.test_D.X[i]]), return_std=True)
+            mean, std = self.predict_value_and_std(jnp.array([self.test_D.X[i]]))
             means = means.at[i].set(mean)
             stds = stds.at[i].set(std)
             self.debug('Predicted: ', mean, ' True: ', self.test_D.y[i], ' Error: ', mean - self.test_D.y[i])

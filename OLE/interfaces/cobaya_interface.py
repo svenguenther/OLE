@@ -7,6 +7,8 @@ import cobaya as my_cobaya
 from cobaya.theory import Theory
 from cobaya.log import LoggedError, always_stop_exceptions
 
+from functools import partial
+
 def check_cache_and_compute(self, params_values_dict,
                                 dependency_params=None, want_derived=False, cached=True):
     
@@ -32,13 +34,15 @@ def check_cache_and_compute(self, params_values_dict,
                     self.emulator = Emulator(**self.emulator_settings)
                     self.emulator.initialize(emulator_state=None, **self.emulator_settings)
 
-                    def emulate_samples(parameters):
-                        key = jax.random.PRNGKey(int(time.clock_gettime_ns(0)))
-                        return self.emulator.emulate_samples(parameters, self.emulator.hyperparameters['N_quality_samples'], key)
-                    
-                    self.jit_emulator_samples = emulate_samples#jax.jit(emulate_samples)
-                    self.jit_emulator_samples = jax.jit(emulate_samples)
-                    self.jit_emulate = jax.jit(self.emulator.emulate)
+                    # jit the emulator functions                                         
+                    del self.emulator_emulate_function
+                    del self.emulator_sampling_function
+                    self.emulator_emulate_function = self.emulator.emulate
+                    self.emulator_sampling_function = self.emulate_samples
+
+                    self.jit_emulate = jax.jit(self.emulator_emulate_function)
+                    self.jit_emulator_samples = jax.jit(self.emulator_sampling_function)
+
                     self.log.info("Emulator trained")
 
                     self._current_state = self.emulator.data_cache.states[0]
@@ -152,25 +156,26 @@ def check_cache_and_compute(self, params_values_dict,
                     if len(self.emulator.data_cache.states) >= self.emulator.hyperparameters['min_data_points']:
                         self.emulator.train()
 
-                        def emulate_samples(parameters):
-                            key = jax.random.PRNGKey(int(time.clock_gettime_ns(0)))
-                            return self.emulator.emulate_samples(parameters, self.emulator.hyperparameters['N_quality_samples'], key)
-                        
-                        self.jit_emulator_samples = emulate_samples#jax.jit(emulate_samples)
-                        self.jit_emulator_samples = jax.jit(emulate_samples)
-                        self.jit_emulate = jax.jit(self.emulator.emulate)
+                        # jit the emulator functions
+                        del self.emulator_emulate_function
+                        del self.emulator_sampling_function
+                        self.emulator_emulate_function = self.emulator.emulate
+                        self.emulator_sampling_function = self.emulate_samples
+
+                        self.jit_emulate = jax.jit(self.emulator_emulate_function)
+                        self.jit_emulator_samples = jax.jit(self.emulator_sampling_function)
+
                         self.log.info("Emulator trained")
                 else:
                     if added:
-
                         # here we need to re jit 
-                        def emulate_samples(parameters):
-                            key = jax.random.PRNGKey(int(time.clock_gettime_ns(0)))
-                            return self.emulator.emulate_samples(parameters, self.emulator.hyperparameters['N_quality_samples'], key)
-                        
-                        self.jit_emulator_samples = emulate_samples#jax.jit(emulate_samples)
-                        self.jit_emulator_samples = jax.jit(emulate_samples)
-                        self.jit_emulate = jax.jit(self.emulator.emulate)
+                        del self.emulator_emulate_function
+                        del self.emulator_sampling_function
+                        self.emulator_emulate_function = self.emulator.emulate
+                        self.emulator_sampling_function = self.emulate_samples
+
+                        self.jit_emulate = jax.jit(self.emulator_emulate_function)
+                        self.jit_emulator_samples = jax.jit(self.emulator_sampling_function)
 
 
     # make this state the current one
@@ -198,13 +203,14 @@ def check_cache_and_compute(self, params_values_dict,
             self.emulator.initialize(emulator_state, **self.emulator_settings)
 
             if self.emulator.trained:
-                def emulate_samples(parameters):
-                    key = jax.random.PRNGKey(int(time.clock_gettime_ns(0)))
-                    return self.emulator.emulate_samples(parameters, self.emulator.hyperparameters['N_quality_samples'], key)
-                
-                self.jit_emulator_samples = emulate_samples#jax.jit(emulate_samples)
-                self.jit_emulator_samples = jax.jit(emulate_samples)
-                self.jit_emulate = jax.jit(self.emulator.emulate)
+                # jit the emulator functions
+                del self.emulator_emulate_function
+                del self.emulator_sampling_function
+                self.emulator_emulate_function = self.emulator.emulate
+                self.emulator_sampling_function = self.emulate_samples
+
+                self.jit_emulate = jax.jit(self.emulator_emulate_function)
+                self.jit_emulator_samples = jax.jit(self.emulator_sampling_function)
 
 
 
@@ -225,17 +231,15 @@ def test_emulator(self,emulator_state):
     # check whether the emulator is trained
     if not self.emulator.trained:
         return False, None
-    
+
     # first we ask the emulator whether it is requried to run a quality check
     a = time.time()
     if self.emulator.require_quality_check(emulator_state['parameters']):
         # if yes. We sample multiple emulator states and estiamte the accuracy on the loglikelihood prediction!
         # if not, we trust the emulator and we can just run it
         # sample multiple spectra
-        #emulator_sample_states = self.emulator.emulate_samples(emulator_state['parameters'], self.emulator.hyperparameters['N_quality_samples'])
+        #emulator_sample_states = self.emulator.emulate_samples(emulator_state['parameters'])
         emulator_sample_states, _ = self.jit_emulator_samples(emulator_state['parameters'])
-        print('emulator_sample_states')
-        print(emulator_sample_states)
 
         # compute the likelihoods
         emulator_sample_loglikes = []
@@ -246,7 +250,6 @@ def test_emulator(self,emulator_state):
 
             self.skip_theory_state_from_emulator = cobaya_sample_state
             likelihoods = list(self.provider.model._loglikes_input_params(self.provider.params, cached = False, return_derived = False))
-            print(likelihoods)
             emulator_sample_loglikes.append(sum(likelihoods))
 
         emulator_sample_loglikes = np.array(emulator_sample_loglikes)
@@ -270,8 +273,17 @@ def test_emulator(self,emulator_state):
     predictions = self.jit_emulate(emulator_state['parameters'])
     b = time.time()
     print("Run the emulator: ", b-a)
+
+    self.emulator_counter += 1
+    print('emulator_counter')
+    print(self.emulator_counter)
+
     return True, predictions
 
+@partial(jax.jit, static_argnums=(0,))
+def emulate_samples(self,parameters):
+    key = jax.random.PRNGKey(int(time.clock_gettime_ns(0)))
+    return self.emulator.emulate_samples(parameters, key)
 
 # This function calls all likelihoods and computes the total likelihood. It is used to compute the likelihood for new emulator states or to qualify the accuracy of the emulator
 def evaluate_cobaya_pipeline(self,state):
@@ -283,12 +295,16 @@ def evaluate_cobaya_pipeline(self,state):
 # give the theory class the new attribute
 Theory.emulate = False
 Theory.emulator = None
+Theory.emulator_counter = 0
 Theory.skip_theory_state_from_emulator = None
 Theory.emulator_settings = {}
+Theory.emulator_sampling_function = None
+Theory.emulator_emulate_function = None
 
 # give the theory class the new method which incorporates the emulator
 Theory.test_emulator = test_emulator
 Theory.check_cache_and_compute = check_cache_and_compute
+Theory.emulate_samples = emulate_samples
 
 
 
