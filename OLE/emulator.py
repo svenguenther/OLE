@@ -26,6 +26,8 @@ from OLE.utils.mpi import *
 from OLE.data_cache import DataCache
 from OLE.gp_predicter import GP_predictor
 
+from OLE.plotting import plot_loglikes
+
 class Emulator(BaseClass): 
 
     # The emulators are a dictionary of the individual emulators for the different quantities. The keys are the names of the quantities.
@@ -105,6 +107,10 @@ class Emulator(BaseClass):
             # the radius around the checked points for which we do not need to check the quality criterium
             'quality_points_radius': 0.3,
 
+            # plotting directory
+            'plotting_directory': None,
+
+
         }
 
         # The hyperparameters are a dictionary of the hyperparameters for the different quantities. The keys are the names of the quantities.
@@ -179,8 +185,9 @@ class Emulator(BaseClass):
         pass
 
     def add_state(self, state):
-        # returns True if the state was added to the data cache and the emulator was updated
-        # returns False if the state was not added to the data cache and the emulator was not updated
+        # returns 2 if the state was added to the data cache and the emulator was trained
+        # returns 1 if the state was added to the data cache and the emulator was updated
+        # returns 0 if the state was not added to the data cache and the emulator was not updated
 
         # new state
         new_state = deepcopy(state)
@@ -195,13 +202,22 @@ class Emulator(BaseClass):
 
         if state_added:
             self.added_data_points += 1
+
+            # write to log that the state was added
+            _ = "State added to emulator: " + " ".join([key+ ': ' +str(value) for key, value in new_state['parameters'].items()]) + " at loglike: " + str(new_state['loglike']) + " max. loglike: " + str(self.data_cache.max_loglike) + "\n"
+            self.write_to_log(_)
+            # write to log the current size of the data cache
+            _ = "Current data cache size: %d\n" % len(self.data_cache.states)
+            self.write_to_log(_)
         
         # if the emulator is already trained, we can add the new state to the GP without fitting the Kernel parameters
         if self.trained and state_added:
             if self.added_data_points%self.hyperparameters['kernel_fitting_frequency'] == 0:
                 self.train()
+                return True
             else:
                 self.update()
+                return True
 
         
             
@@ -223,15 +239,22 @@ class Emulator(BaseClass):
             input_data_raw = self.data_cache.get_parameters()
             output_data_raw = self.data_cache.get_quantities(quantity)
 
-            input_data_raw = np.array(input_data_raw)
-            output_data_raw = np.array(output_data_raw)
+            input_data_raw_jax = jnp.array(input_data_raw)
+            output_data_raw_jax = jnp.array(output_data_raw)
 
             # load data into emulators
-            emulator.load_data(input_data_raw, output_data_raw)
+            emulator.load_data(input_data_raw_jax, output_data_raw_jax)
 
             # normalize and compress data
             emulator.data_processor.normalize_training_data()
             emulator.data_processor.compress_training_data()
+
+            del input_data_raw
+            del output_data_raw
+
+            del input_data_raw_jax
+            del output_data_raw_jax
+            
             
         self.trained = True
         pass
@@ -243,16 +266,17 @@ class Emulator(BaseClass):
         self.write_to_log("Training emulator\n")
 
         # Train the emulator.
+        input_data_raw = self.data_cache.get_parameters()
+        input_data_raw_jax = jnp.array(input_data_raw)
+
         for quantity, emulator in self.emulators.items():
             self.debug("Start training emulator for quantity %s", quantity)
-            input_data_raw = self.data_cache.get_parameters()
             output_data_raw = self.data_cache.get_quantities(quantity)
 
-            input_data_raw = np.array(input_data_raw)
-            output_data_raw = np.array(output_data_raw)
+            output_data_raw_jax = jnp.array(output_data_raw)
 
             # load data into emulators
-            emulator.load_data(input_data_raw, output_data_raw)
+            emulator.load_data(input_data_raw_jax, output_data_raw_jax)
 
             # compute normalization and compression and apply it to the data
             self.debug("Compute normalization and compression for quantity %s", quantity)
@@ -265,11 +289,30 @@ class Emulator(BaseClass):
 
             self.debug("Train GP for quantity %s", quantity)
             emulator.train()
+
+            del output_data_raw_jax
+            del output_data_raw
+
+        del input_data_raw_jax
+        del input_data_raw
             
         self.trained = True
+
+        jax.clear_backends()
+
+
+
+
+        # if we have a plotting directory we plot the loglikelihood
+        if self.hyperparameters['plotting_directory'] is not None:
+            loglikes = jnp.array(self.data_cache.get_loglikes())
+            parameters = jnp.array(self.data_cache.get_parameters())
+
+            for i in range(len(parameters[0])):
+                plot_loglikes(loglikes[:,0], parameters[:,i], self.input_parameters[i], self.hyperparameters['plotting_directory']+'/loglike_'+str(i)+'.png')
         pass
 
-    @partial(jax.jit, static_argnums=0)
+    # @partial(jax.jit, static_argnums=0)
     def emulate(self, parameters):
         # Prepare output state
         output_state = {'quantities':{}} #self.ini_state.copy()
@@ -288,7 +331,7 @@ class Emulator(BaseClass):
         return output_state
     
     # function to get N samples from the same input parameters
-    @partial(jax.jit, static_argnums=0)
+    # @partial(jax.jit, static_argnums=0)
     def emulate_samples(self, parameters, RNGkey=jax.random.PRNGKey(0)):
         # Prepare list of N output states
         output_states = []
@@ -300,7 +343,7 @@ class Emulator(BaseClass):
         return output_states, RNGkey
     
     # function to get 1 sample from the same input parameters
-    @partial(jax.jit, static_argnums=0)
+    # @partial(jax.jit, static_argnums=0)
     def emulate_sample(self, parameters, RNGkey=jax.random.PRNGKey(0)):
         # Prepare list of N output states
 

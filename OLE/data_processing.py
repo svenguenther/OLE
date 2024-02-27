@@ -6,6 +6,8 @@ from OLE.utils.base import BaseClass
 import numpy as np
 import jax.numpy as jnp
 import os
+import gc
+import copy
 
 from OLE.plotting import data_plot_raw, data_plot_normalized, pca_parameter_plot
 
@@ -60,6 +62,9 @@ class data_processor(BaseClass):
 
             # plotting directory
             'plotting_directory': None,
+
+            # testset fraction
+            'testset_fraction': None,
         }
 
         # The hyperparameters are a dictionary of the hyperparameters for the different quantities. The keys are the names of the quantities.
@@ -67,8 +72,32 @@ class data_processor(BaseClass):
 
         for key, value in kwargs.items():
             self.hyperparameters[key] = value
+
+        self.input_data_raw = None
+        self.output_data_raw = None
+
+        self.input_data_normalized = None
+        self.output_data_normalized = None
         
         pass
+
+    def clean_data(self):
+        del self.input_data_raw
+        del self.output_data_raw
+
+        del self.input_data_normalized
+        del self.output_data_normalized
+
+        self.input_data_raw = None
+        self.output_data_raw = None
+
+        self.input_data_normalized = None
+        self.output_data_normalized = None
+        
+
+        gc.collect()
+
+        return
 
     def load_data(self, input_data_raw, output_data_raw):
         # Load the raw data from the data cache.
@@ -136,12 +165,21 @@ class data_processor(BaseClass):
         self.debug("Compressing data to %d dimensions", n_components)
 
         # calculate the projection matrix
-        projection_matrix = eigenvectors[:, :n_components]
-        self.projection_matrix = projection_matrix
+        self.projection_matrix = copy.deepcopy(eigenvectors[:, :n_components])
+
+        del eigenvectors
+        del eigenvalues
+
+        gc.collect()
 
 
     # The following functions are used to process the input and output data of the emulator during the training process
     def normalize_training_data(self):
+        del self.input_data_normalized
+        del self.output_data_normalized
+
+        gc.collect()
+
         # normalize the input data
         self.input_data_normalized = (self.input_data_raw - self.input_means) / self.input_stds
 
@@ -200,11 +238,26 @@ class data_processor(BaseClass):
 
         return output_data_normalized
     
+    def decompress_std(self, output_std_emulator):
+        # undo the second normalization
+        output_std_emulator = output_std_emulator * self.output_pca_stds
+
+        # decompress the data
+        output_std_normalized = jnp.dot(output_std_emulator, jnp.abs(self.projection_matrix.T))
+
+        return output_std_normalized
+    
     def denormalize_data(self, output_data_normalized):
         # denormalize the data
         output_data_raw = output_data_normalized * self.output_stds + self.output_means
 
         return output_data_raw
+    
+    def denormalize_std(self, output_std_normalized):
+        # denormalize the data
+        output_std_raw = output_std_normalized * self.output_stds
+
+        return output_std_raw
 
 
 

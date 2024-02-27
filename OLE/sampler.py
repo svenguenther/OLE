@@ -69,6 +69,9 @@ class Sampler(BaseClass):
 
             # force overwrite
             'force': False,
+
+            # load covmat from file from a path
+            'covmat': None,
         }
 
         # The hyperparameters are a dictionary of the hyperparameters for the different quantities. The keys are the names of the quantities.
@@ -98,8 +101,49 @@ class Sampler(BaseClass):
             else:
                 self.proposal_means = self.proposal_means.at[i].set(0.5*(self.parameter_dict[key]['prior']['min']+self.parameter_dict[key]['prior']['max']))
 
+        # generate the covariance matrix
+        self.covmat = self.generate_covmat()
+
+        # go into eigenspace of covmat
+        self.eigenvalues, self.eigenvectors = jnp.linalg.eigh(self.covmat)
+        self.eigenvalues = jnp.sqrt(self.eigenvalues)
+        self.eigenvectors = jnp.linalg.inv(self.eigenvectors)
+
+        print("eigenvalues: ", self.eigenvalues)
+        print("eigenvectors: ", self.eigenvectors)
+
+
+
+
+
+        # import sys
+        # sys.exit()
+
+
+
+
+
+        # initialize the sampler
+
+
+
 
         pass
+
+    def generate_covmat(self):
+        # this function generates the covariance matrix either by loading it from a file or by using the proposal lengths. Note that the covmat might miss some entries which are to be filled with the proposal lengths.
+        if self.hyperparameters['covmat'] is not None:
+            # load the covmat from a file
+            covmat = np.loadtxt(self.hyperparameters['covmat'])
+            if covmat.shape[0] != len(self.parameter_dict) or covmat.shape[1] != len(self.parameter_dict):
+                raise ValueError("Covmat has wrong shape. Please check the covmat file.")
+            return covmat
+        else:
+            # create the covmat from the proposal lengths
+            covmat = np.zeros((len(self.parameter_dict), len(self.parameter_dict)))
+            for i in range(len(self.parameter_dict)):
+                covmat[i,i] = self.proposal_lengths[i]**2
+            return covmat
 
     def test_pipeline(self):
         # Create a test state from the given parameters.

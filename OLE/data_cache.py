@@ -4,6 +4,7 @@ import sys
 import time
 import pickle
 import fasteners
+import copy
 
 import jax.numpy as jnp
 

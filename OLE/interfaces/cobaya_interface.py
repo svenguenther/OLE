@@ -8,6 +8,8 @@ from cobaya.theory import Theory
 from cobaya.log import LoggedError, always_stop_exceptions
 
 from functools import partial
+import copy
+import gc
 
 def check_cache_and_compute(self, params_values_dict,
                                 dependency_params=None, want_derived=False, cached=True):
@@ -37,11 +39,15 @@ def check_cache_and_compute(self, params_values_dict,
                     # jit the emulator functions                                         
                     del self.emulator_emulate_function
                     del self.emulator_sampling_function
+                    del self.jit_emulate
+                    del self.jit_emulator_samples
                     self.emulator_emulate_function = self.emulator.emulate
                     self.emulator_sampling_function = self.emulate_samples
 
-                    self.jit_emulate = jax.jit(self.emulator_emulate_function)
-                    self.jit_emulator_samples = jax.jit(self.emulator_sampling_function)
+                    # self.jit_emulate = jax.jit(self.emulator_emulate_function)
+                    # self.jit_emulator_samples = jax.jit(self.emulator_sampling_function)
+                    self.jit_emulate = self.emulator_emulate_function
+                    self.jit_emulator_samples = self.emulator_sampling_function
 
                     self.log.info("Emulator trained")
 
@@ -161,21 +167,32 @@ def check_cache_and_compute(self, params_values_dict,
                         del self.emulator_sampling_function
                         self.emulator_emulate_function = self.emulator.emulate
                         self.emulator_sampling_function = self.emulate_samples
-
+                        gc.collect()       
                         self.jit_emulate = jax.jit(self.emulator_emulate_function)
                         self.jit_emulator_samples = jax.jit(self.emulator_sampling_function)
+                        
+                        # self.jit_emulate = self.emulator_emulate_function
+                        # self.jit_emulator_samples = self.emulator_sampling_function
 
                         self.log.info("Emulator trained")
                 else:
                     if added:
                         # here we need to re jit 
-                        del self.emulator_emulate_function
-                        del self.emulator_sampling_function
+                        del self.jit_emulate
+                        del self.jit_emulator_samples
+
+                        # del self.emulator 
+
+                        gc.collect()       
+
                         self.emulator_emulate_function = self.emulator.emulate
                         self.emulator_sampling_function = self.emulate_samples
 
                         self.jit_emulate = jax.jit(self.emulator_emulate_function)
                         self.jit_emulator_samples = jax.jit(self.emulator_sampling_function)
+
+                        # self.jit_emulate = self.emulator_emulate_function
+                        # self.jit_emulator_samples = self.emulator_sampling_function
 
 
     # make this state the current one
@@ -198,19 +215,25 @@ def check_cache_and_compute(self, params_values_dict,
 
             emulator_state['loglike'] = np.array([sum(likelihoods)])
 
+            self.initial_emulator_state = copy.deepcopy(emulator_state)
+
             # initialize the emulator
             self.emulator = Emulator(**self.emulator_settings)
-            self.emulator.initialize(emulator_state, **self.emulator_settings)
+            self.emulator.initialize(self.initial_emulator_state, **self.emulator_settings)
 
             if self.emulator.trained:
                 # jit the emulator functions
                 del self.emulator_emulate_function
                 del self.emulator_sampling_function
+                del self.jit_emulate
+                del self.jit_emulator_samples
                 self.emulator_emulate_function = self.emulator.emulate
                 self.emulator_sampling_function = self.emulate_samples
 
-                self.jit_emulate = jax.jit(self.emulator_emulate_function)
-                self.jit_emulator_samples = jax.jit(self.emulator_sampling_function)
+                # self.jit_emulate = jax.jit(self.emulator_emulate_function)
+                # self.jit_emulator_samples = jax.jit(self.emulator_sampling_function)
+                self.jit_emulate = self.emulator_emulate_function
+                self.jit_emulator_samples = self.emulator_sampling_function
 
 
 
@@ -280,7 +303,7 @@ def test_emulator(self,emulator_state):
 
     return True, predictions
 
-@partial(jax.jit, static_argnums=(0,))
+# @partial(jax.jit, static_argnums=(0,))
 def emulate_samples(self,parameters):
     key = jax.random.PRNGKey(int(time.clock_gettime_ns(0)))
     return self.emulator.emulate_samples(parameters, key)
@@ -300,6 +323,11 @@ Theory.skip_theory_state_from_emulator = None
 Theory.emulator_settings = {}
 Theory.emulator_sampling_function = None
 Theory.emulator_emulate_function = None
+Theory.jit_emulate = None
+Theory.jit_emulator_samples = None
+
+# Theory flag
+
 
 # give the theory class the new method which incorporates the emulator
 Theory.test_emulator = test_emulator

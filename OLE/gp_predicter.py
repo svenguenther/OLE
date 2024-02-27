@@ -16,6 +16,8 @@ from jaxtyping import install_import_hook
 import optax as ox
 
 from functools import partial
+import gc
+import copy
 
 from jax import grad
 
@@ -28,7 +30,7 @@ import time
 
 from OLE.utils.base import BaseClass
 from OLE.data_processing import data_processor
-from OLE.plotting import loss_plot, plot_pca_components_test_set
+from OLE.plotting import loss_plot, plot_pca_components_test_set, plot_prediction_test
 
 from OLE.interfaces import gpjax_interface
 
@@ -47,6 +49,7 @@ class GP_predictor(BaseClass):
     def initialize(self, ini_state, **kwargs):
         # in the ini_state and example state is given which contains the parameters and the quantities which are to be emulated. The example state also contains an example value for each quantity which is used to determine the dimensionality of the quantity.
 
+        self.GPs = []
 
         # default hyperparameters
         defaulthyperparameters = {
@@ -54,6 +57,9 @@ class GP_predictor(BaseClass):
 
             # plotting directory
             'plotting_directory': None,
+
+            # testset fraction. If we have a testset, which is not None, then we will use this fraction of the data as a testset
+            'testset_fraction': None,
 
         }
 
@@ -75,37 +81,65 @@ class GP_predictor(BaseClass):
         self.data_processor = data_processor('Data processor ' + self.quantity_name, debug=self.debug_mode)
         self.data_processor.initialize(self.input_size, self.output_size, self.quantity_name,**kwargs)
 
+        # For each dimension of the output_data we create a GP.
+        self.GPs = []
+        self.num_GPs = 0 # the number of GPs we have
+
         pass
 
-    @partial(jit, static_argnums=0) 
+    # @partial(jit, static_argnums=0) 
     def predict(self, parameters):
         # Predict the quantity for the given parameters.
         # First we normalize the parameters.
         parameters_normalized = self.data_processor.normalize_input_data(parameters)
 
         # Then we predict the output data for the normalized parameters.
-        output_data_compressed = jnp.zeros(len(self.GPs))
-        for i in range(len(self.GPs)):
+        output_data_compressed = jnp.zeros(self.num_GPs)
+        for i in range(self.num_GPs):
             output_data_compressed = output_data_compressed.at[i].set(self.GPs[i].predict(parameters_normalized))    # this is the time consuming part
 
         # Untransform the output data.
         output_data_normalized = self.data_processor.decompress_data(output_data_compressed)
-
 
         # Then we denormalize the output data.
         output_data = self.data_processor.denormalize_data(output_data_normalized)
         
         return output_data
     
-    @partial(jit, static_argnums=0) 
+    # @partial(jit, static_argnums=0) 
+    def predict_value_and_std(self, parameters):
+        # Predict the quantity for the given parameters.
+        # First we normalize the parameters.
+        parameters_normalized = self.data_processor.normalize_input_data(parameters)
+
+        # Then we predict the output data for the normalized parameters.
+        output_data_compressed = jnp.zeros(self.num_GPs)
+        output_std_compressed = jnp.zeros(self.num_GPs)
+
+        for i in range(self.num_GPs):
+            v, s = self.GPs[i].predict_value_and_std(parameters_normalized)
+            output_data_compressed = output_data_compressed.at[i].set(v)   
+            output_std_compressed = output_std_compressed.at[i].set(s)   
+
+        # Untransform the output data.
+        output_data_normalized = self.data_processor.decompress_data(output_data_compressed)
+        output_std_normalized = self.data_processor.decompress_std(output_std_compressed)
+
+        # Then we denormalize the output data.
+        output_data = self.data_processor.denormalize_data(output_data_normalized)
+        output_std = self.data_processor.denormalize_std(output_std_normalized)
+        
+        return output_data, output_std
+    
+    # @partial(jit, static_argnums=0) 
     def sample_prediction(self, parameters, RNGkey=random.PRNGKey(int(time.time()))):
         # Predict the quantity for the given parameters.
         # First we normalize the parameters.
         parameters_normalized = self.data_processor.normalize_input_data(parameters)
 
         # Then we predict the output data for the normalized parameters.
-        output_data_compressed = jnp.zeros((1, len(self.GPs)))
-        for i in range(len(self.GPs)):
+        output_data_compressed = jnp.zeros((1, self.num_GPs))
+        for i in range(self.num_GPs):
             _, RNGkey = self.GPs[i].sample(parameters_normalized, RNGkey=RNGkey)
             output_data_compressed = output_data_compressed.at[:,[i]].set(_.transpose())    # this is the time consuming part
 
@@ -116,16 +150,16 @@ class GP_predictor(BaseClass):
         output_data = self.data_processor.denormalize_data(output_data_normalized)
         return output_data, RNGkey
     
-    @partial(jit, static_argnums=0) 
+    # @partial(jit, static_argnums=0) 
     def predict_gradients(self, parameters):
         # Predict the quantity for the given parameters.
         # First we normalize the parameters.
         parameters_normalized = self.data_processor.normalize_input_data(parameters)
 
         # Then we predict the output data for the normalized parameters.
-        output_data_compressed = np.zeros((len(self.GPs), self.input_size))
+        output_data_compressed = np.zeros((self.num_GPs, self.input_size))
 
-        for i in range(len(self.GPs)):
+        for i in range(self.num_GPs):
             output_data_compressed[i] = self.GPs[i].predict_gradient(parameters_normalized.copy())
 
         output_data_compressed = jnp.array(output_data_compressed)
@@ -146,20 +180,28 @@ class GP_predictor(BaseClass):
     
     def train(self):
         # Train the GP emulator.
-        input_data = self.data_processor.input_data_normalized
-        output_data = self.data_processor.output_data_emulator
+        input_data = copy.deepcopy(self.data_processor.input_data_normalized)
+        output_data = copy.deepcopy(self.data_processor.output_data_emulator)
 
-        # For each dimension of the output_data we create a GP.
-        self.GPs = []
-        for i in range(output_data.shape[1]):
-            # Create a GP for each dimension of the output_data.
-            self.GPs.append(GP('GP '+self.quantity_name+' dim '+str(i), **self.hyperparameters))
+        self.num_GPs = output_data.shape[1]
 
+        # if there are not Gps yet we need to create them
+        if self.num_GPs > len(self.GPs) :
+            for i in range(len(self.GPs), output_data.shape[1]):
+                # Create a GP for each dimension of the output_data.
+                self.GPs.append(copy.deepcopy(GP('GP '+self.quantity_name+' dim '+str(i), **self.hyperparameters)))
+
+
+        for i in range(self.num_GPs):
             # Load the data into the GP.
-            self.GPs[i].load_data(input_data, output_data[:,i])
+            self.GPs[i].load_data(copy.deepcopy(input_data), copy.deepcopy(output_data[:,i]))
 
             # Train the GP.
             self.GPs[i].train()
+
+        # if we have a plotting directory, we will run some tests
+        if self.hyperparameters['plotting_directory'] is not None and self.hyperparameters['testset_fraction'] is not None:
+            self.run_tests()
 
         pass
 
@@ -171,6 +213,7 @@ class GP_predictor(BaseClass):
 
     def load_data(self, input_data_raw, output_data_raw):
         # Load the raw data from the data cache.
+        self.data_processor.clean_data()
         self.data_processor.load_data(input_data_raw, output_data_raw)
         pass
 
@@ -179,6 +222,28 @@ class GP_predictor(BaseClass):
         self.data_processor.set_parameters(parameters)
         pass
 
+    def run_tests(self):
+        # Run tests for the emulator.
+        np.random.seed(0)
+        train_indices, test_indices = np.split(np.random.permutation(self.GPs[0].D.n), [int((1-self.hyperparameters['testset_fraction'])*self.GPs[0].D.n)])
+
+        # predict the test set
+        for i in range(len(test_indices)):
+            self.debug('Predicting test set point: ', i)
+            prediction, std = self.predict_value_and_std(self.data_processor.input_data_raw[jnp.array([test_indices[i]])])
+
+            true = self.data_processor.output_data_raw[jnp.array([test_indices[i]])]
+
+            # check that plotting_dir/preictions/ exists
+            if not os.path.exists(self.hyperparameters['plotting_directory']+ "/predictions/"):
+                os.makedirs(self.hyperparameters['plotting_directory']+ "/predictions/")
+
+            # plot the prediction
+            plot_prediction_test(prediction, true, std, self.quantity_name, self.data_processor.input_data_raw[jnp.array(test_indices[i])], self.hyperparameters['plotting_directory']+ "/predictions/"+self.quantity_name+'_prediction_'+str(i)+'.png')
+
+
+
+        pass
 
 
 class GP(BaseClass):
@@ -210,16 +275,33 @@ class GP(BaseClass):
         self.recompute_kernel_matrix = False
         self.Kxx = None
 
+        self.D = None
+        self.opt_posterior = None
+
         for key, value in kwargs.items():
             self.hyperparameters[key] = value
 
         pass
+
+    def __del__(self):
+        # remove the GP
+        del self.D
+        del self.opt_posterior
+        self.opt_posterior = None
+        self.D = None
+        self.input_data = None
+        self.output_data = None
+
+        gc.collect()
+
 
     def load_data(self, input_data, output_data):
         # Load the data from the data processor.
         self.recompute_kernel_matrix = True
         self.input_data = input_data
         self.output_data = output_data[:,None]
+        del self.D
+        gc.collect()
         self.D = gpx.Dataset(self.input_data, self.output_data)
         self.test_D = None
 
@@ -227,6 +309,7 @@ class GP(BaseClass):
         # if we have a test fraction, then we will split the data into a training and a test set
         if self.hyperparameters['testset_fraction'] is not None:
             self.debug('Splitting data into training and test set')
+            np.random.seed(0)
             train_indices, test_indices = np.split(np.random.permutation(self.D.n), [int((1-self.hyperparameters['testset_fraction'])*self.D.n)])
             self.D = gpx.Dataset(self.input_data[train_indices], self.output_data[train_indices])
             self.test_D = gpx.Dataset(self.input_data[test_indices], self.output_data[test_indices])
@@ -254,10 +337,14 @@ class GP(BaseClass):
         negative_mll = gpx.objectives.ConjugateMLL(negative=True)
         negative_mll(posterior, train_data=self.D)
 
-        negative_mll = jit(negative_mll)
+        #negative_mll = jit(negative_mll)
 
         # have exponential decay learning rate
         lr = lambda t: jnp.exp(-self.hyperparameters['learning_rate']*t)
+
+        del self.opt_posterior
+        self.opt_posterior = None
+        gc.collect()
 
         # fit
         self.opt_posterior, history = gpx.fit(
@@ -266,9 +353,15 @@ class GP(BaseClass):
             train_data=self.D,
             optim=ox.adam(learning_rate=lr),
             num_iters=self.hyperparameters['num_iters'],
-            safe=False,
+            safe=True,
             key=random.PRNGKey(0),
         )
+
+        # negative_mll._clear_cache()
+        # del negative_mll
+        # negative_mll = None
+
+        gc.collect()
 
         # some debugging output
         if self.hyperparameters['plotting_directory'] is not None:
@@ -283,7 +376,7 @@ class GP(BaseClass):
 
         pass
 
-    @partial(jit, static_argnums=0) 
+    # @partial(jit, static_argnums=0) 
     def predict(self, input_data):
         # Predict the output data for the given input data.
 
@@ -302,9 +395,10 @@ class GP(BaseClass):
             Kxx = self.Kxx
 
         ac = self.opt_posterior.calculate_mean_single_from_Kxx(input_data, self.D, Kxx)
+
         return ac
         
-    @partial(jit, static_argnums=0) 
+    # @partial(jit, static_argnums=0) 
     def predict_value_and_std(self, input_data, return_std=False):
         # Predict the output data for the given input data.
         Kxx = self.opt_posterior.compute_Kxx(self.D)
@@ -317,7 +411,7 @@ class GP(BaseClass):
         return ac, predictive_std[0]
 
 
-    @partial(jit, static_argnums=0) 
+    # @partial(jit, static_argnums=0) 
     def sample(self, input_data, RNGkey=random.PRNGKey(int(time.time()))):
         # Predict the output data for the given input data.
 
@@ -368,7 +462,7 @@ class GP(BaseClass):
         if not os.path.exists(self.hyperparameters['plotting_directory']+ "/test_set_prediction/"):
             os.makedirs(self.hyperparameters['plotting_directory']+ "/test_set_prediction/")
 
-        plot_pca_components_test_set(jnp.array(self.test_D.y)[:,0], means, stds,self._name , self.hyperparameters['plotting_directory']+'/test_set_prediction/'+self._name+'.png')
-
         # plot the mean and the std
+        plot_pca_components_test_set(jnp.array(self.test_D.y)[:,0], means, stds,self._name , self.hyperparameters['plotting_directory']+'/test_set_prediction/'+self._name+'.png')
+        
         pass
