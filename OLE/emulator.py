@@ -332,7 +332,7 @@ class Emulator(BaseClass):
     
     # function to get N samples from the same input parameters
     # @partial(jax.jit, static_argnums=0)
-    def emulate_samples(self, parameters, RNGkey=jax.random.PRNGKey(0)):
+    def emulate_samples(self, parameters, RNGkey):
         # Prepare list of N output states
         output_states = []
 

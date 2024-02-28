@@ -26,7 +26,8 @@ def plot_normalization(X, data, label):
         norm_factor = X*(X+1)
     if label in ['pp','tp']:
         norm_factor = X*X*(X+1)*(X+1)
-    
+    if label in ['proton_unmodulated']:
+        norm_factor = X*X    
 
     return norm_factor
 
