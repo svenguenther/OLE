@@ -110,6 +110,9 @@ class Emulator(BaseClass):
             # plotting directory
             'plotting_directory': None,
 
+            # only relevant for cobaya
+            'cobaya_state_file': None,
+
 
         }
 

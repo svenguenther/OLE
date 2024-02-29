@@ -33,35 +33,50 @@ def check_cache_and_compute(self, params_values_dict,
             # if self.emulator_settings has the key, 'load_initial_state', we can load the initial state from the emulator
             if 'load_initial_state' in self.emulator_settings.keys():
                 if self.emulator_settings['load_initial_state']:
-                    # import the emulator
-                    from OLE.emulator import Emulator
 
-                    # initialize the emulator
-                    self.emulator = Emulator(**self.emulator_settings)
-                    self.emulator.initialize(emulator_state=None, **self.emulator_settings)
+                    # we can only load the initial state if an cobaya state is given
+                    if self.emulator_settings['cobaya_state_file'] is None:
+                        self.log.info("No cobaya state file given. Cannot load initial state from emulator")
+                    else:
+                        # check that the file exists
+                        import os
+                        if not os.path.exists(self.emulator_settings['cobaya_state_file']):
+                            self.log.info("The cobaya state file does not exist. Cannot load initial state from emulator. Running theory code to generate initial state")
+                        else:
+                            # load the initial state from the emulator which is a pickle
+                            import pickle
+                            with open(self.emulator_settings['cobaya_state_file'], 'rb') as f:
+                                self.initial_cobaya_state = pickle.load(f)
 
-                    # jit the emulator functions                                         
-                    del self.emulator_emulate_function
-                    del self.emulator_sampling_function
-                    del self.jit_emulate
-                    del self.jit_emulator_samples
-                    self.emulator_emulate_function = self.emulator.emulate
-                    self.emulator_sampling_function = self.emulate_samples
 
-                    # self.jit_emulate = jax.jit(self.emulator_emulate_function)
-                    # self.jit_emulator_samples = jax.jit(self.emulator_sampling_function)
-                    self.jit_emulate = self.emulator_emulate_function
-                    self.jit_emulator_samples = self.emulator_sampling_function
+                            # import the emulator
+                            from OLE.emulator import Emulator
 
-                    self.log.info("Emulator trained")
+                            # initialize the emulator
+                            self.emulator = Emulator(**self.emulator_settings)
+                            self.emulator.initialize(emulator_state=None, **self.emulator_settings)
 
-                    self._current_state = self.emulator.data_cache.states[0]
+                            # jit the emulator functions                                         
+                            del self.emulator_emulate_function
+                            del self.emulator_sampling_function
+                            del self.jit_emulate
+                            del self.jit_emulator_samples
+                            self.emulator_emulate_function = self.emulator.emulate
+                            self.emulator_sampling_function = self.emulate_samples
 
+                            self.jit_emulate = jax.jit(self.emulator_emulate_function)
+                            self.jit_emulator_samples = jax.jit(self.emulator_sampling_function)
+                            # self.jit_emulate = self.emulator_emulate_function
+                            # self.jit_emulator_samples = self.emulator_sampling_function
+
+                            self.log.info("Emulator trained")
+
+                            self._current_state = self.initial_cobaya_state
 
 
     start = time.time()
     if self.skip_theory_state_from_emulator is not None:
-        # we are in the emulator and we need to use the emulator state
+        # here we are in the emulator and we need to use the emulator state
         state = self.skip_theory_state_from_emulator
         self.skip_theory_state_from_emulator = None
         # self._states.appendleft(state)
@@ -133,6 +148,15 @@ def check_cache_and_compute(self, params_values_dict,
             try:
                 if self.calculate(state, want_derived, **params_values_dict) is False:
                     return False
+                else:
+                    # we might want to store an cobaya state for the emulator such that we can reuse it when restarting the emulator\
+                    if self.initial_cobaya_state is None:
+                        if 'cobaya_state_file' in self.emulator_settings.keys():
+                            if self.emulator_settings['cobaya_state_file'] is not None:
+                                self.initial_cobaya_state = state
+                                import pickle
+                                with open(self.emulator_settings['cobaya_state_file'], 'wb') as f:
+                                    pickle.dump(state, f)
             except always_stop_exceptions:
                 raise
             except Exception as excpt:
@@ -333,6 +357,7 @@ Theory.emulator_sampling_function = None
 Theory.emulator_emulate_function = None
 Theory.jit_emulate = None
 Theory.jit_emulator_samples = None
+Theory.initial_cobaya_state = None
 
 # Theory flag
 
@@ -341,8 +366,6 @@ Theory.jit_emulator_samples = None
 Theory.test_emulator = test_emulator
 Theory.check_cache_and_compute = check_cache_and_compute
 Theory.emulate_samples = emulate_samples
-
-
 
 
 #
@@ -434,6 +457,7 @@ def translate_emulator_state_to_cobaya_state(old_cobaya_state, emulator_state):
 
 
 
+from cobaya.model import LogPosterior
 
 
 #
@@ -450,8 +474,16 @@ def metropolis_accept(self, logp_trial, logp_current):
     ``True`` or ``False``.
     """
     if force_acceptance:
-        self.current_point.logpost = self.current_point.logpost - 100
-        logp_current = self.current_point.logpost
+        n_priors = len(self.current_point.results.logpriors)
+        results = LogPosterior(
+            logpost=self.current_point.results.logpost - 100.0*n_priors,
+            logpriors=[_ - 100.0 for _ in self.current_point.results.logpriors] ,
+            loglikes=self.current_point.results.loglikes,
+            derived=self.current_point.results.derived,)
+        initial_point = self.current_point.values
+        self.current_point.add(initial_point, results)
+        force_acceptance = False
+        logp_current = self.current_point.logpost 
     if logp_trial == -np.inf:
         return False
     if logp_trial > logp_current:

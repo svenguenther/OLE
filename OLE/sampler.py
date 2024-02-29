@@ -221,10 +221,7 @@ class Sampler(BaseClass):
             self.emulator.add_state(state)
         else:
             # here we need to test the emulator for its performance
-            emulator_sample_states = []
-            for i in range(self.emulator.hyperparameters['N_quality_samples']):
-                _ , RNGkey = self.emulator.emulate_samples(state['parameters'], RNGkey=RNGkey)
-                emulator_sample_states.append(_)
+            emulator_sample_states, RNGkey = self.emulator.emulate_samples(state['parameters'], RNGkey=RNGkey)
             emulator_sample_loglikes = jnp.array([self.likelihood.loglike_state(_)['loglike'] for _ in emulator_sample_states])
             print("emulator_sample_loglikes: ", emulator_sample_loglikes)
             # check whether the emulator is good enough
