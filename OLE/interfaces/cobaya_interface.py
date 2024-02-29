@@ -450,7 +450,8 @@ def metropolis_accept(self, logp_trial, logp_current):
     ``True`` or ``False``.
     """
     if force_acceptance:
-        return True
+        self.current_point.logpost = self.current_point.logpost - 100
+        logp_current = self.current_point.logpost
     if logp_trial == -np.inf:
         return False
     if logp_trial > logp_current:
