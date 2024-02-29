@@ -316,8 +316,17 @@ def test_emulator(self,emulator_state):
 
         emulator_sample_loglikes = np.array(emulator_sample_loglikes)
 
+        # we also need the reference likelihood which is going to be used eventually
+        predictions = self.jit_emulate(emulator_state['parameters'])
+        predictions_cobaya_state = translate_emulator_state_to_cobaya_state(self._current_state, predictions)
+
+        self.skip_theory_state_from_emulator = predictions_cobaya_state
+
+        reference_likelihood = sum(self.provider.model._loglikes_input_params(self.provider.params, cached = False, return_derived = False))
+
+
         # check whether the emulator is good enough
-        if not self.emulator.check_quality_criterium(emulator_sample_loglikes):
+        if not self.emulator.check_quality_criterium(emulator_sample_loglikes, reference_likelihood = reference_likelihood):
             print("Emulator not good enough")
             return False, None
         else:

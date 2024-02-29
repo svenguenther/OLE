@@ -347,7 +347,7 @@ class Emulator(BaseClass):
     
     # function to get 1 sample from the same input parameters
     # @partial(jax.jit, static_argnums=0)
-    def emulate_sample(self, parameters, RNGkey=jax.random.PRNGKey(0)):
+    def emulate_sample(self, parameters, RNGkey=jax.random.PRNGKey(time.time_ns())):
         # Prepare list of N output states
 
         state = {'parameters': {}, 'quantities': {}}
@@ -363,7 +363,7 @@ class Emulator(BaseClass):
 
         return state, RNGkey
     
-    def check_quality_criterium(self, loglikes):
+    def check_quality_criterium(self, loglikes, reference_loglike = None):
         # check whether the emulator is good enough to be used
         # if the emulator is not yet trained, we return False
         if not self.trained:
@@ -371,7 +371,10 @@ class Emulator(BaseClass):
 
         # if the emulator is trained, we check the quality criterium
         # we check whether the loglikes are within the quality criterium
-        mean_loglike = jnp.mean(loglikes)
+        if reference_loglike is None:
+            mean_loglike = jnp.mean(loglikes)
+        else:
+            mean_loglike = reference_loglike
         std_loglike = jnp.std(loglikes)
 
         max_loglike = self.data_cache.max_loglike
