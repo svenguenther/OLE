@@ -301,7 +301,7 @@ def test_emulator(self,emulator_state):
         # if not, we trust the emulator and we can just run it
         # sample multiple spectra
         #emulator_sample_states = self.emulator.emulate_samples(emulator_state['parameters'])
-        emulator_sample_states, _ = self.jit_emulator_samples(emulator_state['parameters'])
+        emulator_sample_states, _ = self.jit_emulator_samples(emulator_state['parameters'], jax.random.PRNGKey(time.time_ns()))
 
         # compute the likelihoods
         emulator_sample_loglikes = []
@@ -351,9 +351,8 @@ def test_emulator(self,emulator_state):
 
     return True, predictions
 
-# @partial(jax.jit, static_argnums=(0,))
-def emulate_samples(self,parameters):
-    key = jax.random.PRNGKey(int(time.clock_gettime_ns(0)))
+@partial(jax.jit, static_argnums=(0,))
+def emulate_samples(self,parameters, key):
     return self.emulator.emulate_samples(parameters, key)
 
 # This function calls all likelihoods and computes the total likelihood. It is used to compute the likelihood for new emulator states or to qualify the accuracy of the emulator
