@@ -322,11 +322,11 @@ def test_emulator(self,emulator_state):
 
         self.skip_theory_state_from_emulator = predictions_cobaya_state
 
-        reference_likelihood = sum(self.provider.model._loglikes_input_params(self.provider.params, cached = False, return_derived = False))
+        reference_loglike = sum(self.provider.model._loglikes_input_params(self.provider.params, cached = False, return_derived = False))
 
 
         # check whether the emulator is good enough
-        if not self.emulator.check_quality_criterium(emulator_sample_loglikes, reference_likelihood = reference_likelihood):
+        if not self.emulator.check_quality_criterium(emulator_sample_loglikes, reference_loglike = reference_loglike):
             print("Emulator not good enough")
             return False, None
         else:
