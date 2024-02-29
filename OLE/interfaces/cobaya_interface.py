@@ -7,6 +7,8 @@ import cobaya as my_cobaya
 from cobaya.theory import Theory
 from cobaya.log import LoggedError, always_stop_exceptions
 
+from cobaya.component import Timer
+
 from functools import partial
 import copy
 import gc
@@ -48,6 +50,10 @@ def check_cache_and_compute(self, params_values_dict,
                             with open(self.emulator_settings['cobaya_state_file'], 'rb') as f:
                                 self.initial_cobaya_state = pickle.load(f)
 
+                            # avoid stupid cobaya bug here (let theory)
+                            self.timer = Timer()
+                            self.timer.start()
+                            self.timer.increment()
 
                             # import the emulator
                             from OLE.emulator import Emulator
