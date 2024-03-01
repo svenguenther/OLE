@@ -342,6 +342,35 @@ def test_emulator(self,emulator_state):
     # predictions = self.emulator.emulate(emulator_state['parameters'])
     
     predictions = self.jit_emulate(emulator_state['parameters'])
+
+    # if we save a store theory data path we can save the emulator state
+    if 'store_prediction' in self.emulator_settings.keys():
+        # open file and store prediction dictionary with pickle
+        import pickle
+
+        # first check whether the file exists
+        import os
+        if os.path.exists(self.emulator_settings['store_prediction']):
+            # if the file exists, we need to load the dictionary and add the new predictions
+            with open(self.emulator_settings['store_prediction'], 'rb') as f:
+                old_predictions = pickle.load(f)
+
+            # add the new predictions
+            old_predictions.append(predictions)
+
+            if len(old_predictions) > 1000:
+                # pop the first element
+                old_predictions.pop(0)
+
+            # store the new dictionary
+            with open(self.emulator_settings['store_prediction'], 'wb') as f:
+                pickle.dump(old_predictions, f)
+            
+        else:
+            # if the file does not exist, we can just store the predictions
+            with open(self.emulator_settings['store_prediction'], 'wb') as f:
+                pickle.dump([predictions], f)
+
     b = time.time()
     print("Run the emulator: ", b-a)
 
