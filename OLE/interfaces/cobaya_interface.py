@@ -487,19 +487,11 @@ def metropolis_accept(self, logp_trial, logp_current):
     -------
     ``True`` or ``False``.
     """
-    if force_acceptance:
-        n_priors = len(self.current_point.results.logpriors)
-        results = LogPosterior(
-            logpost=self.current_point.results.logpost - 100.0*n_priors,
-            logpriors=[_ - 100.0 for _ in self.current_point.results.logpriors] ,
-            loglikes=self.current_point.results.loglikes,
-            derived=self.current_point.results.derived,)
-        initial_point = self.current_point.values
-        self.current_point.add(initial_point, results)
-        force_acceptance = False
-        logp_current = self.current_point.logpost 
     if logp_trial == -np.inf:
         return False
+    if force_acceptance:
+        force_acceptance = False
+        return True
     if logp_trial > logp_current:
         return True
     posterior_ratio = (logp_current - logp_trial) / self.temperature

@@ -273,7 +273,7 @@ class Emulator(BaseClass):
         input_data_raw_jax = jnp.array(input_data_raw)
 
         for quantity, emulator in self.emulators.items():
-            self.debug("Start training emulator for quantity %s", quantity)
+            self.info("Start training emulator for quantity %s", quantity)
             output_data_raw = self.data_cache.get_quantities(quantity)
 
             output_data_raw_jax = jnp.array(output_data_raw)

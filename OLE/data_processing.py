@@ -162,7 +162,7 @@ class data_processor(BaseClass):
             self.warning("Number of components is larger than the maximal number of dimensions. Setting number of components to %d", n_components)
         self.output_data_emulator_dim = n_components
 
-        self.debug("Compressing data to %d dimensions", n_components)
+        self.info("Compressing data to %d dimensions", n_components)
 
         # calculate the projection matrix
         self.projection_matrix = copy.deepcopy(eigenvectors[:, :n_components])
