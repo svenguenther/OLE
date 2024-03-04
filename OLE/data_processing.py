@@ -9,6 +9,8 @@ import os
 import gc
 import copy
 
+import scipy as sp
+
 from OLE.plotting import data_plot_raw, data_plot_normalized, pca_parameter_plot
 
 class data_processor(BaseClass):
@@ -128,38 +130,28 @@ class data_processor(BaseClass):
         # calculate the PCA of the output data
         data_cov = jnp.dot(self.output_data_normalized.T, self.output_data_normalized)
 
-        # calculate the eigenvalues and eigenvectors of the covariance matrix
-        eigenvalues, eigenvectors = jnp.linalg.eig(data_cov)
+        n_eigenvalues = self.hyperparameters['max_output_dimensions']
+
+        eigenvalues, eigenvectors = sp.sparse.linalg.eigsh(np.array(data_cov), n_eigenvalues)
 
         # sort the eigenvalues and eigenvectors
         idx = eigenvalues.argsort()[::-1]
         eigenvalues = eigenvalues[idx].real
         eigenvectors = eigenvectors[:,idx].real
 
-        self.debug("eigenvalues: %s", str(eigenvalues))
-
         # calculate the explained variance
         explained_variance = eigenvalues / jnp.sum(eigenvalues)
-
-        self.debug("Explained variance: %s", str(explained_variance))
 
         # calculate the cumulative explained variance
         cumulative_explained_variance = jnp.cumsum(explained_variance)
 
-        self.debug("Cumulative explained variance: %s", str(cumulative_explained_variance))
-
         # find the number of components which explain the variance
-        n_components = jnp.argmax(cumulative_explained_variance > self.hyperparameters['explained_variance_cutoff'])
-        
-        # if the number of components is 0, set the number of components to 1. Happens for very correlated data.
-        if n_components == 0:
-            n_components = 1
-            self.warning("Number of components is 0. Setting number of components to 1")
+        n_components = jnp.argmax(cumulative_explained_variance > self.hyperparameters['explained_variance_cutoff']) + 1
 
         # if the number of components is larger than the maximal number of dimensions, set the number of components to the maximal number of dimensions
-        if n_components > self.hyperparameters['max_output_dimensions']:
-            n_components = self.hyperparameters['max_output_dimensions']
+        if n_components == self.hyperparameters['max_output_dimensions']:
             self.warning("Number of components is larger than the maximal number of dimensions. Setting number of components to %d", n_components)
+            
         self.output_data_emulator_dim = n_components
 
         self.info("Compressing data to %d dimensions", n_components)
