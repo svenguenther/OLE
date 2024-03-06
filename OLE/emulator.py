@@ -105,7 +105,7 @@ class Emulator(BaseClass):
             'quality_threshold_quadratic': 0.01,
 
             # the radius around the checked points for which we do not need to check the quality criterium
-            'quality_points_radius': 0.3,
+            'quality_points_radius': 0.0,
 
             # plotting directory
             'plotting_directory': None,
@@ -329,7 +329,7 @@ class Emulator(BaseClass):
             output_state['quantities'][quantity] = emulator_output
 
         # write to log
-        self.write_parameter_dict_to_log(parameters)
+        # self.write_parameter_dict_to_log(parameters)
 
         return output_state
     

@@ -566,7 +566,7 @@ class NUTSSampler(Sampler):
 
                     # translate the parameters to the state
                     for k, key in enumerate(self.parameter_dict.keys()):
-                        state['parameters'][key] = jnp.array([theta_untransformed])
+                        state['parameters'][key] = jnp.array([theta_untransformed[k]])
 
                     if self.emulator.require_quality_check(state['parameters']):
                         # here we need to test the emulator for its performance
@@ -1116,13 +1116,3 @@ class EvaluateSampler(Sampler):
 
             # return the output
             return output, output_uncertainty
-
-
-
-
-
-
-
-
-
-

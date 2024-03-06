@@ -283,16 +283,16 @@ class GP(BaseClass):
 
         pass
 
-    def __del__(self):
-        # remove the GP
-        del self.D
-        del self.opt_posterior
-        self.opt_posterior = None
-        self.D = None
-        self.input_data = None
-        self.output_data = None
+    # def __del__(self):
+    #     # remove the GP
+    #     del self.D
+    #     del self.opt_posterior
+    #     self.opt_posterior = None
+    #     self.D = None
+    #     self.input_data = None
+    #     self.output_data = None
 
-        gc.collect()
+    #     gc.collect()
 
 
     def load_data(self, input_data, output_data):

@@ -130,7 +130,7 @@ class data_processor(BaseClass):
         # calculate the PCA of the output data
         data_cov = jnp.dot(self.output_data_normalized.T, self.output_data_normalized)
 
-        n_eigenvalues = self.hyperparameters['max_output_dimensions']
+        n_eigenvalues = min(self.hyperparameters['max_output_dimensions'], self.output_size)
 
         eigenvalues, eigenvectors = sp.sparse.linalg.eigsh(np.array(data_cov), n_eigenvalues)
 
