@@ -70,10 +70,10 @@ def check_cache_and_compute(self, params_values_dict,
                             self.emulator_emulate_function = self.emulator.emulate
                             self.emulator_sampling_function = self.emulate_samples
 
-                            self.jit_emulate = jax.jit(self.emulator_emulate_function)
-                            self.jit_emulator_samples = jax.jit(self.emulator_sampling_function)
-                            # self.jit_emulate = self.emulator_emulate_function
-                            # self.jit_emulator_samples = self.emulator_sampling_function
+                            # self.jit_emulate = jax.jit(self.emulator_emulate_function)
+                            # self.jit_emulator_samples = jax.jit(self.emulator_sampling_function)
+                            self.jit_emulate = self.emulator_emulate_function
+                            self.jit_emulator_samples = self.emulator_sampling_function
 
                             self.log.info("Emulator trained")
 
@@ -203,11 +203,11 @@ def check_cache_and_compute(self, params_values_dict,
                         self.emulator_emulate_function = self.emulator.emulate
                         self.emulator_sampling_function = self.emulate_samples
                         gc.collect()       
-                        self.jit_emulate = jax.jit(self.emulator_emulate_function)
-                        self.jit_emulator_samples = jax.jit(self.emulator_sampling_function)
+                        # self.jit_emulate = jax.jit(self.emulator_emulate_function)
+                        # self.jit_emulator_samples = jax.jit(self.emulator_sampling_function)
 
-                        # self.jit_emulate = self.emulator_emulate_function
-                        # self.jit_emulator_samples = self.emulator_sampling_function
+                        self.jit_emulate = self.emulator_emulate_function
+                        self.jit_emulator_samples = self.emulator_sampling_function
 
                         
 
@@ -227,11 +227,11 @@ def check_cache_and_compute(self, params_values_dict,
                         self.emulator_emulate_function = self.emulator.emulate
                         self.emulator_sampling_function = self.emulate_samples
 
-                        self.jit_emulate = jax.jit(self.emulator_emulate_function)
-                        self.jit_emulator_samples = jax.jit(self.emulator_sampling_function)
+                        # self.jit_emulate = jax.jit(self.emulator_emulate_function)
+                        # self.jit_emulator_samples = jax.jit(self.emulator_sampling_function)
 
-                        # self.jit_emulate = self.emulator_emulate_function
-                        # self.jit_emulator_samples = self.emulator_sampling_function
+                        self.jit_emulate = self.emulator_emulate_function
+                        self.jit_emulator_samples = self.emulator_sampling_function
 
 
     # make this state the current one
@@ -269,11 +269,22 @@ def check_cache_and_compute(self, params_values_dict,
                 self.emulator_emulate_function = self.emulator.emulate
                 self.emulator_sampling_function = self.emulate_samples
 
-                self.jit_emulate = jax.jit(self.emulator_emulate_function)
-                self.jit_emulator_samples = jax.jit(self.emulator_sampling_function)
-                # self.jit_emulate = self.emulator_emulate_function
-                # self.jit_emulator_samples = self.emulator_sampling_function
+                # self.jit_emulate = jax.jit(self.emulator_emulate_function)
+                # self.jit_emulator_samples = jax.jit(self.emulator_sampling_function)
+                self.jit_emulate = self.emulator_emulate_function
+                self.jit_emulator_samples = self.emulator_sampling_function
 
+        # check if the emulator was used 'jit_threshold' times and retrain it
+        if self.emulator.continuous_successful_calls == self.emulator.hyperparameters['jit_threshold']:
+            del self.emulator_emulate_function
+            del self.emulator_sampling_function
+            del self.jit_emulate
+            del self.jit_emulator_samples
+            self.emulator_emulate_function = self.emulator.emulate
+            self.emulator_sampling_function = self.emulate_samples
+
+            self.jit_emulate = jax.jit(self.emulator_emulate_function)
+            self.jit_emulator_samples = jax.jit(self.emulator_sampling_function)
 
 
     stop = time.time()

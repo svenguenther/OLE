@@ -99,6 +99,8 @@ class Emulator(BaseClass):
             # numer of test samples to determine the quality of the emulator
             'N_quality_samples': 5,
 
+            'jit_threshold': 100, # number of samples to be emulated before we jit the emulator to accelerate it
+
             # here we define the quality threshold for the emulator. If the emulator is below this threshold, it is retrained. We destinguish between a constant, a linear and a quadratic threshold
             'quality_threshold_constant': 0.1,
             'quality_threshold_linear': 0.0,
@@ -184,6 +186,12 @@ class Emulator(BaseClass):
         if len(self.data_cache.states) >= self.hyperparameters['min_data_points']:
             self.data_cache.load_cache()
             self.train()
+
+        # this counter is used to determine the number of continously successful emulator calls
+        self.continuous_successful_calls = 0
+
+        # max loglike encountered in the run
+        self.max_loglike_encountered = -np.inf
         
         pass
 
@@ -217,14 +225,13 @@ class Emulator(BaseClass):
         if self.trained and state_added:
             if self.added_data_points%self.hyperparameters['kernel_fitting_frequency'] == 0:
                 self.train()
-                return True
             else:
                 self.update()
-                return True
 
         
             
         if state_added:
+            self.continuous_successful_calls = 0
             return True
         else:
             return False
@@ -367,6 +374,7 @@ class Emulator(BaseClass):
         # check whether the emulator is good enough to be used
         # if the emulator is not yet trained, we return False
         if not self.trained:
+            self.continuous_successful_calls = 0
             return False
 
         # if the emulator is trained, we check the quality criterium
@@ -377,7 +385,7 @@ class Emulator(BaseClass):
             mean_loglike = reference_loglike
         std_loglike = jnp.std(loglikes)
 
-        max_loglike = self.data_cache.max_loglike
+        max_loglike = max(self.data_cache.max_loglike, self.max_loglike_encountered)
 
         delta_loglike = jnp.abs(mean_loglike - max_loglike)
 
@@ -404,6 +412,12 @@ class Emulator(BaseClass):
         self.debug("Emulator quality criterium fulfilled")
         _ = "Quality criterium fulfilled; Max loglike: %f, delta loglikes: " % (max_loglike) + " ".join([str(loglike) for loglike in loglikes]) + "\n"
         self.write_to_log(_)
+        self.continuous_successful_calls += 1
+
+        # if any of the loglikes is above the maximum loglike, we need to update the maximum loglike
+        if jnp.any(loglikes > max_loglike):
+            self.max_loglike_encountered = jnp.max(loglikes)
+
         return True
     
 
