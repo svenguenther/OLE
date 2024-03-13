@@ -13,7 +13,7 @@ from functools import partial
 import copy
 import gc
 
-global force_acceptance
+# global force_acceptance # OLD 
 
 def check_cache_and_compute(self, params_values_dict,
                                 dependency_params=None, want_derived=False, cached=True):
@@ -26,11 +26,11 @@ def check_cache_and_compute(self, params_values_dict,
 
     params_values_dict can be safely modified and stored.
     """
-    global force_acceptance
+    # global force_acceptance # OLD
         
     # there is a possibility when using the emulator to load an initial state from the cache of the emulator, which then allows to perform the sampling without a single call to the theory
     if self.emulate:
-        force_acceptance = False
+        # force_acceptance = False # OLD
         if self.emulator is None:
             # if self.emulator_settings has the key, 'load_initial_state', we can load the initial state from the emulator
             if 'load_initial_state' in self.emulator_settings.keys():
@@ -194,7 +194,7 @@ def check_cache_and_compute(self, params_values_dict,
                 # if the emulator is not trained, train it, if enough states are available
                 if not self.emulator.trained:
                     if len(self.emulator.data_cache.states) >= self.emulator.hyperparameters['min_data_points']:
-                        force_acceptance = True
+                        # force_acceptance = True # OLD
                         self.emulator.train()
 
                         # jit the emulator functions
@@ -214,7 +214,7 @@ def check_cache_and_compute(self, params_values_dict,
                         self.log.info("Emulator trained")
                 else:
                     if added:
-                        force_acceptance = True
+                        # force_acceptance = True #OLD
 
                         # here we need to re jit    
                         del self.jit_emulate
@@ -391,7 +391,7 @@ def test_emulator(self,emulator_state):
 
     return True, predictions
 
-@partial(jax.jit, static_argnums=(0,))
+#@partial(jax.jit, static_argnums=(0,))
 def emulate_samples(self,parameters, key):
     return self.emulator.emulate_samples(parameters, key)
 
@@ -514,6 +514,8 @@ def translate_emulator_state_to_cobaya_state(old_cobaya_state, emulator_state):
 from cobaya.model import LogPosterior
 
 
+# REMOVED OLD CONCEPT OF FORCING ACCEPTANCE
+'''
 #
 # Here we need to modify the MCMC 
 #
@@ -541,3 +543,4 @@ def metropolis_accept(self, logp_trial, logp_current):
 from cobaya.samplers.mcmc import MCMC
 
 MCMC.metropolis_accept = metropolis_accept
+'''
