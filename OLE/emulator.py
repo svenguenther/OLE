@@ -344,31 +344,44 @@ class Emulator(BaseClass):
     # @partial(jax.jit, static_argnums=0)
     def emulate_samples(self, parameters, RNGkey):
         # Prepare list of N output states
-        output_states = []
-
-        for i in range(self.hyperparameters['N_quality_samples']):
-            state, RNGkey = self.emulate_sample(parameters, RNGkey=RNGkey)
-            output_states.append(state)
-
-        return output_states, RNGkey
-    
-    # function to get 1 sample from the same input parameters
-    # @partial(jax.jit, static_argnums=0)
-    def emulate_sample(self, parameters, RNGkey=jax.random.PRNGKey(time.time_ns())):
-        # Prepare list of N output states
-
         state = {'parameters': {}, 'quantities': {}}
         state['parameters'] = parameters
+        output_states = [deepcopy(state) for i in range(self.hyperparameters['N_quality_samples'])]
 
         # Emulate the quantities for the given parameters.
         input_data = jnp.array([[value[0] for key, value in parameters.items() if key in self.input_parameters]])
 
-        for quantity, emulator in self.emulators.items():
-            emulator_output, RNGkey = emulator.sample_prediction(input_data, RNGkey=RNGkey)
-            
-            state['quantities'][quantity] = emulator_output[0,:]
 
-        return state, RNGkey
+
+
+        for quantity, emulator in self.emulators.items():
+            emulator_output, RNGkey = emulator.sample_prediction(input_data, N=self.hyperparameters['N_quality_samples'], RNGkey=RNGkey)
+            
+            
+            for i in range(self.hyperparameters['N_quality_samples']):
+                output_states[i]['quantities'][quantity] = emulator_output[i,:]
+
+        return output_states, RNGkey
+    
+
+    # OUTDATED
+    # function to get 1 sample from the same input parameters
+    # @partial(jax.jit, static_argnums=0)
+    # def emulate_sample(self, parameters, RNGkey=jax.random.PRNGKey(time.time_ns())):
+    #     # Prepare list of N output states
+
+    #     state = {'parameters': {}, 'quantities': {}}
+    #     state['parameters'] = parameters
+
+    #     # Emulate the quantities for the given parameters.
+    #     input_data = jnp.array([[value[0] for key, value in parameters.items() if key in self.input_parameters]])
+
+    #     for quantity, emulator in self.emulators.items():
+    #         emulator_output, RNGkey = emulator.sample_prediction(input_data, RNGkey=RNGkey)
+            
+    #         state['quantities'][quantity] = emulator_output[0,:]
+
+    #     return state, RNGkey
     
     def check_quality_criterium(self, loglikes, reference_loglike = None):
         # check whether the emulator is good enough to be used

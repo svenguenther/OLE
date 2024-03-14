@@ -132,19 +132,19 @@ class GP_predictor(BaseClass):
         return output_data, output_std
     
     # @partial(jit, static_argnums=0) 
-    def sample_prediction(self, parameters, RNGkey=random.PRNGKey(int(time.time()))):
+    def sample_prediction(self, parameters, N=1, RNGkey=random.PRNGKey(int(time.time()))):
         # Predict the quantity for the given parameters.
         # First we normalize the parameters.
         parameters_normalized = self.data_processor.normalize_input_data(parameters)
 
         # Then we predict the output data for the normalized parameters.
-        output_data_compressed = jnp.zeros((1, self.num_GPs))
+        output_data_compressed = jnp.zeros((N, self.num_GPs))
         for i in range(self.num_GPs):
-            _, RNGkey = self.GPs[i].sample(parameters_normalized, RNGkey=RNGkey)
-            output_data_compressed = output_data_compressed.at[:,[i]].set(_.transpose())    # this is the time consuming part
+            _, RNGkey = self.GPs[i].sample(parameters_normalized, N=N, RNGkey=RNGkey)            
+            output_data_compressed = output_data_compressed.at[:,[i]].set(_)    # this is the time consuming part
 
         # Untransform the output data.
-        output_data_normalized = jnp.array([self.data_processor.decompress_data(output_data_compressed[i,:]) for i in range(1)])
+        output_data_normalized = jnp.array([self.data_processor.decompress_data(output_data_compressed[i,:]) for i in range(N)])
 
         # Then we denormalize the output data.
         output_data = self.data_processor.denormalize_data(output_data_normalized)
@@ -180,8 +180,8 @@ class GP_predictor(BaseClass):
     
     def train(self):
         # Train the GP emulator.
-        input_data = copy.deepcopy(self.data_processor.input_data_normalized)
-        output_data = copy.deepcopy(self.data_processor.output_data_emulator)
+        input_data = self.data_processor.input_data_normalized
+        output_data = self.data_processor.output_data_emulator
 
         self.num_GPs = output_data.shape[1]
 
@@ -194,7 +194,7 @@ class GP_predictor(BaseClass):
 
         for i in range(self.num_GPs):
             # Load the data into the GP.
-            self.GPs[i].load_data(copy.deepcopy(input_data), copy.deepcopy(output_data[:,i]))
+            self.GPs[i].load_data(input_data, output_data[:,i])
 
             # Train the GP.
             self.GPs[i].train()
@@ -321,7 +321,7 @@ class GP(BaseClass):
         
         # Create the kernel
         if self.hyperparameters['kernel'] == 'RBF':
-            kernel = gpx.kernels.RBF() #+ gpx.kernels.White()
+            kernel = gpx.kernels.RBF() + gpx.kernels.White()
         else:
             raise ValueError('Kernel not implemented')
         
@@ -412,7 +412,7 @@ class GP(BaseClass):
 
 
     # @partial(jit, static_argnums=0) 
-    def sample(self, input_data, RNGkey=random.PRNGKey(int(time.time()))):
+    def sample(self, input_data, N=1, RNGkey=random.PRNGKey(int(time.time()))):
         # Predict the output data for the given input data.
 
         if self.recompute_kernel_matrix:
@@ -427,18 +427,18 @@ class GP(BaseClass):
         latent_dist = self.opt_posterior.predict(input_data, train_data=self.D)
         predictive_dist = self.opt_posterior.likelihood(latent_dist)
         predictive_std = predictive_dist.stddev()
-        predictive_mean = predictive_dist.mean()
-
+        # predictive_mean = predictive_dist.mean()
+        
         # generate new key
         RNGkey, subkey = random.split(RNGkey)
 
-        return random.normal(key= subkey, shape=(1,1)) * jnp.sqrt(predictive_std[0]) + ac, RNGkey
+        return random.normal(key= subkey, shape=(N,1)) * jnp.sqrt(predictive_std[0]) + ac, RNGkey
         
-    def predict_gradient(self, input_data):
-        # Predict the gradient of the output data for the given input data.
-        gradient = grad(self.opt_posterior.predict_mean_single)
+    # def predict_gradient(self, input_data):
+    #     # Predict the gradient of the output data for the given input data.
+    #     gradient = grad(self.opt_posterior.predict_mean_single)
 
-        return gradient(input_data, self.D)
+    #     return gradient(input_data, self.D)
 
 
 

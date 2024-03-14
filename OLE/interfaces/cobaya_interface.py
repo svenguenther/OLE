@@ -326,6 +326,8 @@ def test_emulator(self,emulator_state):
             emulator_sample_loglikes.append(sum(likelihoods))
 
         emulator_sample_loglikes = np.array(emulator_sample_loglikes)
+        print('emulator_sample_loglikes')
+        print(emulator_sample_loglikes)
 
         # we also need the reference likelihood which is going to be used eventually
         predictions = self.jit_emulate(emulator_state['parameters'])
