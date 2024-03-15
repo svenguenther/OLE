@@ -103,8 +103,8 @@ class Emulator(BaseClass):
 
             # here we define the quality threshold for the emulator. If the emulator is below this threshold, it is retrained. We destinguish between a constant, a linear and a quadratic threshold
             'quality_threshold_constant': 0.1,
-            'quality_threshold_linear': 0.0,
-            'quality_threshold_quadratic': 0.01,
+            'quality_threshold_linear': 0.01,
+            'quality_threshold_quadratic': 0.0001,
 
             # the radius around the checked points for which we do not need to check the quality criterium
             'quality_points_radius': 0.0,
@@ -114,6 +114,10 @@ class Emulator(BaseClass):
 
             # only relevant for cobaya
             'cobaya_state_file': None,
+
+            # learn about the actual emulation task to estimate 'quality_threshold_quadratic'.
+            'N_sigma': 6,
+            'dimensionality': None, # if we give the dimensionality, the code estimates where we need to be accruate in the quality criterium (inside of N_sigma). Thus, we can estimate the quality_threshold_quadratic, in a way, that it becomes dominant over the linear at this point!
 
 
         }
@@ -163,6 +167,24 @@ class Emulator(BaseClass):
         for key in list(ini_state['parameters'].keys()):
             if key not in self.input_parameters:
                 del ini_state['parameters'][key]
+
+        # if 'dimensionality' is given we need to estimate the quality_threshold_quadratic
+        if self.hyperparameters['dimensionality'] is not None:
+            from scipy.stats import chi2
+            # we need to estimate the quality_threshold_quadratic
+            # we use the N_sigma to estimate the quality_threshold_quadratic
+            # we estimate the quality_threshold_quadratic such that it becomes dominant over the linear term at the N_sigma point
+
+            # up to which p value do we want to be accurate?
+            p_val = chi2.cdf(self.hyperparameters['N_sigma']**2, 1)
+
+            # the corresponding loglike
+            accuracy_loglike = chi2.ppf(p_val, self.hyperparameters['dimensionality'])/2
+
+            # at this point the (constant + linear) term is equal to the quadratic term
+            self.hyperparameters['quality_threshold_quadratic'] = (self.hyperparameters['quality_threshold_quadratic'] + self.hyperparameters['quality_threshold_linear']*accuracy_loglike)/accuracy_loglike**2
+
+            self.debug("Quality threshold quadratic: ", self.hyperparameters['quality_threshold_quadratic'])
 
         # Here: Create the emulators for the different quantities
         self.emulators = {}

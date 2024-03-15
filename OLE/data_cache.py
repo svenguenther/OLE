@@ -60,12 +60,35 @@ class DataCache(BaseClass):
 
             # the cache is stored in the hdf5 file after each state is added
             'store_cache': True,
+
+            # learn about the actual emulation task to estimate the 'delta_loglike'.
+            'N_sigma': 6,
+            'dimensionality': None, # if we give the dimensionality, the code estimates 'delta_loglike' to ensure that all data cache points are within N_sigma of the likelihood.
+
+
         }
 
         self.hyperparameters = defaulthyperparameters
 
         for key, value in kwargs.items():
             self.hyperparameters[key] = value
+
+
+        # if 'dimensionality' is given we need to estimate the quality_threshold_quadratic
+        if self.hyperparameters['dimensionality'] is not None:
+            from scipy.stats import chi2
+            # we need to estimate the quality_threshold_quadratic
+            # we use the N_sigma to estimate the quality_threshold_quadratic
+            # we estimate the quality_threshold_quadratic such that it becomes dominant over the linear term at the N_sigma point
+
+            # up to which p value do we want to be accurate?
+            p_val = chi2.cdf(self.hyperparameters['N_sigma']**2, 1)
+
+            # the corresponding loglike
+            self.hyperparameters['delta_loglike'] = chi2.ppf(p_val, self.hyperparameters['dimensionality'])/2
+
+            # print the estimated delta_loglike
+            self.debug("Estimated delta_loglike: ", self.hyperparameters['delta_loglike'])
 
         self.states = []
 
