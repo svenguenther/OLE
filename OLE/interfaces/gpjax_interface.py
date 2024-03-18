@@ -90,7 +90,7 @@ def predict_mean_single(
 #
 # Compute Kxx matrix
 #
-def compute_Kxx(
+def compute_inv_Kxx(
     self,
     train_data: Dataset,
 ):
@@ -117,13 +117,16 @@ def compute_Kxx(
         Sigma_masked = jnp.where(mask + mask.T, 0.0, Sigma.to_dense())
         Sigma = cola.PSD(Dense(jnp.where(jnp.diag(jnp.squeeze(mask)), 1 / (2 * jnp.pi), Sigma_masked)))
 
-    return Sigma
+    # invert Sigma
+    Sigma_inv = cola.inv(Sigma)
 
-def calculate_mean_single_from_Kxx(
+    return Sigma_inv
+
+def calculate_mean_single_from_inv_Kxx(
     self,
     test_inputs: Num[Array, "N D"],
     train_data: Dataset,
-    Kxx: Num[Array, "N N"],
+    inv_Kxx: Num[Array, "N N"],
 ):
     # Shorter prediction function for single test inputs
 
@@ -134,14 +137,14 @@ def calculate_mean_single_from_Kxx(
     t = test_inputs
 
     # Σ = Kxx + Io²
-    Sigma = Kxx #+ cola.ops.I_like(Kxx) * obs_noise
+    # Sigma = Kxx + cola.ops.I_like(Kxx) * obs_noise
     mean_t = self.prior.mean_function(t)
 
     a = time.time()
     Kxt = self.prior.kernel.cross_covariance(x, t)  # this is the slow part
 
     # Σ⁻¹ Kxt
-    Sigma_inv_Kxt = cola.solve(Sigma, Kxt)  # this is not as slow as Kxt but second slowest
+    Sigma_inv_Kxt = inv_Kxx @ Kxt
 
     # μt  +  Ktx (Kxx + Io²)⁻¹ (y  -  μx)
     mean = mean_t + jnp.matmul(Sigma_inv_Kxt.T, y)
@@ -153,5 +156,5 @@ def calculate_mean_single_from_Kxx(
 
 
 ConjugatePosterior.predict_mean_single = predict_mean_single
-ConjugatePosterior.compute_Kxx = compute_Kxx
-ConjugatePosterior.calculate_mean_single_from_Kxx = calculate_mean_single_from_Kxx
+ConjugatePosterior.compute_inv_Kxx = compute_inv_Kxx
+ConjugatePosterior.calculate_mean_single_from_inv_Kxx = calculate_mean_single_from_inv_Kxx

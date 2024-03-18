@@ -130,6 +130,10 @@ class Emulator(BaseClass):
 
         # If load_initial_state is True, we load the initial state from the cache
         if self.hyperparameters['load_initial_state']:
+            # check that cache file exists, otherwise raise error
+            if not os.path.exists(self.hyperparameters['cache_file']):
+                raise FileNotFoundError("Cache file does not exist. Cannot load initial state from cache. Set 'load_initial_state' to False until the cache file is created.")
+
             self.data_cache.load_cache()
             self.ini_state = self.data_cache.states[0].copy()
         else:

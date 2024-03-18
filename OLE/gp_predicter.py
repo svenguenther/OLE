@@ -132,7 +132,7 @@ class GP_predictor(BaseClass):
         return output_data, output_std
     
     # @partial(jit, static_argnums=0) 
-    def sample_prediction(self, parameters, N=1, RNGkey=random.PRNGKey(int(time.time()))):
+    def sample_prediction(self, parameters, N=1, RNGkey=random.PRNGKey(time.time_ns())):
         # Predict the quantity for the given parameters.
         # First we normalize the parameters.
         parameters_normalized = self.data_processor.normalize_input_data(parameters)
@@ -140,7 +140,7 @@ class GP_predictor(BaseClass):
         # Then we predict the output data for the normalized parameters.
         output_data_compressed = jnp.zeros((N, self.num_GPs))
         for i in range(self.num_GPs):
-            _, RNGkey = self.GPs[i].sample(parameters_normalized, N=N, RNGkey=RNGkey)            
+            _, RNGkey = self.GPs[i].sample(parameters_normalized, RNGkey=RNGkey)            
             output_data_compressed = output_data_compressed.at[:,[i]].set(_)    # this is the time consuming part
 
         # Untransform the output data.
@@ -265,15 +265,19 @@ class GP(BaseClass):
 
             # testset fraction. If we have a testset, which is not None, then we will use this fraction of the data as a testset
             'testset_fraction': None,
+
+            # numer of test samples to determine the quality of the emulator
+            'N_quality_samples': 5,
+
             
         }
 
         # The hyperparameters are a dictionary of the hyperparameters for the different quantities. The keys are the names of the quantities.
         self.hyperparameters = defaulthyperparameters
 
-        # Flag that indicates whether it is required to recompute the kernel matrix (Kxx) of the training data set.
+        # Flag that indicates whether it is required to recompute the inverse kernel matrix (inv_Kxx) of the training data set.
         self.recompute_kernel_matrix = False
-        self.Kxx = None
+        self.inv_Kxx = None
 
         self.D = None
         self.opt_posterior = None
@@ -388,22 +392,22 @@ class GP(BaseClass):
         # ab = self.opt_posterior.predict_mean_single(input_data, self.D)
 
         if self.recompute_kernel_matrix:
-            Kxx = self.opt_posterior.compute_Kxx(self.D)
+            inv_Kxx = self.opt_posterior.compute_inv_Kxx(self.D)
             #self.recompute_kernel_matrix = False    # TODO: This leads to memory leaks in jit mode
-            self.Kxx = Kxx
+            self.inv_Kxx = inv_Kxx
         else:
-            Kxx = self.Kxx
+            inv_Kxx = self.inv_Kxx
 
-        ac = self.opt_posterior.calculate_mean_single_from_Kxx(input_data, self.D, Kxx)
+        ac = self.opt_posterior.calculate_mean_single_from_inv_Kxx(input_data, self.D, inv_Kxx)
 
         return ac
         
     # @partial(jit, static_argnums=0) 
     def predict_value_and_std(self, input_data, return_std=False):
         # Predict the output data for the given input data.
-        Kxx = self.opt_posterior.compute_Kxx(self.D)
+        inv_Kxx = self.opt_posterior.compute_inv_Kxx(self.D)
 
-        ac = self.opt_posterior.calculate_mean_single_from_Kxx(input_data, self.D, Kxx)
+        ac = self.opt_posterior.calculate_mean_single_from_inv_Kxx(input_data, self.D, inv_Kxx)
 
         latent_dist = self.opt_posterior.predict(input_data, train_data=self.D)
         predictive_dist = self.opt_posterior.likelihood(latent_dist)
@@ -412,16 +416,17 @@ class GP(BaseClass):
 
 
     # @partial(jit, static_argnums=0) 
-    def sample(self, input_data, N=1, RNGkey=random.PRNGKey(int(time.time()))):
+    def sample(self, input_data, RNGkey=random.PRNGKey(time.time_ns())):
         # Predict the output data for the given input data.
+        N = self.hyperparameters['N_quality_samples']
 
         if self.recompute_kernel_matrix:
-            Kxx = self.opt_posterior.compute_Kxx(self.D)
-            self.Kxx = Kxx
+            inv_Kxx = self.opt_posterior.compute_inv_Kxx(self.D)
+            self.inv_Kxx = inv_Kxx
         else:
-            Kxx = self.Kxx
+            inv_Kxx = self.inv_Kxx
 
-        ac = self.opt_posterior.calculate_mean_single_from_Kxx(input_data, self.D, Kxx)
+        ac = self.opt_posterior.calculate_mean_single_from_inv_Kxx(input_data, self.D, inv_Kxx)
 
         # DOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOo
         latent_dist = self.opt_posterior.predict(input_data, train_data=self.D)
