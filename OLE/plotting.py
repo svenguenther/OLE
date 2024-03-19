@@ -58,6 +58,14 @@ def plain_plot(x, y, label, file_name):
 
     gc.collect()
 
+def plain_scatter(x, y, label, file_name):
+    plt.figure()
+    plt.scatter(x, y, label=label)
+    plt.legend()
+    plt.savefig(file_name)
+    plt.close()
+
+    gc.collect()
 
 def data_plot_raw(data, label, file_name):
     if data.shape[1] == 1:

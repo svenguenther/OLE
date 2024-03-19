@@ -574,11 +574,19 @@ class NUTSSampler(Sampler):
 
                         # check whether the emulator is good enough
                         if not self.emulator.check_quality_criterium(jnp.array(loglikes)):
-
+                            
+                           
                             state = self.theory.compute(state)
                             state = self.likelihood.loglike_state(state)
                             logprior = self.compute_logprior(state)
+                            
                             state['loglike'] = state['loglike'] + logprior
+                            point = []
+                            for key,value in state['parameters'].items():
+                                point.append(value[0])
+                            # test if the assumed error is small enough
+                            self.emulator.update_error(jnp.array([point]))
+                            
                             self.emulator.add_state(state)
 
                             print("Emulator not good enough")

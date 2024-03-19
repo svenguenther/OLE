@@ -409,6 +409,12 @@ class Emulator(BaseClass):
 
     #     return state, RNGkey
     
+    def update_error(self,point):
+        for quantity_name, quantity in self.ini_state['quantities'].items():
+            self.emulators[quantity_name].update_error(point) 
+                             
+    
+
     def check_quality_criterium(self, loglikes, reference_loglike = None):
         # check whether the emulator is good enough to be used
         # if the emulator is not yet trained, we return False

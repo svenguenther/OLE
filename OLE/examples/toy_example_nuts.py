@@ -52,7 +52,7 @@ class my_theory(Theory):
         # observables y_array, y_scalar
         self.requirements = ['x1', 'x2', 'x3']
 
-        state['quantities']['y_array'] = jnp.array([state['parameters']['x1'][0], state['parameters']['x2'][0], state['parameters']['x3'][0]])
+        state['quantities']['y_array'] = jnp.array([0.3*jnp.sin(2.*state['parameters']['x1'][0])+state['parameters']['x1'][0], 0.5*state['parameters']['x3'][0]+state['parameters']['x2'][0], state['parameters']['x3'][0]])
         state['quantities']['y_scalar'] = jnp.array([jnp.sum(state['quantities']['y_array'])])
         return state
 
@@ -68,7 +68,7 @@ class my_likelihood(Likelihood):
 
     def loglike(self, state):
         # Compute the loglikelihood for the given parameters.
-        loglike = -0.5*jnp.sum((state['quantities']['y_array']-jnp.ones(3))**2) - 0.5*(state['quantities']['y_scalar']-5.0)**2
+        loglike = -10.*jnp.sum((state['quantities']['y_array']-jnp.ones(3))**2) - 10.*(state['quantities']['y_scalar']-3.0)**2
         return loglike
     
 
@@ -88,7 +88,7 @@ emulator_settings = {
     'kernel': 'RBF',
 
     # Kernel fitting frequency. After aquiring this many data points, the kernel is refitted.
-    'kernel_fitting_frequency': 4,
+    'kernel_fitting_frequency': 10,
 
     ## Related to the Gaussian Process itself. ToDo: Rework this part
     'learning_rate': 0.02,
@@ -118,11 +118,11 @@ emulator_settings = {
     'store_cache': False,
 
     # accuracy parameters for loglike:
-    'quality_threshold_constant': 0.1,
-    'quality_threshold_linear': 0.0,
-    'quality_threshold_quadratic': 0.01,
+    'quality_threshold_constant': 0.03, 
+    'quality_threshold_linear': 0.4,
+    'quality_threshold_quadratic': 0.02,
 
-
+    # add acceptable error that is reduced live. For pca it should be linear in the eigenvalues
 
 
     # related so sampler

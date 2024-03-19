@@ -1,13 +1,12 @@
 # Here we will program the gp_predicter class. One instance of this class will be created for each quantity that is to be emulated.
 # Each quantity may have different number of dimensions. Thus, each gp_predicter requires a different preprocessing and potentially PCA data compression.
 # 
-
+import jax
 # use GPJax to fit the data
-from jax.config import config
-
+#from jax.config import config
 import os
 
-config.update("jax_enable_x64", True)
+jax.config.update("jax_enable_x64", True)
 
 from jax import jit, random
 import jax.numpy as jnp
@@ -30,9 +29,10 @@ import time
 
 from OLE.utils.base import BaseClass
 from OLE.data_processing import data_processor
-from OLE.plotting import loss_plot, plot_pca_components_test_set, plot_prediction_test
+from OLE.plotting import plain_plot, plain_scatter, loss_plot, plot_pca_components_test_set, plot_prediction_test
 
 from OLE.interfaces import gpjax_interface
+
 
 class GP_predictor(BaseClass):
 
@@ -60,6 +60,9 @@ class GP_predictor(BaseClass):
 
             # testset fraction. If we have a testset, which is not None, then we will use this fraction of the data as a testset
             'testset_fraction': None,
+
+            # acceptable error
+            'error_tolerance': 0.1
 
         }
 
@@ -178,8 +181,21 @@ class GP_predictor(BaseClass):
         
         return data_out.T
     
+    def update_error(self,point):
+        #print(point)
+        #print(self.num_GPs)
+        for i in range(self.num_GPs):
+
+            mean,std = self.GPs[i].predict_value_and_std(point)
+            if self.GPs[i].hyperparameters['error_tolerance'] > std**2 /3.: 
+                # more than a third of uncertanity is error
+                self.GPs[i].hyperparameters['error_tolerance'] /= 2.
+                # this is still very simple. We should relate it to the impact on final loglike
+                # in this case the error of all comps will evolve similiar
+
     def train(self):
         # Train the GP emulator.
+
         input_data = self.data_processor.input_data_normalized
         output_data = self.data_processor.output_data_emulator
 
@@ -193,8 +209,10 @@ class GP_predictor(BaseClass):
 
 
         for i in range(self.num_GPs):
+
             # Load the data into the GP.
             self.GPs[i].load_data(input_data, output_data[:,i])
+
 
             # Train the GP.
             self.GPs[i].train()
@@ -266,9 +284,11 @@ class GP(BaseClass):
             # testset fraction. If we have a testset, which is not None, then we will use this fraction of the data as a testset
             'testset_fraction': None,
 
+            #error
+            'error_tolerance': 0.1,
+
             # numer of test samples to determine the quality of the emulator
             'N_quality_samples': 5,
-
             
         }
 
@@ -324,8 +344,17 @@ class GP(BaseClass):
         # Train the GP emulator.
         
         # Create the kernel
+
         if self.hyperparameters['kernel'] == 'RBF':
-            kernel = gpx.kernels.RBF() + gpx.kernels.White()
+
+            kernelRBF = gpx.kernels.RBF() #+ gpx.kernels.White()
+        
+            #kernelM52 = gpx.kernels.Matern52()
+            #kernelLin = gpx.kernels.Polynomial(degree=1)
+            kernelWhite = gpx.kernels.White(variance = self.hyperparameters['error_tolerance'] )
+            kernelError = kernelWhite.replace_trainable(variance=False)
+            kernel = gpx.kernels.SumKernel(kernels = [kernelRBF,kernelError])
+
         else:
             raise ValueError('Kernel not implemented')
         
@@ -344,7 +373,8 @@ class GP(BaseClass):
         #negative_mll = jit(negative_mll)
 
         # have exponential decay learning rate
-        lr = lambda t: jnp.exp(-self.hyperparameters['learning_rate']*t)
+        #lr = lambda t: jnp.exp(-self.hyperparameters['learning_rate']*t)
+        lr = lambda t: self.hyperparameters['learning_rate']*10.
 
         del self.opt_posterior
         self.opt_posterior = None
@@ -357,8 +387,8 @@ class GP(BaseClass):
             train_data=self.D,
             optim=ox.adam(learning_rate=lr),
             num_iters=self.hyperparameters['num_iters'],
-            safe=True,
-            key=random.PRNGKey(0),
+            safe=True, # what does this do?
+            key=jax.random.PRNGKey(0),
         )
 
         # negative_mll._clear_cache()
@@ -374,7 +404,37 @@ class GP(BaseClass):
             if not os.path.exists(self.hyperparameters['plotting_directory']+ "/loss/"):
                 os.makedirs(self.hyperparameters['plotting_directory']+ "/loss/")
             loss_plot(history, self._name , self.hyperparameters['plotting_directory']+'/loss/' + self._name + '_loss.png')
+            
+            # plot the training data
+            #fig = plt.figure()
+            #cmap = mpl.cm.cool
 
+            #norm = mpl.colors.Normalize(vmin=-3, vmax=3)
+            #ax.scatter(self.input_data[:,0],self.input_data[:,1], self.input_data[:,2],c=self.output_data[:,0], cmap=cmap)
+            #plt.savefig(self.hyperparameters['plotting_directory']+'/loss/' + self._name + '_trainData.png')
+            #plt.close(fig)
+            
+
+            # plot a slice of the trained GP
+            #fig = plt.figure()
+            #ys = jnp.linspace(0., 3., 100)
+            #zs = []
+            #stds = []
+            #for yval in ys:
+            #    inputDat = jnp.array([[yval,yval,yval]])
+            #    mean,std = self.predict_value_and_std(inputDat)
+            #    zs.append(mean)
+            #    stds.append(std)
+            #zs = np.array(zs)
+            #stds = np.array(stds)
+            #plt.plot(ys,zs)
+            #plt.fill_between(ys, zs - 3.*stds,zs + 3.*stds,alpha = 0.3)
+            #plt.fill_between(ys, zs - stds,zs + stds,alpha = 0.3)
+            #plt.savefig(self.hyperparameters['plotting_directory']+'/loss/' + self._name + '_slice.png')
+            #plt.close(fig)
+            
+
+            
             if self.hyperparameters['testset_fraction'] is not None:
                 self.run_test_set_tests()
 
