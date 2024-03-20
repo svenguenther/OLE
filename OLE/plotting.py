@@ -58,6 +58,18 @@ def plain_plot(x, y, label, file_name):
 
     gc.collect()
 
+def error_plot(x, y, std, file_name):
+    # plot a slice of the trained GP
+    plt.figure()
+    plt.plot(x,y)
+    plt.fill_between(x, y - 3.*std, y + 3.*std, alpha = 0.3)
+    plt.fill_between(x, y - std, y + std, alpha = 0.3)
+    plt.savefig(file_name)
+    plt.close()
+
+    gc.collect()
+
+
 def plain_scatter(x, y, label, file_name):
     plt.figure()
     plt.scatter(x, y, label=label)

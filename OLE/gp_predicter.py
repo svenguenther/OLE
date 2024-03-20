@@ -29,7 +29,7 @@ import time
 
 from OLE.utils.base import BaseClass
 from OLE.data_processing import data_processor
-from OLE.plotting import plain_plot, plain_scatter, loss_plot, plot_pca_components_test_set, plot_prediction_test
+from OLE.plotting import plain_plot, error_plot, loss_plot, plot_pca_components_test_set, plot_prediction_test
 
 from OLE.interfaces import gpjax_interface
 
@@ -60,9 +60,6 @@ class GP_predictor(BaseClass):
 
             # testset fraction. If we have a testset, which is not None, then we will use this fraction of the data as a testset
             'testset_fraction': None,
-
-            # acceptable error
-            'error_tolerance': 0.1
 
         }
 
@@ -185,13 +182,14 @@ class GP_predictor(BaseClass):
         #print(point)
         #print(self.num_GPs)
         for i in range(self.num_GPs):
-
-            mean,std = self.GPs[i].predict_value_and_std(point)
-            if self.GPs[i].hyperparameters['error_tolerance'] > std**2 /3.: 
-                # more than a third of uncertanity is error
-                self.GPs[i].hyperparameters['error_tolerance'] /= 2.
-                # this is still very simple. We should relate it to the impact on final loglike
-                # in this case the error of all comps will evolve similiar
+            if self.GPs[i].hyperparameters['error_tolerance'] > 0.:
+                
+                mean,std = self.GPs[i].predict_value_and_std(point)
+                if self.GPs[i].hyperparameters['error_tolerance'] > std**2 /3.: 
+                    # more than a third of uncertanity is error
+                    self.GPs[i].hyperparameters['error_tolerance'] /= 2.
+                    # this is still very simple. We should relate it to the impact on final loglike
+                    # in this case the error of all comps will evolve similiar
 
     def train(self):
         # Train the GP emulator.
@@ -285,7 +283,7 @@ class GP(BaseClass):
             'testset_fraction': None,
 
             #error
-            'error_tolerance': 0.1,
+            'error_tolerance': 0.,
 
             # numer of test samples to determine the quality of the emulator
             'N_quality_samples': 5,
@@ -347,16 +345,22 @@ class GP(BaseClass):
 
         if self.hyperparameters['kernel'] == 'RBF':
 
-            kernelRBF = gpx.kernels.RBF() #+ gpx.kernels.White()
+            kernelNoiseFree = gpx.kernels.RBF() #+ gpx.kernels.White()
         
             #kernelM52 = gpx.kernels.Matern52()
             #kernelLin = gpx.kernels.Polynomial(degree=1)
-            kernelWhite = gpx.kernels.White(variance = self.hyperparameters['error_tolerance'] )
-            kernelError = kernelWhite.replace_trainable(variance=False)
-            kernel = gpx.kernels.SumKernel(kernels = [kernelRBF,kernelError])
-
         else:
             raise ValueError('Kernel not implemented')
+        
+        
+        if self.hyperparameters['error_tolerance'] > 0.:
+            kernelWhite = gpx.kernels.White(variance = self.hyperparameters['error_tolerance'] )
+            kernelError = kernelWhite.replace_trainable(variance=False)
+            kernel = gpx.kernels.SumKernel(kernels = [kernelNoiseFree ,kernelError])
+
+        else:        
+            kernel = kernelNoiseFree
+        
         
         meanf = gpx.mean_functions.Zero()
         prior = gpx.gps.Prior(mean_function=meanf, kernel=kernel)
@@ -405,35 +409,20 @@ class GP(BaseClass):
                 os.makedirs(self.hyperparameters['plotting_directory']+ "/loss/")
             loss_plot(history, self._name , self.hyperparameters['plotting_directory']+'/loss/' + self._name + '_loss.png')
             
-            # plot the training data
-            #fig = plt.figure()
-            #cmap = mpl.cm.cool
-
-            #norm = mpl.colors.Normalize(vmin=-3, vmax=3)
-            #ax.scatter(self.input_data[:,0],self.input_data[:,1], self.input_data[:,2],c=self.output_data[:,0], cmap=cmap)
-            #plt.savefig(self.hyperparameters['plotting_directory']+'/loss/' + self._name + '_trainData.png')
-            #plt.close(fig)
-            
-
             # plot a slice of the trained GP
-            #fig = plt.figure()
-            #ys = jnp.linspace(0., 3., 100)
-            #zs = []
-            #stds = []
-            #for yval in ys:
-            #    inputDat = jnp.array([[yval,yval,yval]])
-            #    mean,std = self.predict_value_and_std(inputDat)
-            #    zs.append(mean)
-            #    stds.append(std)
-            #zs = np.array(zs)
-            #stds = np.array(stds)
-            #plt.plot(ys,zs)
-            #plt.fill_between(ys, zs - 3.*stds,zs + 3.*stds,alpha = 0.3)
-            #plt.fill_between(ys, zs - stds,zs + stds,alpha = 0.3)
-            #plt.savefig(self.hyperparameters['plotting_directory']+'/loss/' + self._name + '_slice.png')
-            #plt.close(fig)
+            x = jnp.linspace(0., 3., 100) # automaticaly determin menaigful ranges
+            y = []
+            std = []
+            for xval in x:
+                inputDat = jnp.array([jnp.ones(len(self.input_data[0])) * xval])
+                mean,stdev = self.predict_value_and_std(inputDat)
+                y.append(mean)
+                std.append(stdev)
+            y = jnp.array(y)
+            std = jnp.array(std)
+            error_plot(x, y, std, self.hyperparameters['plotting_directory']+'/loss/' + self._name + '_slice.png')
             
-
+        
             
             if self.hyperparameters['testset_fraction'] is not None:
                 self.run_test_set_tests()
