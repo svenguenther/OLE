@@ -14,7 +14,7 @@ class Likelihood(BaseClass):
             loglike = 0.0
     
             return loglike
-        
+    
         def loglike_state(self, state):
             # Compute the loglikelihood for the given parameters.
             state['loglike'] = self.loglike(state)
@@ -23,5 +23,5 @@ class Likelihood(BaseClass):
         
         def loglike_gradient(self, state):
             # Compute the gradient of the loglikelihood for the given parameters.
-    
+
             return state

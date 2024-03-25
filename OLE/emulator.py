@@ -366,6 +366,7 @@ class Emulator(BaseClass):
 
         return output_state
     
+
     # function to get N samples from the same input parameters
     # @partial(jax.jit, static_argnums=0)
     def emulate_samples(self, parameters, RNGkey):
@@ -408,12 +409,25 @@ class Emulator(BaseClass):
     #         state['quantities'][quantity] = emulator_output[0,:]
 
     #     return state, RNGkey
-    
-    def update_error(self,point):
+
+    # function simply restes all errors for the GPs
+    def reset_error(self,delta_loglike):
+  
         for quantity_name, quantity in self.ini_state['quantities'].items():
-            self.emulators[quantity_name].update_error(point) 
-                             
-    
+            self.emulators[quantity_name].reset_error(delta_loglike) 
+
+    # givven a state find the maximal tolerable error for the GPs
+    def update_error(self,state,quantity_derivs,acceptable_error):
+
+        point = []
+        for key,value in state['parameters'].items():
+            point.append(value[0])
+
+
+        for quantity_name, quantity in self.ini_state['quantities'].items():
+            self.emulators[quantity_name].update_error(jnp.array([point]),quantity_derivs[quantity_name],acceptable_error) 
+
+        
 
     def check_quality_criterium(self, loglikes, reference_loglike = None):
         # check whether the emulator is good enough to be used
@@ -431,6 +445,7 @@ class Emulator(BaseClass):
         std_loglike = jnp.std(loglikes)
 
         max_loglike = max(self.data_cache.max_loglike, self.max_loglike_encountered)
+
 
         delta_loglike = jnp.abs(mean_loglike - max_loglike)
 

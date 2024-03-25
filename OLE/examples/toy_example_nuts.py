@@ -71,6 +71,22 @@ class my_likelihood(Likelihood):
         loglike = -10.*jnp.sum((state['quantities']['y_array']-jnp.ones(3))**2) - 10.*(state['quantities']['y_scalar']-3.0)**2
         return loglike
     
+    def loglike_gradient(self, state, type): # define a function for each quantity
+            # Compute the gradient of the loglikelihood for the given parameters.
+        
+        if type == 'y_array':
+            return [
+                -20.*(state['quantities']['y_array']-jnp.ones(3))[0],
+                -20.*(state['quantities']['y_array']-jnp.ones(3))[1],
+                -20.*(state['quantities']['y_array']-jnp.ones(3))[2]
+                ]
+        elif type == 'y_scalar':
+            return [
+                -20.*(state['quantities']['y_scalar']-3.0)
+                ]
+          
+        return []
+
 
 # init theory and likelihood
 my_theory = my_theory()
@@ -120,9 +136,9 @@ emulator_settings = {
     'store_cache': False,
 
     # accuracy parameters for loglike:
-    'quality_threshold_constant': 0.03, 
+    'quality_threshold_constant': 0.05, 
     'quality_threshold_linear': 0.4,
-    'quality_threshold_quadratic': 0.02,
+    'quality_threshold_quadratic': 0.1,
 
     # add acceptable error that is reduced live. For pca it should be linear in the eigenvalues
 

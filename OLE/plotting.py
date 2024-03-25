@@ -88,6 +88,7 @@ def data_plot_raw(data, label, file_name):
         plt.xlabel('Data index')
         plt.ylabel(label)
         plt.savefig(file_name)
+        plt.close()
 
     else:
         N = len(data)
@@ -117,6 +118,7 @@ def data_plot_normalized(data, label, file_name):
         plt.xlabel('Data index')
         plt.ylabel('Normalized '+label)
         plt.savefig(file_name)
+        plt.close()
 
     else:
         N = len(data)
@@ -170,6 +172,7 @@ def plot_pca_components_test_set(true, pred, pred_std, title, file_name):
     plt.xlabel('True')
     plt.ylabel('Residuals')
     plt.savefig(file_name)
+    plt.close()
 
     gc.collect()
 

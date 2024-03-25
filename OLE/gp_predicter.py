@@ -61,6 +61,9 @@ class GP_predictor(BaseClass):
             # testset fraction. If we have a testset, which is not None, then we will use this fraction of the data as a testset
             'testset_fraction': None,
 
+            #error
+            'error_tolerance': 0.,
+
         }
 
         # The hyperparameters are a dictionary of the hyperparameters for the different quantities. The keys are the names of the quantities.
@@ -106,6 +109,41 @@ class GP_predictor(BaseClass):
         
         return output_data
     
+    # Predict the quantity for the given GPOutput. This is just to split the precit function so we can autodiff it in parts    
+    def predict_fromGP(self, GPOut):
+        
+        output_data_compressed = GPOut    
+
+        # Untransform the output data.
+        output_data_normalized = self.data_processor.decompress_data(output_data_compressed)
+
+        output_data = self.data_processor.denormalize_data(output_data_normalized)
+        
+        return output_data
+    
+    # same as above, just wrapped the input for autodiff
+    def predict_fromGP_scalar(self, GPOut,index):
+        
+        output_data_compressed = GPOut    # this is the time consuming part
+
+        # Untransform the output data.
+        output_data_normalized = self.data_processor.decompress_data(output_data_compressed)
+
+        output_data = self.data_processor.denormalize_data(output_data_normalized)
+        
+        return output_data[index]
+    
+    # sexond part such that predict(parameters) = predict_fromGP(predict_GPout(self,parameters))  
+    def predict_GPOut(self, parameters):
+        
+        parameters_normalized = self.data_processor.normalize_input_data(parameters)
+
+        output_data_compressed = jnp.zeros(self.num_GPs)
+        for i in range(self.num_GPs):
+            output_data_compressed = output_data_compressed.at[i].set(self.GPs[i].predict(parameters_normalized))    # this is the time consuming part
+
+        return jnp.array(output_data_compressed)
+    
     # @partial(jit, static_argnums=0) 
     def predict_value_and_std(self, parameters):
         # Predict the quantity for the given parameters.
@@ -150,6 +188,7 @@ class GP_predictor(BaseClass):
         output_data = self.data_processor.denormalize_data(output_data_normalized)
         return output_data, RNGkey
     
+    
     # @partial(jit, static_argnums=0) 
     def predict_gradients(self, parameters):
         # Predict the quantity for the given parameters.
@@ -178,18 +217,57 @@ class GP_predictor(BaseClass):
         
         return data_out.T
     
-    def update_error(self,point):
-        #print(point)
-        #print(self.num_GPs)
+    def reset_error(self,delta_loglike):
+        
         for i in range(self.num_GPs):
-            if self.GPs[i].hyperparameters['error_tolerance'] > 0.:
+            error_fract = self.hyperparameters['error_tolerance'] - self.GPs[i].hyperparameters['error_tolerance']
+            self.GPs[i].hyperparameters['error_tolerance'] += error_fract * (1. - jnp.exp(delta_loglike))
+        
+        for i in range(self.num_GPs):
+                print('error for GPn',i, 'reset to' ,self.GPs[i].hyperparameters['error_tolerance'])
+              
+
+    def update_error(self,point,quantity_derivs,acceptable_error):
+        
+        GPOut = self.predict_GPOut(point)
+        
+        # get derivatives of output wrt to GP's
+        GP_derivs = grad(self.predict_fromGP_scalar,0)
+
+        derivs = []
+        for i in range(self.output_size):
+            
+            derivs.append(GP_derivs(GPOut,i))
+            #derivs is now a matrix with first index refering to the output and second index to the GP
+        
+        # those derivs should coincide with the eigenvalues of the decomposition modulo some normalisations..
+        # we could then have a unique error per emulator and update the GP errs via the eigenvalues. 
+
+        # dloglike/dGP = dloglike/dQuant * dQuant/dGP
+
+        dlogdGP = []
+        for i in range(self.num_GPs):
+            dlog = 0.
+            for j in range(self.output_size):
+                dlog += quantity_derivs[j]*derivs[j][i]
+            dlogdGP.append(dlog)
+
+        #print('derivatives of loglike wrt to GPs are: ',dlogdGP)   
+        
+        print_errors = False
+            
+        for i in range(self.num_GPs):
+            max_error = acceptable_error / dlogdGP[i] # check that this is correct ... 
                 
-                mean,std = self.GPs[i].predict_value_and_std(point)
-                if self.GPs[i].hyperparameters['error_tolerance'] > std**2 /3.: 
-                    # more than a third of uncertanity is error
-                    self.GPs[i].hyperparameters['error_tolerance'] /= 2.
-                    # this is still very simple. We should relate it to the impact on final loglike
-                    # in this case the error of all comps will evolve similiar
+            if self.GPs[i].hyperparameters['error_tolerance'] > max_error**2:
+                self.GPs[i].hyperparameters['error_tolerance'] = max_error[0]**2
+                print_errors = True
+        
+        if print_errors:
+            for i in range(self.num_GPs):
+                print('current error for GPn',i, 'is' ,self.GPs[i].hyperparameters['error_tolerance'])
+                
+               
 
     def train(self):
         # Train the GP emulator.
@@ -488,6 +566,24 @@ class GP(BaseClass):
 
         return random.normal(key= subkey, shape=(N,1)) * jnp.sqrt(predictive_std[0]) + ac, RNGkey
         
+    def sample_mean(self, input_data, RNGkey=random.PRNGKey(time.time_ns())):
+        # Predict the output data for the given input data.
+        # this need updating as we really just want the mean, but for simplicity i want to keep the structure 
+        # identically. So i just draw the mean N times. 
+        N = self.hyperparameters['N_quality_samples']
+
+        if self.recompute_kernel_matrix:
+            inv_Kxx = self.opt_posterior.compute_inv_Kxx(self.D)
+            self.inv_Kxx = inv_Kxx
+        else:
+            inv_Kxx = self.inv_Kxx
+
+        ac = self.opt_posterior.calculate_mean_single_from_inv_Kxx(input_data, self.D, inv_Kxx)
+
+        RNGkey, subkey = random.split(RNGkey)
+
+        return random.normal(key= subkey, shape=(N,1)) * jnp.sqrt(0.) + ac, RNGkey
+    
     # def predict_gradient(self, input_data):
     #     # Predict the gradient of the output data for the given input data.
     #     gradient = grad(self.opt_posterior.predict_mean_single)
