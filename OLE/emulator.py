@@ -355,7 +355,7 @@ class Emulator(BaseClass):
         output_state['parameters'] = parameters
 
         # Emulate the quantities for the given parameters.
-        input_data = jnp.array([[value[0] for key, value in parameters.items() if key in self.input_parameters]])
+        input_data = jnp.array([[parameters[key][0] for key in self.input_parameters]])
         
         for quantity, emulator in self.emulators.items():
             emulator_output = emulator.predict(input_data)
@@ -375,10 +375,7 @@ class Emulator(BaseClass):
         output_states = [deepcopy(state) for i in range(self.hyperparameters['N_quality_samples'])]
 
         # Emulate the quantities for the given parameters.
-        input_data = jnp.array([[value[0] for key, value in parameters.items() if key in self.input_parameters]])
-
-
-
+        input_data = jnp.array([[parameters[key][0] for key in self.input_parameters]])
 
         for quantity, emulator in self.emulators.items():
             emulator_output, RNGkey = emulator.sample_prediction(input_data, N=self.hyperparameters['N_quality_samples'], RNGkey=RNGkey)
