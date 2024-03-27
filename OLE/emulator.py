@@ -25,6 +25,7 @@ from OLE.utils.base import BaseClass
 from OLE.utils.mpi import *
 from OLE.data_cache import DataCache
 from OLE.gp_predicter import GP_predictor
+from OLE.likelihood import Likelihood
 
 from OLE.plotting import plot_loglikes
 
@@ -48,6 +49,9 @@ class Emulator(BaseClass):
     # list of input parameters
     input_parameters: list
 
+    # likelihood calculation
+    likelihood: Likelihood
+
     def __init__(self, data_cache = None, **kwargs):
         super().__init__("Emulator", **kwargs)
 
@@ -67,7 +71,7 @@ class Emulator(BaseClass):
 
         pass
 
-    def initialize(self, ini_state=None, **kwargs):
+    def initialize(self, likelihood, ini_state=None, **kwargs):
         # default hyperparameters
         defaulthyperparameters = {
             # kernel
@@ -105,6 +109,8 @@ class Emulator(BaseClass):
             'quality_threshold_constant': 0.1,
             'quality_threshold_linear': 0.01,
             'quality_threshold_quadratic': 0.0001,
+
+            'noise_percentage' : 0.,
 
             # the radius around the checked points for which we do not need to check the quality criterium
             'quality_points_radius': 0.0,
@@ -151,6 +157,8 @@ class Emulator(BaseClass):
         else:
             self.input_parameters = list(ini_state['parameters'].keys())
 
+        self.likelihood = likelihood
+        self.likelihood.initialize(**kwargs)
 
         # A state dictionary is a nested dictionary with the following structure:
         # state = {
@@ -301,6 +309,7 @@ class Emulator(BaseClass):
 
         self.write_to_log("Training emulator\n")
 
+        
         # Train the emulator.
         input_data_raw = self.data_cache.get_parameters()
         input_data_raw_jax = jnp.array(input_data_raw)
@@ -314,6 +323,9 @@ class Emulator(BaseClass):
             # load data into emulators
             emulator.load_data(input_data_raw_jax, output_data_raw_jax)
 
+            del output_data_raw_jax
+            del output_data_raw
+
             # compute normalization and compression and apply it to the data
             self.debug("Compute normalization and compression for quantity %s", quantity)
             emulator.data_processor.compute_normalization()
@@ -323,11 +335,16 @@ class Emulator(BaseClass):
             emulator.data_processor.compute_compression()
             emulator.data_processor.compress_training_data()
 
-            self.debug("Train GP for quantity %s", quantity)
-            emulator.train()
+            emulator.initialize_training() # fill basic structures so we can set errors accurately
+            
+        self.set_error()
 
-            del output_data_raw_jax
-            del output_data_raw
+        for quantity, emulator in self.emulators.items():
+            self.debug("Train GP for quantity %s", quantity)
+
+            emulator.finalize_training()
+
+            
 
         del input_data_raw_jax
         del input_data_raw
@@ -411,23 +428,51 @@ class Emulator(BaseClass):
     #     return state, RNGkey
 
     # function simply restes all errors for the GPs
-    def reset_error(self,delta_loglike):
+    
+    def reset_error(self):
   
         for quantity_name, quantity in self.ini_state['quantities'].items():
-            self.emulators[quantity_name].reset_error(delta_loglike) 
+            self.emulators[quantity_name].reset_error() 
 
-    # givven a state find the maximal tolerable error for the GPs
-    def update_error(self,state,quantity_derivs,acceptable_error):
+    def set_error(self):
 
-        point = []
-        for key,value in state['parameters'].items():
-            point.append(value[0])
+        if self.hyperparameters['noise_percentage'] == 0.:
+            for quantity_name, quantity in self.ini_state['quantities'].items():
+                self.emulators[quantity_name].disable_error() 
 
+        else:
 
-        for quantity_name, quantity in self.ini_state['quantities'].items():
-            self.emulators[quantity_name].update_error(jnp.array([point]),quantity_derivs[quantity_name],acceptable_error) 
+            num_GPs = 0
+            for quantity_name, quantity in self.ini_state['quantities'].items():
+                self.emulators[quantity_name].reset_error() 
+                num_GPs += self.emulators[quantity_name].num_GPs
 
         
+            for index in range(len(self.data_cache.states)):
+                state = self.data_cache.states[index]
+                
+                delta_loglike = max(self.data_cache.max_loglike) - state['loglike']
+                acceptable_error = self.hyperparameters['quality_threshold_constant'] + delta_loglike * self.hyperparameters['quality_threshold_linear'] + delta_loglike **2 * self.hyperparameters['quality_threshold_quadratic']
+                            
+                # we distribute this error equally among all GPs. Other options could be considered
+                quantity_derivs = {}
+        
+                for name,val in state['quantities'].items():
+                    quantity_derivs[name] = jnp.array( self.likelihood.loglike_gradient(state, name))
+            
+                acceptable_error /= jnp.sqrt(num_GPs) * jnp.sqrt(100./self.hyperparameters['noise_percentage']) 
+                                    
+        
+                if delta_loglike > 0.:
+                    for quantity_name, quantity in self.ini_state['quantities'].items():
+                        self.emulators[quantity_name].set_error(index,quantity_derivs[quantity_name],acceptable_error) 
+
+        print('set the noise levels to ')
+        for quantity_name, quantity in self.ini_state['quantities'].items():
+            for i in range(self.emulators[quantity_name].num_GPs):
+                print(self.emulators[quantity_name].GPs[i].hyperparameters['error_tolerance'] )
+
+    
 
     def check_quality_criterium(self, loglikes, reference_loglike = None):
         # check whether the emulator is good enough to be used

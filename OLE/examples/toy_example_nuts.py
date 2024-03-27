@@ -109,7 +109,7 @@ emulator_settings = {
     ## Related to the Gaussian Process itself. ToDo: Rework this part
     'learning_rate': 0.02,
 
-    'error_tolerance': 0.01,
+    'noise_percentage': 0.1, # this could be bool
     # Number of iterations
     'num_iters': 100,
 

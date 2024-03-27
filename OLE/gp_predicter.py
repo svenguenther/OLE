@@ -62,7 +62,7 @@ class GP_predictor(BaseClass):
             'testset_fraction': None,
 
             #error
-            'error_tolerance': 0.,
+            'error_tolerance': 1.,
 
         }
 
@@ -124,7 +124,7 @@ class GP_predictor(BaseClass):
     # same as above, just wrapped the input for autodiff
     def predict_fromGP_scalar(self, GPOut,index):
         
-        output_data_compressed = GPOut    # this is the time consuming part
+        output_data_compressed = GPOut   
 
         # Untransform the output data.
         output_data_normalized = self.data_processor.decompress_data(output_data_compressed)
@@ -143,6 +143,7 @@ class GP_predictor(BaseClass):
             output_data_compressed = output_data_compressed.at[i].set(self.GPs[i].predict(parameters_normalized))    # this is the time consuming part
 
         return jnp.array(output_data_compressed)
+    
     
     # @partial(jit, static_argnums=0) 
     def predict_value_and_std(self, parameters):
@@ -217,32 +218,30 @@ class GP_predictor(BaseClass):
         
         return data_out.T
     
-    def reset_error(self,delta_loglike):
+    def reset_error(self):
         
         for i in range(self.num_GPs):
-            error_fract = self.hyperparameters['error_tolerance'] - self.GPs[i].hyperparameters['error_tolerance']
-            self.GPs[i].hyperparameters['error_tolerance'] += error_fract * (1. - jnp.exp(delta_loglike))
-        
-        for i in range(self.num_GPs):
-                print('error for GPn',i, 'reset to' ,self.GPs[i].hyperparameters['error_tolerance'])
-              
+            self.GPs[i].hyperparameters['error_tolerance'] = self.hyperparameters['error_tolerance']
 
-    def update_error(self,point,quantity_derivs,acceptable_error):
+    def disable_error(self):
         
-        GPOut = self.predict_GPOut(point)
+        self.hyperparameters['error_tolerance'] = 0.
+
+        for i in range(self.num_GPs):
+            self.GPs[i].hyperparameters['error_tolerance'] = self.hyperparameters['error_tolerance']
+
+    def set_error(self,index,quantity_derivs,acceptable_error):
+        
+        GPOut = jnp.array([self.GPs[i].output_data[index][0] for i in range(self.num_GPs)])
         
         # get derivatives of output wrt to GP's
         GP_derivs = grad(self.predict_fromGP_scalar,0)
 
         derivs = []
         for i in range(self.output_size):
-            
             derivs.append(GP_derivs(GPOut,i))
             #derivs is now a matrix with first index refering to the output and second index to the GP
         
-        # those derivs should coincide with the eigenvalues of the decomposition modulo some normalisations..
-        # we could then have a unique error per emulator and update the GP errs via the eigenvalues. 
-
         # dloglike/dGP = dloglike/dQuant * dQuant/dGP
 
         dlogdGP = []
@@ -252,22 +251,15 @@ class GP_predictor(BaseClass):
                 dlog += quantity_derivs[j]*derivs[j][i]
             dlogdGP.append(dlog)
 
-        #print('derivatives of loglike wrt to GPs are: ',dlogdGP)   
-        
-        print_errors = False
             
         for i in range(self.num_GPs):
             max_error = acceptable_error / dlogdGP[i] # check that this is correct ... 
                 
             if self.GPs[i].hyperparameters['error_tolerance'] > max_error**2:
                 self.GPs[i].hyperparameters['error_tolerance'] = max_error[0]**2
-                print_errors = True
         
-        if print_errors:
-            for i in range(self.num_GPs):
-                print('current error for GPn',i, 'is' ,self.GPs[i].hyperparameters['error_tolerance'])
-                
-               
+    
+                          
 
     def train(self):
         # Train the GP emulator.
@@ -296,6 +288,43 @@ class GP_predictor(BaseClass):
         # if we have a plotting directory, we will run some tests
         if self.hyperparameters['plotting_directory'] is not None and self.hyperparameters['testset_fraction'] is not None:
             self.run_tests()
+
+        pass
+
+    def finalize_training(self):
+        # Train the GP emulator.
+
+        
+        for i in range(self.num_GPs):
+
+            # Train the GP.
+            self.GPs[i].train()
+
+        # if we have a plotting directory, we will run some tests
+        if self.hyperparameters['plotting_directory'] is not None and self.hyperparameters['testset_fraction'] is not None:
+            self.run_tests()
+
+        pass
+
+    def initialize_training(self):
+        # Set up for training.
+
+        input_data = self.data_processor.input_data_normalized
+        output_data = self.data_processor.output_data_emulator
+
+        self.num_GPs = output_data.shape[1]
+
+        # if there are not Gps yet we need to create them
+        if self.num_GPs > len(self.GPs) :
+            for i in range(len(self.GPs), output_data.shape[1]):
+                # Create a GP for each dimension of the output_data.
+                self.GPs.append(copy.deepcopy(GP('GP '+self.quantity_name+' dim '+str(i), **self.hyperparameters)))
+
+
+        for i in range(self.num_GPs):
+
+            # Load the data into the GP.
+            self.GPs[i].load_data(input_data, output_data[:,i])
 
         pass
 
@@ -361,7 +390,7 @@ class GP(BaseClass):
             'testset_fraction': None,
 
             #error
-            'error_tolerance': 0.,
+            'error_tolerance': 1.,
 
             # numer of test samples to determine the quality of the emulator
             'N_quality_samples': 5,

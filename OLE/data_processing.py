@@ -58,6 +58,8 @@ class data_processor(BaseClass):
         defaulthyperparameters = {
             # explained variance cutoff is the minimum explained variance which is required for the PCA compression. Once this value is reached, the PCA compression is stopped.
             'explained_variance_cutoff': 0.9999,
+            # this should also inform the error of the GPs to remain consistent. Or alternatively since we specify error params,
+            # those might also set this parameter
 
             # maximal number of dimensions of the compressed data
             'max_output_dimensions': 30,
@@ -220,6 +222,12 @@ class data_processor(BaseClass):
         input_data_normalized = (input_data_raw - self.input_means) / self.input_stds
 
         return input_data_normalized
+        
+    def denormalize_input_data(self, input_data_normalized):
+        # normalize the data
+        input_data_raw = input_data_normalized * self.input_stds + self.input_means
+
+        return input_data_raw
 
     def decompress_data(self, output_data_emulator):
         # undo the second normalization
@@ -250,18 +258,4 @@ class data_processor(BaseClass):
         output_std_raw = output_std_normalized * self.output_stds
 
         return output_std_raw
-
-
-
-
-
-
-
-
-
-
-        
-
-
-        
 

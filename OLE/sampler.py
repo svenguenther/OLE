@@ -107,9 +107,9 @@ class Sampler(BaseClass):
                 test_state = self.test_pipeline()
 
         if len(self.theory.requirements) > 0:
-            self.emulator.initialize(test_state, input_parameters=self.theory.requirements, **kwargs)
+            self.emulator.initialize(self.likelihood, test_state, input_parameters=self.theory.requirements, **kwargs)
         else:
-            self.emulator.initialize(test_state, **kwargs)
+            self.emulator.initialize(self.likelihood, test_state, **kwargs)
 
 
         pass
@@ -583,29 +583,6 @@ class NUTSSampler(Sampler):
                             logprior = self.compute_logprior(state)
                             
                             state['loglike'] = state['loglike'] + logprior
-
-                            # compute the maximally accetable GP errors
-                            delta_loglike = max(self.emulator.data_cache.max_loglike, self.emulator.max_loglike_encountered) - state['loglike']
-                            acceptable_error = self.emulator.hyperparameters['quality_threshold_constant'] + delta_loglike * self.emulator.hyperparameters['quality_threshold_linear'] + delta_loglike **2 * self.emulator.hyperparameters['quality_threshold_quadratic']
-                            
-                            # we distribute this error equally among all GPs. Other options could be considered
-                            num_GPs = 0
-                            for name,val in state['quantities'].items():
-                                num_GPs += self.emulator.emulators[name].num_GPs
-
-                            # here the 100 means that 1% of total error bidget could be noise. This shuld be an input parameter !!
-                            acceptable_error /= jnp.sqrt(num_GPs) * jnp.sqrt(100.) 
-
-                            #print('found deltaLog of ',delta_loglike,' leading to an error ',acceptable_error)
-                            
-                            quantity_derivs = {}
-                            for name,val in state['quantities'].items():
-                                quantity_derivs[name] = jnp.array( self.likelihood.loglike_gradient(state, name))
-                                
-                            if delta_loglike <= 0.:
-                                self.emulator.reset_error(delta_loglike[0])
-                            else:
-                                self.emulator.update_error(state,quantity_derivs,acceptable_error)
                             
                             self.emulator.add_state(state)
 
