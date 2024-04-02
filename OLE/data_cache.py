@@ -84,6 +84,10 @@ class DataCache(BaseClass):
             # up to which p value do we want to be accurate?
             p_val = chi2.cdf(self.hyperparameters['N_sigma']**2, 1)
 
+            if p_val == 1.0:
+                self.warning("N_sigma is too large. The p value is 1.0 due to double precision. The estimated delta_loglike is not accurate. Thus, N_sigma = 8")
+                p_val = chi2.cdf(8**2, 1)
+
             # the corresponding loglike
             self.hyperparameters['delta_loglike'] = chi2.ppf(p_val, self.hyperparameters['dimensionality'])/2
 
@@ -144,15 +148,15 @@ class DataCache(BaseClass):
             # remove the state with the smallest loglike if the new loglike is larger than the smallest loglike
             min_loglike = min(self.get_loglikes())
             if new_loglike > min_loglike:
-                for state in self.states:
+                for i,state in enumerate(self.states):
                     if state['loglike'] == min_loglike:
-                        del state
+                        self.states.pop(i) #
                         break
     
         # add a state to the cache
         self.states.append(new_state)
 
-        self.info("Added state to cache: %s", state['parameters'])
+        self.info("Added state to cache: %s", new_state['parameters'])
         self.info("Cache size: %d/%d", len(self.states), self.hyperparameters['cache_size'])
 
         print("new_state: ", new_state)
@@ -162,10 +166,6 @@ class DataCache(BaseClass):
             self.synchronize_to_cache(new_state)
         else:
             self.store_cache()
-
-        # store the cache in the hdf5 file
-        # if self.hyperparameters['store_cache']:
-        #     self.store_cache()
 
         return True
 
@@ -208,14 +208,14 @@ class DataCache(BaseClass):
             # here we need to remove states if the cache is full
             if len(old) > self.hyperparameters['cache_size']:
                 min_loglike = min([state['loglike'] for state in old])
-                for state in old:
+                for i,state in enumerate(old):
                     if state['loglike'] == min_loglike:
-                        del state
+                        old.pop(i)
                         break
             
             # remove states whose loglike is to far away from the maximum loglike
             max_loglike = max([state['loglike'] for state in old])
-            print("max_loglike: ", max_loglike)
+
             valid_indices = []
             for i, state in enumerate(old):
                 if not (abs(state['loglike'][0] - max_loglike) > self.hyperparameters['delta_loglike']):

@@ -130,10 +130,7 @@ def check_cache_and_compute(self, params_values_dict,
             emulator_state = translate_cobaya_state_to_emulator_state(state)
 
             # test whether the emulator can be used
-
             successful_emulation, emulator_state = self.test_emulator(emulator_state)
-            print('successful_emulation')
-            print(successful_emulation)
 
             if successful_emulation:
                 # translate the emulator state back to the cobaya state
@@ -335,7 +332,6 @@ def test_emulator(self,emulator_state):
         self.skip_theory_state_from_emulator = predictions_cobaya_state
 
         reference_loglike = sum(self.provider.model._loglikes_input_params(self.provider.params, cached = False, return_derived = False))
-
 
         # check whether the emulator is good enough
         if not self.emulator.check_quality_criterium(emulator_sample_loglikes, reference_loglike = reference_loglike):

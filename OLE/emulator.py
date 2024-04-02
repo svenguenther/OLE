@@ -182,11 +182,15 @@ class Emulator(BaseClass):
             # up to which p value do we want to be accurate?
             p_val = chi2.cdf(self.hyperparameters['N_sigma']**2, 1)
 
+            if p_val == 1.0:
+                self.warning("N_sigma is too large. The p value is 1.0 due to double precision. The estimated delta_loglike is not accurate. Thus, we set N_sigma = 8!")
+                p_val = chi2.cdf(8**2, 1)
+
             # the corresponding loglike
             accuracy_loglike = chi2.ppf(p_val, self.hyperparameters['dimensionality'])/2
 
             # at this point the (constant + linear) term is equal to the quadratic term
-            self.hyperparameters['quality_threshold_quadratic'] = (self.hyperparameters['quality_threshold_quadratic'] + self.hyperparameters['quality_threshold_linear']*accuracy_loglike)/accuracy_loglike**2
+            self.hyperparameters['quality_threshold_quadratic'] = (self.hyperparameters['quality_threshold_constant'] + self.hyperparameters['quality_threshold_linear']*accuracy_loglike)/accuracy_loglike**2
 
             self.debug("Quality threshold quadratic: ", self.hyperparameters['quality_threshold_quadratic'])
 
@@ -237,7 +241,7 @@ class Emulator(BaseClass):
         # Add a state to the emulator. This means that the state is added to the data cache and the emulator is retrained.
         state_added = self.data_cache.add_state(new_state)
 
-        if state_added:
+        if state_added and self.trained:
             self.added_data_points += 1
 
             # write to log that the state was added
