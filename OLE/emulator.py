@@ -241,9 +241,7 @@ class Emulator(BaseClass):
         # Add a state to the emulator. This means that the state is added to the data cache and the emulator is retrained.
         state_added = self.data_cache.add_state(new_state)
 
-        if state_added and self.trained:
-            self.added_data_points += 1
-
+        if state_added:
             # write to log that the state was added
             _ = "State added to emulator: " + " ".join([key+ ': ' +str(value) for key, value in new_state['parameters'].items()]) + " at loglike: " + str(new_state['loglike']) + " max. loglike: " + str(self.data_cache.max_loglike) + "\n"
             self.write_to_log(_)
@@ -253,6 +251,7 @@ class Emulator(BaseClass):
         
         # if the emulator is already trained, we can add the new state to the GP without fitting the Kernel parameters
         if self.trained and state_added:
+            self.added_data_points += 1
             if self.added_data_points%self.hyperparameters['kernel_fitting_frequency'] == 0:
                 self.train()
             else:
