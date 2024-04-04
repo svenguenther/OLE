@@ -454,8 +454,8 @@ class Emulator(BaseClass):
         self.continuous_successful_calls += 1
 
         # if any of the loglikes is above the maximum loglike, we need to update the maximum loglike
-        if jnp.any(loglikes > max_loglike):
-            self.max_loglike_encountered = jnp.max(loglikes)
+        if jnp.any(mean_loglike > max_loglike):
+            self.max_loglike_encountered = mean_loglike
 
         return True
     
@@ -469,6 +469,7 @@ class Emulator(BaseClass):
         if not self.hyperparameters['test_emulator']:
             self.debug("Quality check not required. Test emulator is False")
             self.write_to_log("Quality check not required. Test emulator is False")
+            self.continuous_successful_calls += 1
             return False
 
         # The idea is that we collect all points which were checked by the quality criterium and then check whether the new point is within the convex hull of the checked points.

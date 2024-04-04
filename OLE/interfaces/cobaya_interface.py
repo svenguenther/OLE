@@ -342,14 +342,18 @@ def test_emulator(self,emulator_state):
             # Add the point to the quality points
             self.emulator.add_quality_point(emulator_state['parameters'])
 
-    b = time.time()
-    print("Time for emulator test: ", b-a)
+        b = time.time()
+        print("Time for emulator test: ", b-a)
 
-    # now run the emulator
-    a = time.time()
-    # predictions = self.emulator.emulate(emulator_state['parameters'])
-    
-    predictions = self.jit_emulate(emulator_state['parameters'])
+    else:
+        # now run the emulator
+        a = time.time()
+        # predictions = self.emulator.emulate(emulator_state['parameters'])
+        
+        predictions = self.jit_emulate(emulator_state['parameters'])
+
+        b = time.time()
+        print("Run the emulator: ", b-a)
 
     # if we save a store theory data path we can save the emulator state
     if 'store_prediction' in self.emulator_settings.keys():
@@ -379,8 +383,6 @@ def test_emulator(self,emulator_state):
             with open(self.emulator_settings['store_prediction'], 'wb') as f:
                 pickle.dump([predictions], f)
 
-    b = time.time()
-    print("Run the emulator: ", b-a)
 
     self.emulator_counter += 1
     print('emulator_counter')
