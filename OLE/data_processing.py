@@ -160,7 +160,7 @@ class data_processor(BaseClass):
 
         # calculate the projection matrix
         self.projection_matrix = copy.deepcopy(eigenvectors[:, :n_components])
-
+        
         del eigenvectors
         del eigenvalues
 
@@ -198,8 +198,11 @@ class data_processor(BaseClass):
         self.output_pca_means = jnp.mean(self.output_data_emulator, axis=0)
         self.output_pca_stds = jnp.std(self.output_data_emulator, axis=0)
 
+
+
         # set all stds which are 0 to 1
         self.output_pca_stds = jnp.where(self.output_pca_stds == 0, 1, self.output_pca_stds)
+
 
         # normalize the compressed data
         self.output_data_emulator = (self.output_data_emulator - self.output_pca_means) / self.output_pca_stds

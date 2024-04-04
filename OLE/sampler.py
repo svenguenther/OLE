@@ -320,7 +320,33 @@ class Sampler(BaseClass):
         self.increment(self.logger)
         return loglikes
 
+    def sample_emulate_loglike_from_normalized_parameters_differentiable_noiseFree(self, parameters, N=1, RNGkey=jax.random.PRNGKey(int(time.time()))):
+        # this function is similar to the compute_loglike_from_parameters, but it returns the loglike and does not automaticailly add the state to the emulator. Thus it is differentiable.
+        # if RNG is not None, we provide the mean estimate, otherwise we sample from the emulator
+        self.start()
 
+        # rescale the parameters
+        parameters = self.retranform_parameters_from_normalized_eigenspace(parameters)
+
+        # Run the sampler.
+        state = {'parameters': {}, 'quantities': {}, 'loglike': None}
+
+        # translate the parameters to the state
+        for i, key in enumerate(self.parameter_dict.keys()):
+            state['parameters'][key] = jnp.array([parameters[i]])
+
+        # compute logprior
+        logprior = self.compute_logprior(state)
+        self.debug("logprior: %f for parameters: %s", logprior, state['parameters'])
+
+        self.debug("emulator available - check emulation performance")
+
+        states, RNGkey = self.emulator.emulate_samples_noiseFree(state['parameters'], RNGkey)
+
+        loglikes = [self.likelihood.loglike_state(_)['loglike'] + logprior for _ in states]
+
+        self.increment(self.logger)
+        return loglikes
 
 
     def compute_total_loglike_from_parameters(self, parameters):
@@ -335,6 +361,12 @@ class Sampler(BaseClass):
         N = self.emulator.hyperparameters['N_quality_samples']
         res = [_.sum() for _ in self.sample_emulate_loglike_from_normalized_parameters_differentiable(parameters, N=N)]
         return res
+
+    def sample_emulate_total_loglike_from_parameters_differentiable_noiseFree(self, parameters):
+        N = self.emulator.hyperparameters['N_quality_samples']
+        res = [_.sum() for _ in self.sample_emulate_loglike_from_normalized_parameters_differentiable_noiseFree(parameters, N=N)]
+        return res
+
 
     def compute_logprior(self, state):
         # To be implemented.
@@ -485,7 +517,8 @@ class NUTSSampler(Sampler):
 
         # create differentiable loglike
         self.logp_and_grad = jax.jit(jax.value_and_grad(self.emulate_total_loglike_from_parameters_differentiable))     # this is the differentiable loglike
-        self.logp_sample = jax.jit(self.sample_emulate_total_loglike_from_parameters_differentiable)                    # this samples N realizations from the emulator to estimate the uncertainty
+        self.logp_sample = jax.jit(self.sample_emulate_total_loglike_from_parameters_differentiable)  
+        self.logp_sample_noiseFree = jax.jit(self.sample_emulate_total_loglike_from_parameters_differentiable_noiseFree)                   # this samples N realizations from the emulator to estimate the uncertainty
         # self.logp_sample = self.sample_emulate_total_loglike_from_parameters_differentiable                    # this samples N realizations from the emulator to estimate the uncertainty
 
         self.theta0 = bestfit
@@ -573,9 +606,14 @@ class NUTSSampler(Sampler):
                     if self.emulator.require_quality_check(state['parameters']):
                         # here we need to test the emulator for its performance
                         loglikes = self.logp_sample(thetas[i*self.NUTS_batch_size+j])
+                        loglikes_noiseFree = self.logp_sample_noiseFree(thetas[i*self.NUTS_batch_size+j])
+
+                        #print('dumping loglikes emulated')
+                        #print(jnp.std(jnp.array(loglikes)))
+                        #print(jnp.std(jnp.array(loglikes_noiseFree)))
 
                         # check whether the emulator is good enough
-                        if not self.emulator.check_quality_criterium(jnp.array(loglikes)):
+                        if not self.emulator.check_quality_criterium(jnp.array(loglikes_noiseFree)):
                             
                            
                             state = self.theory.compute(state)
@@ -591,8 +629,13 @@ class NUTSSampler(Sampler):
                             # update the differential loglikes
                             self.logp_and_grad = jax.jit(jax.value_and_grad(self.emulate_total_loglike_from_parameters_differentiable))     # this is the differentiable loglike
                             self.logp_sample = jax.jit(self.sample_emulate_total_loglike_from_parameters_differentiable)                    # this samples N realizations from the emulator to estimate the uncertainty
+                            self.logp_sample_noiseFree = jax.jit(self.sample_emulate_total_loglike_from_parameters_differentiable_noiseFree)                    # this samples N realizations from the emulator to estimate the uncertainty
                             # self.logp_sample = self.sample_emulate_total_loglike_from_parameters_differentiable                    # this samples N realizations from the emulator to estimate the uncertainty
                         else:
+                            if not self.emulator.check_quality_criterium(jnp.array(loglikes)):
+                                # if the emulator passes noiseFree but fails with noise then the noise is too large
+                                print('!!!!noise levels too large for convergence, reduce explained_variance_cutoff and or noise_percentage!!!!')
+                                # shouydl implement automatic reduction here!!
                             print("Emulator good enough")
                             # Add the point to the quality points
                             self.emulator.add_quality_point(state['parameters'])

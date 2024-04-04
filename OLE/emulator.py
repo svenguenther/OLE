@@ -406,6 +406,27 @@ class Emulator(BaseClass):
                 output_states[i]['quantities'][quantity] = emulator_output[i,:]
 
         return output_states, RNGkey
+
+    def emulate_samples_noiseFree(self, parameters, RNGkey):
+        # Prepare list of N output states
+        state = {'parameters': {}, 'quantities': {}}
+        state['parameters'] = parameters
+        output_states = [deepcopy(state) for i in range(self.hyperparameters['N_quality_samples'])]
+
+        # Emulate the quantities for the given parameters.
+        input_data = jnp.array([[value[0] for key, value in parameters.items() if key in self.input_parameters]])
+
+
+
+
+        for quantity, emulator in self.emulators.items():
+            emulator_output, RNGkey = emulator.sample_prediction_noiseFree(input_data, N=self.hyperparameters['N_quality_samples'], RNGkey=RNGkey)
+            
+            
+            for i in range(self.hyperparameters['N_quality_samples']):
+                output_states[i]['quantities'][quantity] = emulator_output[i,:]
+
+        return output_states, RNGkey
     
 
     # OUTDATED
@@ -428,11 +449,11 @@ class Emulator(BaseClass):
     #     return state, RNGkey
 
     # function simply restes all errors for the GPs
-    
-    def reset_error(self):
+
+    #def reset_error(self):
   
-        for quantity_name, quantity in self.ini_state['quantities'].items():
-            self.emulators[quantity_name].reset_error() 
+    #    for quantity_name, quantity in self.ini_state['quantities'].items():
+    #        self.emulators[quantity_name].reset_error() 
 
     def set_error(self):
 
@@ -442,35 +463,49 @@ class Emulator(BaseClass):
 
         else:
 
-            num_GPs = 0
-            for quantity_name, quantity in self.ini_state['quantities'].items():
-                self.emulators[quantity_name].reset_error() 
-                num_GPs += self.emulators[quantity_name].num_GPs
-
-        
-            for index in range(len(self.data_cache.states)):
-                state = self.data_cache.states[index]
+            #num_GPs = 0
+            #for quantity_name, quantity in self.ini_state['quantities'].items():
+            #    self.emulators[quantity_name].reset_error() 
+            #    num_GPs += self.emulators[quantity_name].num_GPs
+           
                 
-                delta_loglike = max(self.data_cache.max_loglike) - state['loglike']
-                acceptable_error = self.hyperparameters['quality_threshold_constant'] + delta_loglike * self.hyperparameters['quality_threshold_linear'] + delta_loglike **2 * self.hyperparameters['quality_threshold_quadratic']
+        
+            #for index in range(len(self.data_cache.states)):
+            #    state = self.data_cache.states[index]
+                
+            #    delta_loglike = max(self.data_cache.max_loglike) - state['loglike']
+            #    acceptable_error = self.hyperparameters['quality_threshold_constant'] + delta_loglike * self.hyperparameters['quality_threshold_linear'] + delta_loglike **2 * self.hyperparameters['quality_threshold_quadratic']
                             
                 # we distribute this error equally among all GPs. Other options could be considered
-                quantity_derivs = {}
+            #    quantity_derivs = {}
         
-                for name,val in state['quantities'].items():
-                    quantity_derivs[name] = jnp.array( self.likelihood.loglike_gradient(state, name))
+            #    for name,val in state['quantities'].items():
+            #        quantity_derivs[name] = jnp.array( self.likelihood.loglike_gradient(state, name))
             
-                acceptable_error /= jnp.sqrt(num_GPs) * jnp.sqrt(100./self.hyperparameters['noise_percentage']) 
+            #    acceptable_error /= jnp.sqrt(num_GPs) * jnp.sqrt(100./self.hyperparameters['noise_percentage']) 
                                     
         
-                if delta_loglike > 0.:
-                    for quantity_name, quantity in self.ini_state['quantities'].items():
-                        self.emulators[quantity_name].set_error(index,quantity_derivs[quantity_name],acceptable_error) 
+            #    if delta_loglike > 0.:
+            #        for quantity_name, quantity in self.ini_state['quantities'].items():
+            #            self.emulators[quantity_name].set_error(index,quantity_derivs[quantity_name],acceptable_error) 
+                        
+                
+            # this could be in gp_predictor
+            print('set the noise levels to ')
+            for quantity_name, quantity in self.ini_state['quantities'].items():
+                var = self.emulators[quantity_name].data_processor.output_pca_stds**2 * len(self.emulators[quantity_name].data_processor.output_data_emulator)
+                # this is analytical for the variance of the components. since we compare to the total we might drop the len of data
+            
+                total_var = jnp.sum(var)
+                variance_tolerance = 1. - self.emulators[quantity_name].data_processor.hyperparameters['explained_variance_cutoff']
 
-        print('set the noise levels to ')
-        for quantity_name, quantity in self.ini_state['quantities'].items():
-            for i in range(self.emulators[quantity_name].num_GPs):
-                print(self.emulators[quantity_name].GPs[i].hyperparameters['error_tolerance'] )
+                for i in range(self.emulators[quantity_name].num_GPs):
+                    relative_variance = var[i]/total_var
+                    error = variance_tolerance / relative_variance * self.hyperparameters['noise_percentage']
+
+
+                    self.emulators[quantity_name].GPs[i].hyperparameters['error_tolerance'] = error
+                    print(self.emulators[quantity_name].GPs[i].hyperparameters['error_tolerance'] )
 
     
 

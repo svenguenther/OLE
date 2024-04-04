@@ -179,7 +179,28 @@ class GP_predictor(BaseClass):
         # Then we predict the output data for the normalized parameters.
         output_data_compressed = jnp.zeros((N, self.num_GPs))
         for i in range(self.num_GPs):
-            _, RNGkey = self.GPs[i].sample(parameters_normalized, RNGkey=RNGkey)            
+            _, RNGkey = self.GPs[i].sample(parameters_normalized, RNGkey=RNGkey)  
+            output_data_compressed = output_data_compressed.at[:,[i]].set(_)    # this is the time consuming part
+
+        # Untransform the output data.
+        output_data_normalized = jnp.array([self.data_processor.decompress_data(output_data_compressed[i,:]) for i in range(N)])
+
+        # Then we denormalize the output data.
+        output_data = self.data_processor.denormalize_data(output_data_normalized)
+        return output_data, RNGkey
+    
+        # @partial(jit, static_argnums=0) 
+    
+
+    def sample_prediction_noiseFree(self, parameters, N=1, RNGkey=random.PRNGKey(time.time_ns())):
+        # Predict the quantity for the given parameters.
+        # First we normalize the parameters.
+        parameters_normalized = self.data_processor.normalize_input_data(parameters)
+
+        # Then we predict the output data for the normalized parameters.
+        output_data_compressed = jnp.zeros((N, self.num_GPs))
+        for i in range(self.num_GPs):
+            _, RNGkey = self.GPs[i].sample_noiseFree(parameters_normalized, RNGkey=RNGkey)  
             output_data_compressed = output_data_compressed.at[:,[i]].set(_)    # this is the time consuming part
 
         # Untransform the output data.
@@ -230,33 +251,33 @@ class GP_predictor(BaseClass):
         for i in range(self.num_GPs):
             self.GPs[i].hyperparameters['error_tolerance'] = self.hyperparameters['error_tolerance']
 
-    def set_error(self,index,quantity_derivs,acceptable_error):
+    #def set_error(self,index,quantity_derivs,acceptable_error):
         
-        GPOut = jnp.array([self.GPs[i].output_data[index][0] for i in range(self.num_GPs)])
+    #    GPOut = jnp.array([self.GPs[i].output_data[index][0] for i in range(self.num_GPs)])
         
         # get derivatives of output wrt to GP's
-        GP_derivs = grad(self.predict_fromGP_scalar,0)
+    #    GP_derivs = grad(self.predict_fromGP_scalar,0)
 
-        derivs = []
-        for i in range(self.output_size):
-            derivs.append(GP_derivs(GPOut,i))
+    #    derivs = []
+    #    for i in range(self.output_size):
+    #        derivs.append(GP_derivs(GPOut,i))
             #derivs is now a matrix with first index refering to the output and second index to the GP
         
         # dloglike/dGP = dloglike/dQuant * dQuant/dGP
 
-        dlogdGP = []
-        for i in range(self.num_GPs):
-            dlog = 0.
-            for j in range(self.output_size):
-                dlog += quantity_derivs[j]*derivs[j][i]
-            dlogdGP.append(dlog)
+    #    dlogdGP = []
+    #    for i in range(self.num_GPs):
+    #        dlog = 0.
+    #        for j in range(self.output_size):
+    #            dlog += quantity_derivs[j]*derivs[j][i]
+    #        dlogdGP.append(dlog)
 
             
-        for i in range(self.num_GPs):
-            max_error = acceptable_error / dlogdGP[i] # check that this is correct ... 
+    #    for i in range(self.num_GPs):
+    #        max_error = acceptable_error / dlogdGP[i] # check that this is correct ... 
                 
-            if self.GPs[i].hyperparameters['error_tolerance'] > max_error**2:
-                self.GPs[i].hyperparameters['error_tolerance'] = max_error[0]**2
+    #        if self.GPs[i].hyperparameters['error_tolerance'] > max_error**2:
+    #            self.GPs[i].hyperparameters['error_tolerance'] = max_error[0]**2
         
     
                           
@@ -588,12 +609,47 @@ class GP(BaseClass):
         latent_dist = self.opt_posterior.predict(input_data, train_data=self.D)
         predictive_dist = self.opt_posterior.likelihood(latent_dist)
         predictive_std = predictive_dist.stddev()
+        
         # predictive_mean = predictive_dist.mean()
         
+        # should we fix mean to the true mean and make sure we draw sym around it to only emulate the var??
+        
+        # we also want to know if we add a point because the error term is large. We can compare the precitive_std to the noise term 
+        # and pass noise_dominated
+
         # generate new key
         RNGkey, subkey = random.split(RNGkey)
 
-        return random.normal(key= subkey, shape=(N,1)) * jnp.sqrt(predictive_std[0]) + ac, RNGkey
+        return random.normal(key= subkey, shape=(N,1)) * jnp.sqrt(predictive_std[0]) + ac , RNGkey
+    
+    def sample_noiseFree(self, input_data, RNGkey=random.PRNGKey(time.time_ns())):
+        # Predict the output data for the given input data.
+        N = self.hyperparameters['N_quality_samples']
+
+        if self.recompute_kernel_matrix:
+            inv_Kxx = self.opt_posterior.compute_inv_Kxx(self.D)
+            self.inv_Kxx = inv_Kxx
+        else:
+            inv_Kxx = self.inv_Kxx
+
+        ac = self.opt_posterior.calculate_mean_single_from_inv_Kxx(input_data, self.D, inv_Kxx)
+
+        # DOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOo
+        latent_dist = self.opt_posterior.predict(input_data, train_data=self.D)
+        predictive_dist = self.opt_posterior.likelihood(latent_dist)
+        predictive_std = predictive_dist.stddev() - jnp.sqrt(self.hyperparameters['error_tolerance'])
+        
+        # predictive_mean = predictive_dist.mean()
+        
+        # should we fix mean to the true mean and make sure we draw sym around it to only emulate the var??
+        
+        # we also want to know if we add a point because the error term is large. We can compare the precitive_std to the noise term 
+        # and pass noise_dominated
+
+        # generate new key
+        RNGkey, subkey = random.split(RNGkey)
+
+        return random.normal(key= subkey, shape=(N,1)) * jnp.sqrt(predictive_std[0]) + ac , RNGkey
         
     def sample_mean(self, input_data, RNGkey=random.PRNGKey(time.time_ns())):
         # Predict the output data for the given input data.

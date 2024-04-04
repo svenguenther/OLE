@@ -71,21 +71,21 @@ class my_likelihood(Likelihood):
         loglike = -10.*jnp.sum((state['quantities']['y_array']-jnp.ones(3))**2) - 10.*(state['quantities']['y_scalar']-3.0)**2
         return loglike
     
-    def loglike_gradient(self, state, type): # define a function for each quantity
+    #def loglike_gradient(self, state, type): # define a function for each quantity
             # Compute the gradient of the loglikelihood for the given parameters.
         
-        if type == 'y_array':
-            return [
-                -20.*(state['quantities']['y_array']-jnp.ones(3))[0],
-                -20.*(state['quantities']['y_array']-jnp.ones(3))[1],
-                -20.*(state['quantities']['y_array']-jnp.ones(3))[2]
-                ]
-        elif type == 'y_scalar':
-            return [
-                -20.*(state['quantities']['y_scalar']-3.0)
-                ]
+    #    if type == 'y_array':
+    #        return [
+    #            -20.*(state['quantities']['y_array']-jnp.ones(3))[0],
+    #            -20.*(state['quantities']['y_array']-jnp.ones(3))[1],
+    #            -20.*(state['quantities']['y_array']-jnp.ones(3))[2]
+    #            ]
+    #    elif type == 'y_scalar':
+    #        return [
+    #            -20.*(state['quantities']['y_scalar']-3.0)
+    #            ]
           
-        return []
+    #    return []
 
 
 # init theory and likelihood
@@ -109,7 +109,7 @@ emulator_settings = {
     ## Related to the Gaussian Process itself. ToDo: Rework this part
     'learning_rate': 0.02,
 
-    'noise_percentage': 0.1, # this could be bool
+    'noise_percentage': 0.1, 
     # Number of iterations
     'num_iters': 100,
 
