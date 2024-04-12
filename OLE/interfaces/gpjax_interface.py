@@ -9,6 +9,8 @@ from beartype.typing import (
     Callable,
     Optional,
 )
+
+
 import cola
 from cola.ops import Dense
 
@@ -42,6 +44,8 @@ import time
 # This is an additional method for the ConjugatePosterior class.
 # It speeds up the default predict_mean method.
 #
+
+# add methods for sparse GPs
 
 def predict_mean_single(
     self,

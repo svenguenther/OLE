@@ -21,15 +21,6 @@
 
 
 
-
-
-
-
-
-
-
-
-
 from OLE.theory import Theory
 from OLE.likelihood import Likelihood
 import jax.numpy as jnp
@@ -108,7 +99,6 @@ class my_likelihood(Likelihood):
 
 
 
-
         
         return
 
@@ -173,7 +163,7 @@ my_likelihood = my_likelihood()
 
 emulator_settings = {
     # the number of data points in cache before the emulator is to be trained
-    'min_data_points': 80,
+    'min_data_points': 40,
 
     # maximal cache size
     'cache_size': 1000,
@@ -190,10 +180,15 @@ emulator_settings = {
 
     # delta loglike for what states to be accepted to the cache
     'delta_loglike': 300.0,
+    'noise_percentage': 0.5, 
+    # Number of iterations
+    'num_iters': 400,
+
+    'sparse_GP_points': 10,
 
     # accuracy parameters for loglike:
-    'quality_threshold_constant': 0.1,
-    'quality_threshold_linear': 0.0,
+    'quality_threshold_constant': 0.01,
+    'quality_threshold_linear': 0.003,
     'quality_threshold_quadratic': 0.001,
 
     # related so sampler
@@ -211,7 +206,7 @@ emulator_settings = {
     # M adapt
     'M_adapt': 1000,
 
-    # 'plotting_directory': './plots_sampler_clang_nuts',
+    'plotting_directory': './plots_sampler_clang_nuts',
     # 'testset_fraction': 0.1,
 }
 

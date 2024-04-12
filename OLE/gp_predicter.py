@@ -302,6 +302,8 @@ class GP_predictor(BaseClass):
             # Load the data into the GP.
             self.GPs[i].load_data(input_data, output_data[:,i])
 
+            # here is the break in training for setting the error. If we implement it here it would be much nicer!!
+
 
             # Train the GP.
             self.GPs[i].train()
@@ -312,20 +314,6 @@ class GP_predictor(BaseClass):
 
         pass
 
-    def finalize_training(self):
-        # Train the GP emulator.
-
-        
-        for i in range(self.num_GPs):
-
-            # Train the GP.
-            self.GPs[i].train()
-
-        # if we have a plotting directory, we will run some tests
-        if self.hyperparameters['plotting_directory'] is not None and self.hyperparameters['testset_fraction'] is not None:
-            self.run_tests()
-
-        pass
 
     def initialize_training(self):
         # Set up for training.
@@ -342,10 +330,26 @@ class GP_predictor(BaseClass):
                 self.GPs.append(copy.deepcopy(GP('GP '+self.quantity_name+' dim '+str(i), **self.hyperparameters)))
 
 
+
         for i in range(self.num_GPs):
 
             # Load the data into the GP.
             self.GPs[i].load_data(input_data, output_data[:,i])
+
+        pass
+
+    def finalize_training(self):
+        # Train the GP emulator.
+
+        
+        for i in range(self.num_GPs):
+
+            # Train the GP.
+            self.GPs[i].train()
+
+        # if we have a plotting directory, we will run some tests
+        if self.hyperparameters['plotting_directory'] is not None and self.hyperparameters['testset_fraction'] is not None:
+            self.run_tests()
 
         pass
 
@@ -485,43 +489,118 @@ class GP(BaseClass):
             kernelWhite = gpx.kernels.White(variance = self.hyperparameters['error_tolerance'] )
             kernelError = kernelWhite.replace_trainable(variance=False)
             kernel = gpx.kernels.SumKernel(kernels = [kernelNoiseFree ,kernelError])
-
-        else:        
+        else:         
             kernel = kernelNoiseFree
         
         
         meanf = gpx.mean_functions.Zero()
         prior = gpx.gps.Prior(mean_function=meanf, kernel=kernel)
-
-        # Create the likelihood
-        likelihood = gpx.gps.Gaussian(num_datapoints=self.D.n)
-        
-
-        posterior = prior * likelihood
-
-        negative_mll = gpx.objectives.ConjugateMLL(negative=True)
-        negative_mll(posterior, train_data=self.D)
-
-        #negative_mll = jit(negative_mll)
-
-        # have exponential decay learning rate
-        #lr = lambda t: jnp.exp(-self.hyperparameters['learning_rate']*t)
-        lr = lambda t: self.hyperparameters['learning_rate']*10.
+        prior = prior.replace(jitter = 1e-20)
 
         del self.opt_posterior
         self.opt_posterior = None
         gc.collect()
 
+
+        if self.hyperparameters['sparse_GP_points'] > 0:
+            sparse_trained = False
+
+            #lr = lambda t: jnp.exp(-self.hyperparameters['learning_rate']*t)
+            lr = lambda t: self.hyperparameters['learning_rate']
+
+
+            # Create the likelihood
+            likelihood = gpx.gps.Gaussian(num_datapoints=self.D.n)
+            likelihood = likelihood.replace_trainable(obs_stddev = False)
+            # the target_error defines an error for each point which is nessecary for training a sparse GP
+            # ideally we want to set it very small, but this is numerically unstable. Since we know our target 
+            # accuracy we should make it small compared to that so that the information in the points is still used optimally
+            target_error = jnp.sqrt( self.hyperparameters['error_tolerance']) / 10. 
+            likelihood = likelihood.replace(obs_stddev = target_error)
+        
+            posterior = prior * likelihood
+            posterior = posterior.replace(jitter = 1e-20)
+
+            elbo = gpx.objectives.CollapsedELBO(negative=True)
+            
+            while not sparse_trained:
+                # cosntruct a sparse GP
+                # define initial inducing points
+                print('now checking ', self.hyperparameters['sparse_GP_points'], ' sparse points')
+                z = self.input_data[:self.hyperparameters['sparse_GP_points'] ]
+
+                if len(z) == len(self.input_data):
+                    sparse_trained = True
+                    # this will be last pass... maybe swap to normal GP ... !!
+                q = gpx.variational_families.CollapsedVariationalGaussian(
+                    posterior=posterior, inducing_inputs=z
+                )
+                 
+                self.opt_posterior, history = gpx.fit(
+                    model=q,
+                    objective=elbo,
+                    train_data=self.D,
+                    optim=ox.adamw(learning_rate=lr),
+                    num_iters=self.hyperparameters['num_iters'],
+                    safe=True,
+                    key=jax.random.PRNGKey(0),
+                )
+                # now we check if our error on the training points is too large
+                latent_dist = self.opt_posterior(self.input_data, train_data=self.D)
+                predictive_dist = self.opt_posterior.posterior.likelihood(latent_dist)
+                predictive_std = predictive_dist.stddev()
+
+                add_points = False
+                n_poor = 0
+                for std in predictive_std:
+                    if std**2 > self.hyperparameters['error_tolerance']*2.: # acceptable boost
+                        #print('too few points',std**2)
+                        n_poor += 1
+                print(n_poor, 'points abover acceptable error bounds')
+                if n_poor > len(predictive_std)/10.: # acceptable ratio
+                    add_points = True
+                if add_points:
+                    self.hyperparameters['sparse_GP_points'] += 10
+                    if self.hyperparameters['sparse_GP_points'] >= len(self.input_data):
+                        self.hyperparameters['sparse_GP_points'] = len(self.input_data)
+                    
+                # check if noise imporved compared to last try and we are not noise limited. We should see better loss ???
+
+                if not add_points:
+                    # done
+                    sparse_trained = True
+            
+        
+                
+                
+
+
+        else:
+
+            #lr = lambda t: jnp.exp(-self.hyperparameters['learning_rate']*t)
+            lr = lambda t: self.hyperparameters['learning_rate']*10.
+
+            # Create the likelihood
+            likelihood = gpx.gps.Gaussian(num_datapoints=self.D.n)
+            likelihood = likelihood.replace_trainable(obs_stddev = False)
+            likelihood = likelihood.replace(obs_stddev = 1e-10)
+        
+            posterior = prior * likelihood
+            posterior = posterior.replace(jitter = 1e-20)
+
+            negative_mll = gpx.objectives.ConjugateMLL(negative=True)
+            negative_mll(posterior, train_data=self.D)
+
         # fit
-        self.opt_posterior, history = gpx.fit(
-            model=posterior,
-            objective=negative_mll,
-            train_data=self.D,
-            optim=ox.adam(learning_rate=lr),
-            num_iters=self.hyperparameters['num_iters'],
-            safe=True, # what does this do?
-            key=jax.random.PRNGKey(0),
-        )
+            self.opt_posterior, history = gpx.fit(
+                model=posterior,
+                objective=negative_mll,
+                train_data=self.D,
+                optim=ox.adam(learning_rate=lr),
+                num_iters=self.hyperparameters['num_iters'],
+                safe=True, # what does this do?
+                key=jax.random.PRNGKey(0),
+            )
 
         # negative_mll._clear_cache()
         # del negative_mll
@@ -567,55 +646,82 @@ class GP(BaseClass):
         # predictive_dist = self.opt_posterior.likelihood(latent_dist)
         # predictive_mean = predictive_dist.mean()
         # ab = self.opt_posterior.predict_mean_single(input_data, self.D)
+        if self.hyperparameters['sparse_GP_points'] == 0:
+        
+            if self.recompute_kernel_matrix:
+                inv_Kxx = self.opt_posterior.compute_inv_Kxx(self.D)
+                #self.recompute_kernel_matrix = False    # TODO: This leads to memory leaks in jit mode
+                self.inv_Kxx = inv_Kxx
+            else:
+                inv_Kxx = self.inv_Kxx
 
-        if self.recompute_kernel_matrix:
-            inv_Kxx = self.opt_posterior.compute_inv_Kxx(self.D)
-            #self.recompute_kernel_matrix = False    # TODO: This leads to memory leaks in jit mode
-            self.inv_Kxx = inv_Kxx
+            ac = self.opt_posterior.calculate_mean_single_from_inv_Kxx(input_data, self.D, inv_Kxx)
+
+            return ac
+        
         else:
-            inv_Kxx = self.inv_Kxx
+            latent_dist = self.opt_posterior(input_data, train_data=self.D)
+            predictive_dist = self.opt_posterior.posterior.likelihood(latent_dist)
+            predictive_mean = predictive_dist.mean()
 
-        ac = self.opt_posterior.calculate_mean_single_from_inv_Kxx(input_data, self.D, inv_Kxx)
-
-        return ac
+            return predictive_mean[0]
         
     # @partial(jit, static_argnums=0) 
     def predict_value_and_std(self, input_data, return_std=False):
         # Predict the output data for the given input data.
-        inv_Kxx = self.opt_posterior.compute_inv_Kxx(self.D)
+        if self.hyperparameters['sparse_GP_points'] == 0:
+            inv_Kxx = self.opt_posterior.compute_inv_Kxx(self.D)
 
-        ac = self.opt_posterior.calculate_mean_single_from_inv_Kxx(input_data, self.D, inv_Kxx)
+            ac = self.opt_posterior.calculate_mean_single_from_inv_Kxx(input_data, self.D, inv_Kxx)
 
-        latent_dist = self.opt_posterior.predict(input_data, train_data=self.D)
-        predictive_dist = self.opt_posterior.likelihood(latent_dist)
-        predictive_std = predictive_dist.stddev()
-        return ac, predictive_std[0]
+            latent_dist = self.opt_posterior.predict(input_data, train_data=self.D)
+            predictive_dist = self.opt_posterior.likelihood(latent_dist)
+            predictive_std = predictive_dist.stddev()
+
+            return ac, predictive_std[0]
+        
+        else: # TODO: implement optimisations for sparse GP
+            latent_dist = self.opt_posterior(input_data, train_data=self.D)
+            predictive_dist = self.opt_posterior.posterior.likelihood(latent_dist)
+            predictive_mean = predictive_dist.mean()
+            predictive_std = predictive_dist.stddev()
+        
+        
+            return predictive_mean[0], predictive_std[0]
 
 
     # @partial(jit, static_argnums=0) 
     def sample(self, input_data, RNGkey=random.PRNGKey(time.time_ns())):
         # Predict the output data for the given input data.
+
         N = self.hyperparameters['N_quality_samples']
 
-        if self.recompute_kernel_matrix:
-            inv_Kxx = self.opt_posterior.compute_inv_Kxx(self.D)
-            self.inv_Kxx = inv_Kxx
+        if self.hyperparameters['sparse_GP_points'] == 0:
+            
+            if self.recompute_kernel_matrix:
+                inv_Kxx = self.opt_posterior.compute_inv_Kxx(self.D)
+                self.inv_Kxx = inv_Kxx
+            else:
+                inv_Kxx = self.inv_Kxx
+
+            ac = self.opt_posterior.calculate_mean_single_from_inv_Kxx(input_data, self.D, inv_Kxx)
+
+            # DOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOo
+            latent_dist = self.opt_posterior.predict(input_data, train_data=self.D)
+            predictive_dist = self.opt_posterior.likelihood(latent_dist)
+            predictive_std = predictive_dist.stddev()
+        
+            #  predictive_mean = predictive_dist.mean()
+        
         else:
-            inv_Kxx = self.inv_Kxx
+            latent_dist = self.opt_posterior(input_data, train_data=self.D)
+            predictive_dist = self.opt_posterior.posterior.likelihood(latent_dist)
+            predictive_mean = predictive_dist.mean()
+            predictive_std = predictive_dist.stddev()
+            ac = predictive_mean[0]
 
-        ac = self.opt_posterior.calculate_mean_single_from_inv_Kxx(input_data, self.D, inv_Kxx)
-
-        # DOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOo
-        latent_dist = self.opt_posterior.predict(input_data, train_data=self.D)
-        predictive_dist = self.opt_posterior.likelihood(latent_dist)
-        predictive_std = predictive_dist.stddev()
-        
-        # predictive_mean = predictive_dist.mean()
-        
         # should we fix mean to the true mean and make sure we draw sym around it to only emulate the var??
         
-        # we also want to know if we add a point because the error term is large. We can compare the precitive_std to the noise term 
-        # and pass noise_dominated
 
         # generate new key
         RNGkey, subkey = random.split(RNGkey)
@@ -624,28 +730,33 @@ class GP(BaseClass):
     
     def sample_noiseFree(self, input_data, RNGkey=random.PRNGKey(time.time_ns())):
         # Predict the output data for the given input data.
+        
         N = self.hyperparameters['N_quality_samples']
 
-        if self.recompute_kernel_matrix:
-            inv_Kxx = self.opt_posterior.compute_inv_Kxx(self.D)
-            self.inv_Kxx = inv_Kxx
-        else:
-            inv_Kxx = self.inv_Kxx
+        if self.hyperparameters['sparse_GP_points'] == 0:
+            if self.recompute_kernel_matrix:
+                inv_Kxx = self.opt_posterior.compute_inv_Kxx(self.D)
+                self.inv_Kxx = inv_Kxx
+            else:
+                inv_Kxx = self.inv_Kxx
 
-        ac = self.opt_posterior.calculate_mean_single_from_inv_Kxx(input_data, self.D, inv_Kxx)
+            ac = self.opt_posterior.calculate_mean_single_from_inv_Kxx(input_data, self.D, inv_Kxx)
 
-        # DOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOo
-        latent_dist = self.opt_posterior.predict(input_data, train_data=self.D)
-        predictive_dist = self.opt_posterior.likelihood(latent_dist)
-        predictive_std = predictive_dist.stddev() - jnp.sqrt(self.hyperparameters['error_tolerance'])
+            # DOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOo
+            latent_dist = self.opt_posterior.predict(input_data, train_data=self.D)
+            predictive_dist = self.opt_posterior.likelihood(latent_dist)
+            predictive_std = predictive_dist.stddev() - jnp.sqrt(self.hyperparameters['error_tolerance'])
         
-        # predictive_mean = predictive_dist.mean()
+            # predictive_mean = predictive_dist.mean()
         
         # should we fix mean to the true mean and make sure we draw sym around it to only emulate the var??
+        else:
+            latent_dist = self.opt_posterior(input_data, train_data=self.D)
+            predictive_dist = self.opt_posterior.posterior.likelihood(latent_dist)
+            predictive_mean = predictive_dist.mean()
+            predictive_std = predictive_dist.stddev() - jnp.sqrt(self.hyperparameters['error_tolerance'])
+            ac = predictive_mean[0]
         
-        # we also want to know if we add a point because the error term is large. We can compare the precitive_std to the noise term 
-        # and pass noise_dominated
-
         # generate new key
         RNGkey, subkey = random.split(RNGkey)
 

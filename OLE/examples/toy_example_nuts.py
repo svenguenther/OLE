@@ -94,7 +94,7 @@ my_likelihood = my_likelihood()
 
 emulator_settings = {
     # the number of data points in cache before the emulator is to be trained
-    'min_data_points': 40,
+    'min_data_points': 100,
 
 
 
@@ -109,9 +109,11 @@ emulator_settings = {
     ## Related to the Gaussian Process itself. ToDo: Rework this part
     'learning_rate': 0.02,
 
-    'noise_percentage': 0.1, 
+    'noise_percentage': 0.5, 
+
+    'sparse_GP_points': 10,
     # Number of iterations
-    'num_iters': 100,
+    'num_iters': 400,
 
 
     ## Related to the Data Cache
@@ -136,8 +138,8 @@ emulator_settings = {
     'store_cache': False,
 
     # accuracy parameters for loglike:
-    'quality_threshold_constant': 0.05, 
-    'quality_threshold_linear': 0.4,
+    'quality_threshold_constant': 0.03, 
+    'quality_threshold_linear': 0.2,
     'quality_threshold_quadratic': 0.1,
 
     # add acceptable error that is reduced live. For pca it should be linear in the eigenvalues

@@ -605,6 +605,7 @@ class NUTSSampler(Sampler):
 
                     if self.emulator.require_quality_check(state['parameters']):
                         # here we need to test the emulator for its performance
+                        # noiseFree is only required if a noise term is used at all !!
                         loglikes = self.logp_sample(thetas[i*self.NUTS_batch_size+j])
                         loglikes_noiseFree = self.logp_sample_noiseFree(thetas[i*self.NUTS_batch_size+j])
 
@@ -636,10 +637,11 @@ class NUTSSampler(Sampler):
                                 # if the emulator passes noiseFree but fails with noise then the noise is too large
                                 print('!!!!noise levels too large for convergence, reduce explained_variance_cutoff and or noise_percentage!!!!')
                                 # shouydl implement automatic reduction here!!
+                                # note that it is normal to trigger this from time to time. for acceptable noise at the edge of interpolation area it can happen
                             print("Emulator good enough")
                             # Add the point to the quality points
                             self.emulator.add_quality_point(state['parameters'])
-
+                            
                 print("Testing time: ", time.time()-start)
 
         # save the chain and the logprobability
