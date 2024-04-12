@@ -114,6 +114,18 @@ class Sampler(BaseClass):
 
         pass
 
+    def normalize_parameters(self, parameters):
+        # this function normalizes the parameters
+        return (parameters - self.proposal_means) / jnp.sqrt(self.eigenvalues)
+    
+    def denormalize_parameters(self, parameters):
+        # this function denormalizes the parameters
+        return parameters * jnp.sqrt(self.eigenvalues) + self.proposal_means
+
+    def denormalize_inv_hessematrix(self, matrix):
+        # this function denormalizes the matrix
+        return jnp.dot(jnp.diag(jnp.sqrt(self.eigenvalues)), jnp.dot(matrix, jnp.diag(jnp.sqrt(self.eigenvalues))))
+
     def transform_parameters_into_normalized_eigenspace(self, parameters):
         # this function transforms the parameters into the normalized eigenspace
         return jnp.dot(parameters - self.proposal_means, self.eigenvectors) / jnp.sqrt(self.eigenvalues)
@@ -152,6 +164,48 @@ class Sampler(BaseClass):
         
         # create the covmat from the proposal lengths
         return covmat
+
+    def get_initial_position(self, N=1, noramlized=False):
+        # this function returns N initial positions for the sampler. It samples from the 'ref' values of the parameters.
+        positions = []
+        for i in range(N):
+            position = []
+            for key, value in self.parameter_dict.items():
+                if 'ref' in list(value.keys()):
+                    position.append(value['ref']['mean'] + value['ref']['std']*np.random.normal())
+                elif 'prior' in list(value.keys()):
+                    position.append(value['prior']['min'] + (value['prior']['max']-value['prior']['min'])*np.random.uniform())
+                else:
+                    raise ValueError("Parameter %s is not defined correctly. Please check the parameter_dict."%key)
+            positions.append(position)
+
+        if noramlized:
+            return self.normalize_parameters(np.array(positions))
+        else:
+            return np.array(positions)
+
+    def get_bounds(self, normalized=False):
+        # this function returns the bounds of the parameters
+        bounds = []
+        for key, value in self.parameter_dict.items():
+            if 'prior' in list(value.keys()):
+                bounds.append((value['prior']['min'], value['prior']['max']))
+            else:
+                raise ValueError("Parameter %s is not defined correctly. Please check the parameter_dict."%key)
+        
+        if normalized:
+            lower_bound = np.array([_[0] for _ in bounds])
+            upper_bound = np.array([_[1] for _ in bounds])
+            normalized_bounds = self.normalize_parameters(np.vstack([lower_bound, upper_bound]))
+            
+            # put the bounds in the right order\
+            bounds = []
+            for i in range(len(normalized_bounds[0])):
+                bounds.append((normalized_bounds[0,i], normalized_bounds[1,i]))
+
+            return bounds
+        else:
+            return bounds
 
     def test_pipeline(self):
         # Create a test state from the given parameters.
@@ -348,7 +402,6 @@ class Sampler(BaseClass):
         self.increment(self.logger)
         return loglikes
 
-
     def compute_total_loglike_from_parameters(self, parameters):
         res = self.compute_loglike_from_normalized_parameters(parameters)
         return res.sum()
@@ -367,6 +420,15 @@ class Sampler(BaseClass):
         res = [_.sum() for _ in self.sample_emulate_loglike_from_normalized_parameters_differentiable_noiseFree(parameters, N=N)]
         return res
 
+
+    def emulate_total_minusloglike_from_parameters_differentiable(self, parameters):
+        res = -self.emulate_loglike_from_normalized_parameters_differentiable(parameters)
+        return res.sum()
+    
+    def sample_emulate_total_minusloglike_from_parameters_differentiable(self, parameters):
+        N = self.emulator.hyperparameters['N_quality_samples']
+        res = [-_.sum() for _ in self.sample_emulate_loglike_from_normalized_parameters_differentiable(parameters, N=N)]
+        return res
 
     def compute_logprior(self, state):
         # To be implemented.
@@ -1166,3 +1228,102 @@ class EvaluateSampler(Sampler):
 
             # return the output
             return output, output_uncertainty
+        
+
+
+# Minimize Sampler. This sampler is used to minimize the likelihood or the posterior. It uses scipy.optimize.minimize to do so.
+# We can set it to also use gradients that we obtain from the jax jit grad emulator.
+class MinimizeSampler(Sampler):
+    
+        def __init__(self, name=None, **kwargs):
+            super().__init__(name, **kwargs)
+        
+        def initialize(self, **kwargs):
+            super().initialize(**kwargs)
+    
+            # flag whether to use the emulator or not
+            self.use_emulator = kwargs['use_emulator'] if 'use_emulator' in kwargs else True
+
+            # check wether we want to calculate the loglikelihood or the logposterior
+            self.logposterior = kwargs['logposterior'] if 'logposterior' in kwargs else False
+
+            # check whether to use the gradients
+            self.use_gradients = kwargs['use_gradients'] if 'use_gradients' in kwargs else True
+
+            # set the method for the minimization
+            self.method = 'L-BFGS-B' if 'method' not in kwargs else kwargs['method']
+
+            # 
+
+            # run evaluation once to train the emulator
+            if self.use_emulator:
+                self.info("Training emulator")
+                parameter_list = jnp.array([self.parameter_dict[key]['ref']['mean'] for key in self.parameter_dict.keys()])
+                self.compute_total_loglike_from_parameters(parameter_list/self.proposal_lengths)
+                self.info("Emulator trained")
+
+            # output error if we use the emulator but it is not trained
+            if self.use_emulator and not self.emulator.trained:
+                self.error("Emulator is not trained yet. Please train the emulator first or set use_emulator=False")
+                raise ValueError
+
+            # import scipy.optimize
+            import scipy.optimize as opt
+
+            self.optimizer = opt.minimize
+        
+            pass
+        
+        
+        def minimize(self):
+            # Run the sampler.
+
+            # get the initial guess
+            initial_position = self.get_initial_position(N=1, noramlized=True)[0]
+            initial_position1 = self.get_initial_position(N=1, noramlized=False)[0]
+
+            # get the bounds
+            bounds = self.get_bounds(normalized=True)
+            bounds1 = self.get_bounds(normalized=False)
+
+
+            print(initial_position)
+            print(initial_position1)
+            print(bounds)
+            print(bounds1)
+
+            if self.use_gradients:
+                # create differentiable loglike
+                f = jax.jit(self.emulate_total_minusloglike_from_parameters_differentiable)     # this is the differentiable loglike
+                grad_f = jax.jit(jax.grad(self.emulate_total_minusloglike_from_parameters_differentiable))
+                hessian_f = jax.jit(jax.hessian(self.emulate_total_minusloglike_from_parameters_differentiable))
+
+                res = self.optimizer(f, 
+                                    initial_position, method=self.method, bounds=bounds, 
+                                    jac=grad_f, 
+                                    options={'disp': True},#, 'ftol': 1e-20, 'gtol': 1e-10 },
+                                    )
+                
+                self.inv_hessian = self.denormalize_inv_hessematrix( np.linalg.inv(hessian_f(res.x)) )
+            
+            else:
+                f = jax.jit(self.emulate_total_minusloglike_from_parameters_differentiable)
+
+                res = self.optimizer(f,
+                                    initial_position, method=self.method, bounds=bounds, 
+                                    options={'disp': True})
+                try:
+                    self.inv_hessian = self.denormalize_inv_hessematrix( res.hess_inv.todense() )
+                except:
+                    self.inv_hessian = None
+                
+            self.res = res
+            self.bestfit = self.denormalize_parameters(res.x)
+            self.max_loglike = res.fun
+
+            print(self.bestfit)
+            print(self.max_loglike)
+            print(self.inv_hessian)
+            
+
+

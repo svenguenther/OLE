@@ -190,11 +190,15 @@ class Emulator(BaseClass):
             # up to which p value do we want to be accurate?
             p_val = chi2.cdf(self.hyperparameters['N_sigma']**2, 1)
 
+            if p_val == 1.0:
+                self.warning("N_sigma is too large. The p value is 1.0 due to double precision. The estimated delta_loglike is not accurate. Thus, we set N_sigma = 8!")
+                p_val = chi2.cdf(8**2, 1)
+
             # the corresponding loglike
             accuracy_loglike = chi2.ppf(p_val, self.hyperparameters['dimensionality'])/2
 
             # at this point the (constant + linear) term is equal to the quadratic term
-            self.hyperparameters['quality_threshold_quadratic'] = (self.hyperparameters['quality_threshold_quadratic'] + self.hyperparameters['quality_threshold_linear']*accuracy_loglike)/accuracy_loglike**2
+            self.hyperparameters['quality_threshold_quadratic'] = (self.hyperparameters['quality_threshold_constant'] + self.hyperparameters['quality_threshold_linear']*accuracy_loglike)/accuracy_loglike**2
 
             self.debug("Quality threshold quadratic: ", self.hyperparameters['quality_threshold_quadratic'])
 
@@ -246,8 +250,6 @@ class Emulator(BaseClass):
         state_added = self.data_cache.add_state(new_state)
 
         if state_added:
-            self.added_data_points += 1
-
             # write to log that the state was added
             _ = "State added to emulator: " + " ".join([key+ ': ' +str(value) for key, value in new_state['parameters'].items()]) + " at loglike: " + str(new_state['loglike']) + " max. loglike: " + str(self.data_cache.max_loglike) + "\n"
             self.write_to_log(_)
@@ -257,6 +259,7 @@ class Emulator(BaseClass):
         
         # if the emulator is already trained, we can add the new state to the GP without fitting the Kernel parameters
         if self.trained and state_added:
+            self.added_data_points += 1
             if self.added_data_points%self.hyperparameters['kernel_fitting_frequency'] == 0:
                 self.train()
             else:
@@ -372,7 +375,7 @@ class Emulator(BaseClass):
         output_state['parameters'] = parameters
 
         # Emulate the quantities for the given parameters.
-        input_data = jnp.array([[value[0] for key, value in parameters.items() if key in self.input_parameters]])
+        input_data = jnp.array([[parameters[key][0] for key in self.input_parameters]])
         
         for quantity, emulator in self.emulators.items():
             emulator_output = emulator.predict(input_data)
@@ -393,10 +396,7 @@ class Emulator(BaseClass):
         output_states = [deepcopy(state) for i in range(self.hyperparameters['N_quality_samples'])]
 
         # Emulate the quantities for the given parameters.
-        input_data = jnp.array([[value[0] for key, value in parameters.items() if key in self.input_parameters]])
-
-
-
+        input_data = jnp.array([[parameters[key][0] for key in self.input_parameters]])
 
         for quantity, emulator in self.emulators.items():
             emulator_output, RNGkey = emulator.sample_prediction(input_data, N=self.hyperparameters['N_quality_samples'], RNGkey=RNGkey)
@@ -555,8 +555,8 @@ class Emulator(BaseClass):
         self.continuous_successful_calls += 1
 
         # if any of the loglikes is above the maximum loglike, we need to update the maximum loglike
-        if jnp.any(loglikes > max_loglike):
-            self.max_loglike_encountered = jnp.max(loglikes)
+        if jnp.any(mean_loglike > max_loglike):
+            self.max_loglike_encountered = mean_loglike
 
         return True
     
@@ -570,6 +570,7 @@ class Emulator(BaseClass):
         if not self.hyperparameters['test_emulator']:
             self.debug("Quality check not required. Test emulator is False")
             self.write_to_log("Quality check not required. Test emulator is False")
+            self.continuous_successful_calls += 1
             return False
 
         # The idea is that we collect all points which were checked by the quality criterium and then check whether the new point is within the convex hull of the checked points.
