@@ -295,7 +295,7 @@ class Sampler(BaseClass):
             emulator_sample_loglikes = jnp.array([self.likelihood.loglike_state(_)['loglike'] for _ in emulator_sample_states])
             print("emulator_sample_loglikes: ", emulator_sample_loglikes)
             # check whether the emulator is good enough
-            if not self.emulator.check_quality_criterium(emulator_sample_loglikes):
+            if not self.emulator.check_quality_criterium(emulator_sample_loglikes, parameters=state['parameters']):
                 print("Emulator not good enough")
                 state = self.theory.compute(state)
                 state = self.likelihood.loglike_state(state)

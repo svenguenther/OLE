@@ -183,7 +183,7 @@ class NUTSSampler(Sampler):
                     #print(jnp.std(jnp.array(loglikes_noiseFree)))
 
                     # check whether the emulator is good enough
-                    if not self.emulator.check_quality_criterium(jnp.array(loglikes_noiseFree)):
+                    if not self.emulator.check_quality_criterium(jnp.array(loglikes_noiseFree), parameters=state['parameters']):
                         
                         
                         state = self.theory.compute(state)
@@ -202,7 +202,7 @@ class NUTSSampler(Sampler):
                         self.logp_sample_noiseFree = jax.jit(self.sample_emulate_total_loglike_from_parameters_differentiable_noiseFree)                    # this samples N realizations from the emulator to estimate the uncertainty
                         # self.logp_sample = self.sample_emulate_total_loglike_from_parameters_differentiable                    # this samples N realizations from the emulator to estimate the uncertainty
                     else:
-                        if not self.emulator.check_quality_criterium(jnp.array(loglikes)):
+                        if not self.emulator.check_quality_criterium(jnp.array(loglikes), parameters=state['parameters']):
                             # if the emulator passes noiseFree but fails with noise then the noise is too large
                             print('!!!!noise levels too large for convergence, reduce explained_variance_cutoff and or noise_percentage!!!!')
                             # shouydl implement automatic reduction here!!

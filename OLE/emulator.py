@@ -94,7 +94,6 @@ class Emulator(BaseClass):
             # However, if we have a state in the cache, we can load the initial state from the cache. And not a single theory call has to be made.
             'load_initial_state': False,
 
-
             ## TESTING:
 
             # should we test the performance of the emulator once it is trained? If Flase, the following parameters are not needed
@@ -252,7 +251,14 @@ class Emulator(BaseClass):
 
         if state_added:
             # write to log that the state was added
-            _ = "State added to emulator: " + " ".join([key+ ': ' +str(value) for key, value in new_state['parameters'].items()]) + " at loglike: " + str(new_state['loglike']) + " max. loglike: " + str(self.data_cache.max_loglike) + "\n"
+            _ = "State added to emulator: " + "; ".join([key+ ': ' +str(value) for key, value in new_state['parameters'].items()]) + " at loglike: " + str(new_state['loglike']) + " max. loglike: " + str(self.data_cache.max_loglike) + "\n"
+            self.write_to_log(_)
+            # write to log the current size of the data cache
+            _ = "Current data cache size: %d\n" % len(self.data_cache.states)
+            self.write_to_log(_)
+        else:
+            # write to log that the state was not added
+            _ = "State not added to emulator: " + "; ".join([key+ ': ' +str(value) for key, value in new_state['parameters'].items()]) + " at loglike: " + str(new_state['loglike']) + " max. loglike: " + str(self.data_cache.max_loglike) + "\n"
             self.write_to_log(_)
             # write to log the current size of the data cache
             _ = "Current data cache size: %d\n" % len(self.data_cache.states)
@@ -459,7 +465,7 @@ class Emulator(BaseClass):
     def set_error(self):
 
         if self.hyperparameters['noise_percentage'] == 0.:
-            for quantity_name, quantity in self.ini_state['quantities'].items():
+            for quantity_name in self.emulators.keys():
                 self.emulators[quantity_name].disable_error() 
 
         else:
@@ -510,7 +516,7 @@ class Emulator(BaseClass):
 
     
 
-    def check_quality_criterium(self, loglikes, reference_loglike = None):
+    def check_quality_criterium(self, loglikes, parameters, reference_loglike = None):
         # check whether the emulator is good enough to be used
         # if the emulator is not yet trained, we return False
         if not self.trained:
@@ -536,7 +542,7 @@ class Emulator(BaseClass):
         if mean_loglike > max_loglike:
             if std_loglike > self.hyperparameters['quality_threshold_constant']:
                 self.debug("Emulator quality criterium NOT fulfilled")
-                _ = "Quality criterium NOT fulfilled; Max loglike: %f, delta loglikes: " % (max_loglike) + " ".join([str(loglike) for loglike in loglikes]) + "\n"
+                _ = "Quality criterium NOT fulfilled; "+"; ".join([key+ ': ' +str(value) for key, value in parameters.items()]) + " Max loglike: %f, delta loglikes: " % (max_loglike) + " ".join([str(loglike) for loglike in loglikes]) + "\n"
                 self.write_to_log(_)
                 return False
         else:
@@ -546,12 +552,12 @@ class Emulator(BaseClass):
             # the full criterium 
             if std_loglike > self.hyperparameters['quality_threshold_constant'] + self.hyperparameters['quality_threshold_linear']*delta_loglike + self.hyperparameters['quality_threshold_quadratic']*delta_loglike**2:
                 self.debug("Emulator quality criterium NOT fulfilled")
-                _ = "Quality criterium NOT fulfilled; Max loglike: %f, delta loglikes: " % (max_loglike) + " ".join([str(loglike) for loglike in loglikes]) + "\n"
+                _ = "Quality criterium NOT fulfilled; "+"; ".join([key+ ': ' +str(value) for key, value in parameters.items()]) + " Max loglike: %f, delta loglikes: " % (max_loglike) + " ".join([str(loglike) for loglike in loglikes]) + "\n"
                 self.write_to_log(_)
                 return False
 
         self.debug("Emulator quality criterium fulfilled")
-        _ = "Quality criterium fulfilled; Max loglike: %f, delta loglikes: " % (max_loglike) + " ".join([str(loglike) for loglike in loglikes]) + "\n"
+        _ = "Quality criterium fulfilled; "+"; ".join([key+ ': ' +str(value) for key, value in parameters.items()]) + " Max loglike: %f, delta loglikes: " % (max_loglike) + " ".join([str(loglike) for loglike in loglikes]) + "\n"
         self.write_to_log(_)
         self.continuous_successful_calls += 1
 
