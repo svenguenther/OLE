@@ -41,8 +41,6 @@ class NUTSSampler(Sampler):
         self.M_adapt = kwargs['M_adapt'] if 'M_adapt' in kwargs else 1000
         self.delta_max = kwargs['delta_max'] if 'delta_max' in kwargs else 1000
 
-        self.NUTS_batch_size = kwargs['NUTS_batch_size'] if 'NUTS_batch_size' in kwargs else 10
-
         pass
     
     
@@ -118,9 +116,6 @@ class NUTSSampler(Sampler):
         # puntjes
         thetas = np.zeros((self.M_adapt + nsteps + 1, self.ndim))
         logps = np.zeros(self.M_adapt + nsteps + 1)
-
-        # number of rounds for the NUTS sampler to run and check the performance of the emulator
-        nrounds = int(np.ceil((self.M_adapt + nsteps + 1)/self.NUTS_batch_size))
 
         thetas[0] = bestfit
 
