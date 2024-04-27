@@ -26,9 +26,10 @@ def check_cache_and_compute(self, params_values_dict,
 
     params_values_dict can be safely modified and stored.
     """
-    # global force_acceptance # OLD
+    # Try to build emulator from saved cobaya state and cache
         
-    # there is a possibility when using the emulator to load an initial state from the cache of the emulator, which then allows to perform the sampling without a single call to the theory
+    # There is a possibility when using the emulator to load an initial state from the cache of the emulator, 
+    # which then allows to perform the sampling without a single call to the theory
     if self.emulate:
         # force_acceptance = False # OLD
         if self.emulator is None:
@@ -81,6 +82,7 @@ def check_cache_and_compute(self, params_values_dict,
 
 
     start = time.time()
+    # This is a flag which is used when we want to compute the delta_loglikelihood for the emulator
     if self.skip_theory_state_from_emulator is not None:
         # here we are in the emulator and we need to use the emulator state
         state = self.skip_theory_state_from_emulator

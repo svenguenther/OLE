@@ -69,6 +69,18 @@ class data_processor(BaseClass):
 
             # testset fraction
             'testset_fraction': None,
+
+            # Load of (observable) covmats
+            # If obersavables are not provided, the data is normalized using the means and stds of the data.
+
+            # The observable covmats can be either 1 dimensional and represent the diagonal of the covariance matrix or 2 dimensional and represent the full covariance matrix.
+            # If None is given we compute the covariance matrix from the data.
+            'observable_covmat': None,
+
+            # Normalize by full covariance matrix? If False, we normalize by the diagonal of the covariance matrix. 
+            # Note that a full covmat normalization is computationally more expensive.
+            'normalize_by_full_covmat': False,
+            
         }
 
         # The hyperparameters are a dictionary of the hyperparameters for the different quantities. The keys are the names of the quantities.
@@ -123,6 +135,8 @@ class data_processor(BaseClass):
         # set all stds which are 0 to 1
         self.input_stds = jnp.where(self.input_stds == 0, 1, self.input_stds)
         self.output_stds = jnp.where(self.output_stds == 0, 1, self.output_stds)
+
+        # 
 
     def compute_compression(self):
         # Compress the normalized data. This is done by applying a PCA to the normalized data.

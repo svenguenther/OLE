@@ -53,8 +53,6 @@ class GP_predictor(BaseClass):
 
         # default hyperparameters
         defaulthyperparameters = {
-            'kernel': 'RBF',
-
             # plotting directory
             'plotting_directory': None,
 
@@ -419,6 +417,9 @@ class GP(BaseClass):
 
             # numer of test samples to determine the quality of the emulator
             'N_quality_samples': 5,
+
+            # number of sparse GP points
+            'sparse_GP_points': 0,
             
         }
 

@@ -56,10 +56,7 @@ class DataCache(BaseClass):
 
             # delta loglike is the the maximum allowed difference of the loglike between two states which are stored in the cache.
             # It should prevent the cache from storing states which are outliers.
-            'delta_loglike': 300,
-
-            # the cache is stored in the hdf5 file after each state is added
-            'store_cache': True,
+            'delta_loglike': 100,
 
             # learn about the actual emulation task to estimate the 'delta_loglike'.
             'N_sigma': 6,

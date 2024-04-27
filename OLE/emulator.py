@@ -71,14 +71,14 @@ class Emulator(BaseClass):
 
         pass
 
-    def initialize(self, likelihood, ini_state=None, **kwargs):
+    def initialize(self, likelihood=None, ini_state=None, **kwargs):
         # default hyperparameters
         defaulthyperparameters = {
             # kernel
             'kernel': 'RBF',
 
             # kernel fitting frequency. Every n-th state the kernel parameters are fitted.
-            'kernel_fitting_frequency': 4,
+            'kernel_fitting_frequency': 20,
 
             # the number of data points in cache before the emulator is to be trained
             'min_data_points': 80,
@@ -103,7 +103,6 @@ class Emulator(BaseClass):
             # numer of test samples to determine the quality of the emulator
             'N_quality_samples': 5,
 
-            'jit_threshold': 100, # number of samples to be emulated before we jit the emulator to accelerate it
 
             # here we define the quality threshold for the emulator. If the emulator is below this threshold, it is retrained. We destinguish between a constant, a linear and a quadratic threshold
             'quality_threshold_constant': 0.1,
@@ -119,7 +118,8 @@ class Emulator(BaseClass):
             'plotting_directory': None,
 
             # only relevant for cobaya
-            'cobaya_state_file': None,
+            'cobaya_state_file': None, # TODO: put this somewhere else. This is only used in the cobaya wrapper
+            'jit_threshold': 10, # number of samples to be emulated before we jit the emulator to accelerate it TODO: put this somewhere else
 
             # learn about the actual emulation task to estimate 'quality_threshold_quadratic'.
             'N_sigma': 6,
@@ -158,7 +158,8 @@ class Emulator(BaseClass):
             self.input_parameters = list(ini_state['parameters'].keys())
 
         self.likelihood = likelihood
-        self.likelihood.initialize(**kwargs)
+        if self.likelihood is not None:
+            self.likelihood.initialize(**kwargs)
 
         # A state dictionary is a nested dictionary with the following structure:
         # state = {
