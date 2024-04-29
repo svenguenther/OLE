@@ -102,6 +102,8 @@ class Emulator(BaseClass):
             # numer of test samples to determine the quality of the emulator
             'N_quality_samples': 5,
 
+            # path to a directory with data covmats to do better normalization. If given, the emulator will search for data covmats in this directoy and if one is found, it will be used for normalization
+            'data_covmat_directory': None,
 
             # here we define the quality threshold for the emulator. If the emulator is below this threshold, it is retrained. We destinguish between a constant, a linear and a quadratic threshold
             'quality_threshold_constant': 0.1,
@@ -202,6 +204,23 @@ class Emulator(BaseClass):
 
             self.debug("Quality threshold quadratic: ", self.hyperparameters['quality_threshold_quadratic'])
 
+        # if we have a data_covmat_directory we search for the data covmat in this directory
+        self.data_covmats = {quantity_name: None for quantity_name in ini_state['quantities'].keys()}
+        if self.hyperparameters['data_covmat_directory'] is not None:
+            # check whether the directory exists
+            if not os.path.exists(self.hyperparameters['data_covmat_directory']):
+                self.warning("Data covmat directory does not exist. Cannot use data covmat for normalization.")
+            else:
+                # search for the data covmat in the directory. They should be named <quantity_name>.covmat
+                for quantity_name, quantity in ini_state['quantities'].items():
+                    covmat_file = self.hyperparameters['data_covmat_directory'] + '/' + quantity_name + '.covmat'
+                    if os.path.exists(covmat_file):
+                        self.debug("Data covmat found for quantity %s. Using it for normalization.", quantity_name)
+                        self.data_covmats[quantity_name] = np.loadtxt(covmat_file)
+                    else:
+                        self.debug("Data covmat not found for quantity %s. Not using it for normalization.", quantity_name)
+
+
         # Here: Create the emulators for the different quantities
         self.emulators = {}
 
@@ -214,7 +233,7 @@ class Emulator(BaseClass):
             
             # initialize the emulator for the quantity
             self.emulators[quantity_name] = GP_predictor(quantity_name, debug=self.debug_mode)
-            self.emulators[quantity_name].initialize(ini_state, **kwargs)
+            self.emulators[quantity_name].initialize(ini_state,data_covmat=self.data_covmats[quantity_name], **kwargs)
 
         # initialize the points which were already tested with the quality criterium
         self.quality_points = []
@@ -358,7 +377,7 @@ class Emulator(BaseClass):
 
         del input_data_raw_jax
         del input_data_raw
-            
+
         self.trained = True
 
         jax.clear_backends()

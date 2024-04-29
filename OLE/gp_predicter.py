@@ -64,6 +64,9 @@ class GP_predictor(BaseClass):
 
         }
 
+        # load data covmat
+        self.data_covmat = kwargs['data_covmat']
+
         # The hyperparameters are a dictionary of the hyperparameters for the different quantities. The keys are the names of the quantities.
         self.hyperparameters = defaulthyperparameters
 
@@ -80,7 +83,7 @@ class GP_predictor(BaseClass):
 
         # We can now initialize the data processor for this quantity.
         self.data_processor = data_processor('Data processor ' + self.quantity_name, debug=self.debug_mode)
-        self.data_processor.initialize(self.input_size, self.output_size, self.quantity_name,**kwargs)
+        self.data_processor.initialize(self.input_size, self.output_size, self.quantity_name, **kwargs)
 
         # For each dimension of the output_data we create a GP.
         self.GPs = []
