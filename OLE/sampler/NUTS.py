@@ -90,6 +90,27 @@ class NUTSSampler(Sampler):
         else:
             # if the emulator is already trained, we can directly start with the NUTS sampler
             bestfit = pos[0]
+
+        # rescale the parameters
+        # Run the sampler.
+            
+        if self.hyperparameters['compute_data_covmat']:
+            # compute the data covariance matrix
+            bestfit_state = {'parameters': {}, 'quantities': {}, 'loglike': None}
+
+            # translate the parameters to the state
+            for i, key in enumerate(self.parameter_dict.keys()):
+                _ = self.retranform_parameters_from_normalized_eigenspace(bestfit)
+                bestfit_state['parameters'][key] = jnp.array([_[i]])
+
+            data_covmats = self.calculate_data_covmat(bestfit_state['parameters'])
+
+            # set the data covmats in the emulator
+            self.emulator.set_data_covmats(data_covmats)
+
+            # we need to retrain the emulator 
+            self.emulator.train()
+
         self.info("Emulator trained - Start NUTS sampler now!")
 
         # create differentiable loglike

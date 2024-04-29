@@ -64,9 +64,6 @@ class GP_predictor(BaseClass):
 
         }
 
-        # load data covmat
-        self.data_covmat = kwargs['data_covmat']
-
         # The hyperparameters are a dictionary of the hyperparameters for the different quantities. The keys are the names of the quantities.
         self.hyperparameters = defaulthyperparameters
 
@@ -636,7 +633,9 @@ class GP(BaseClass):
         
             
             if self.hyperparameters['testset_fraction'] is not None:
-                self.run_test_set_tests()
+                # check that there are test data
+                if self.test_D.n >0:
+                    self.run_test_set_tests()
 
         pass
 

@@ -5,6 +5,18 @@ import jax.numpy as jnp
 
 plot_format = 'png'
 
+def data_covmat_plot(covmat, title, file_name):
+    plt.figure()
+    plt.axis('equal')
+    plt.title(title)
+    max_abs = np.max(np.abs(covmat))
+    plt.imshow(covmat, cmap='seismic', vmin=-max_abs, vmax=max_abs)
+    plt.colorbar()
+    plt.savefig(file_name)
+    plt.close()
+
+    gc.collect()
+
 def variance_plots(variances, title, y_label, file_name):
     plt.figure()
     plt.grid()

@@ -394,6 +394,12 @@ class Emulator(BaseClass):
                 plot_loglikes(loglikes[:,0], parameters[:,i], self.input_parameters[i], self.hyperparameters['plotting_directory']+'/loglike_'+str(i)+'.png')
         pass
 
+    def set_data_covmats(self, data_covmats):
+        # set the data covmats for the different quantities
+        for quantity_name, data_covmat in data_covmats.items():
+            self.data_covmats[quantity_name] = data_covmat
+            self.emulators[quantity_name].data_processor.data_covmat = data_covmat
+
     # @partial(jax.jit, static_argnums=0)
     def emulate(self, parameters):
         # Prepare output state

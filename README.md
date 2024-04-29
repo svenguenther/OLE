@@ -88,6 +88,8 @@ Sampler:
 | ```force``` | ```False``` | Overwrites results (TODO) |
 | ```covmat``` | ```None``` | File of parameter covmat. It is used for initial guess for the samplers. TODO: currently not for Minimizer |
 | ```nwalkers``` | ```10``` | Number of walkers in enselbe sampler |
+| ```compute_data_covmats``` | ```False``` | If your likelihood is differentiable, you can compute the covmats of your data. This can help you with normalization. TODO: use this for your PCA. |
+
 
 
 Evaluate sampler (computes likelihood for a given parameter set):

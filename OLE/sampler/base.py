@@ -6,6 +6,7 @@ from OLE.theory import Theory
 from OLE.likelihood import Likelihood
 from OLE.emulator import Emulator
 from OLE.utils.mpi import *
+from OLE.plotting import data_covmat_plot
 
 from functools import partial
 from typing import Tuple
@@ -15,6 +16,8 @@ import fasteners
 from jax.numpy import ndarray
 import jax.lax as lax
 import random
+import copy
+import os
 
 import numpy as np
 
@@ -65,6 +68,12 @@ class Sampler(BaseClass):
 
             # load (parameter) covmat from file from a path
             'covmat': None,
+
+            # compute data covmat. This only works for differentiable likelihoods
+            'compute_data_covmat': False,
+
+            # plotting directory
+            'plotting_directory': None,
 
         }
 
@@ -247,7 +256,39 @@ class Sampler(BaseClass):
         self.info(state)
 
         return state
-    
+
+
+    def calculate_data_covmat(self, parameters):
+        # This function computes the hessian of the likelihood 
+        # with respect to a certain point in parameter space. This can be understtod as an effective covmat of the data.
+        # The hessian is calculated by jax.hessian
+
+        # Run the emulator to compute the observables.
+        state = self.emulator.emulate(parameters)
+
+        data_covmats = {}
+
+        # for each observable we create a function that computes the hessian with respect to the observable.
+        for observable in state['quantities'].keys():
+            def hessian_observable(x):
+                local_state = copy.deepcopy(state)
+                local_state['quantities'][observable] = x
+                return -self.likelihood.loglike(local_state)
+
+            _ = jnp.array(state['quantities'][observable])
+
+            data_covmats[observable] = jnp.linalg.inv(jax.hessian(hessian_observable)(_))[0]
+
+        if self.hyperparameters['plotting_directory'] is not None:
+            for observable in state['quantities'].keys():
+                # check if plotting directory exists, otherwise create it
+                if not os.path.exists(self.hyperparameters['plotting_directory']+'/data_covmats'):
+                    os.makedirs(self.hyperparameters['plotting_directory']+'/data_covmats')
+
+                data_covmat_plot(data_covmats[observable], 'data covariance matrix '+ observable, self.hyperparameters['plotting_directory']+'/data_covmats/'+observable+'.png')
+
+
+        return data_covmats     
 
     # This function computes the loglikelihoods for given parameters.
     # If possible it uses the emulator to speed up the computation.
