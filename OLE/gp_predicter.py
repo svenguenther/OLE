@@ -63,6 +63,8 @@ class GP_predictor(BaseClass):
 
             #error
             'error_tolerance': 1.,
+            'excess_fraction': 0.1,
+            'error_boost':2.,
 
         }
 
@@ -477,8 +479,11 @@ class GP(BaseClass):
 
         if self.hyperparameters['kernel'] == 'RBF':
 
-            kernelNoiseFree = gpx.kernels.RBF() #+ gpx.kernels.White()
-        
+            kernelNoiseFree = gpx.kernels.RBF() + gpx.kernels.Polynomial(degree=1) #+ gpx.kernels.White()
+            # we add a linear kernel to see if it imporves performance. The idea is that the GP for points
+            # far away from support becomes constant and does not give the sampler a lot of usefull information
+            # the lienar kernel will at least provide a slope that is meaningfull and allws the sampler to find the 
+            # best-fit
             #kernelM52 = gpx.kernels.Matern52()
             #kernelLin = gpx.kernels.Polynomial(degree=1)
         else:
@@ -515,7 +520,7 @@ class GP(BaseClass):
             # the target_error defines an error for each point which is nessecary for training a sparse GP
             # ideally we want to set it very small, but this is numerically unstable. Since we know our target 
             # accuracy we should make it small compared to that so that the information in the points is still used optimally
-            target_error = jnp.sqrt( self.hyperparameters['error_tolerance']) / 10. 
+            target_error = jnp.sqrt( self.hyperparameters['error_tolerance']) / 100. 
             likelihood = likelihood.replace(obs_stddev = target_error)
         
             posterior = prior * likelihood
@@ -526,10 +531,9 @@ class GP(BaseClass):
             while not sparse_trained:
                 # cosntruct a sparse GP
                 # define initial inducing points
-                print('now checking ', self.hyperparameters['sparse_GP_points'], ' sparse points')
                 z = self.input_data[:self.hyperparameters['sparse_GP_points'] ]
 
-                if len(z) == len(self.input_data):
+                if len(z) >= len(self.input_data)-10:
                     sparse_trained = True
                     # this will be last pass... maybe swap to normal GP ... !!
                 q = gpx.variational_families.CollapsedVariationalGaussian(
@@ -553,27 +557,43 @@ class GP(BaseClass):
                 add_points = False
                 n_poor = 0
                 for std in predictive_std:
-                    if std**2 > self.hyperparameters['error_tolerance']*2.: # acceptable boost
-                        #print('too few points',std**2)
+                    if std**2 > self.hyperparameters['error_tolerance'] * self.hyperparameters['error_boost']: # acceptable boost
+                        # we require a constant error over all points in sparse GP training. However the sampler 
+                        # is happy it only points arround the best-fit are accurate and tolerates a higher error in the 
+                        # outer regions. We employ a simple method to impklement this. We do not try to add points until 
+                        # we reach the target error everywhere, but accept higher errors. The sampler will then notice if
+                        # the GP is not accurate enough and aqquire more points in the relevant rehgions only. This provides
+                        # a higher focus on those regions and implicltly implements a non-uniform error demand. 
+
+                        # Our method is controlled by two parameters. We multiply the error_tolerance by a constant factor. 
+                        # If this factor is too small we force optimal convergence everywhere leading to too many sparse points
+                        # and nullifying some advantages of the sparse sampling. If it is choosen too large we will aquire 
+                        # unnessecary points and could alrady have a working interpolator if we would add more sparse points.
+                        # A value around a few is a ggod choice, whith less than 2 being a bis small. 
+                        # Less than 1 will never converge and a non-sparse GP should be used instead
+
+                        # The second parameter is that we will accept a fraction of outlying points at even higher errors.
+                        # If this region is too poorly described the GP will add more points and eventually force a more accurate description
+                        # If this parameter is small, the GP will use too many sparse points trying to reach a constant error everywhere
+                        # If it is too large, the GP is happy to irgnore large regions which then causes new points to be aqquired 
+                        # but not leading to any convergence. The GP will be stuck on low sparse points and not becoming predictive
+                        # reasonable values seem to be in the range of tnes of percent 
+                
                         n_poor += 1
-                print(n_poor, 'points abover acceptable error bounds')
-                if n_poor > len(predictive_std)/10.: # acceptable ratio
+                if n_poor > len(predictive_std) * self.hyperparameters['excess_fraction']: # acceptable ratio, allowing too much will overaquire points, allowing too little forces too many spares points
                     add_points = True
                 if add_points:
                     self.hyperparameters['sparse_GP_points'] += 10
-                    if self.hyperparameters['sparse_GP_points'] >= len(self.input_data):
-                        self.hyperparameters['sparse_GP_points'] = len(self.input_data)
+                    self.hyperparameters['sparse_GP_points'] = min(self.hyperparameters['sparse_GP_points'],len(self.input_data) -10)
                     
-                # check if noise imporved compared to last try and we are not noise limited. We should see better loss ???
-
                 if not add_points:
                     # done
                     sparse_trained = True
             
-        
+            print('used ', self.hyperparameters['sparse_GP_points'], ' sparse points')
+            print(n_poor, 'points above acceptable error bounds')
                 
                 
-
 
         else:
 
@@ -617,7 +637,7 @@ class GP(BaseClass):
             loss_plot(history, self._name , self.hyperparameters['plotting_directory']+'/loss/' + self._name + '_loss.png')
             
             # plot a slice of the trained GP
-            x = jnp.linspace(0., 3., 100) # automaticaly determin menaigful ranges
+            x = jnp.linspace(-1.5, 1.5, 100) 
             y = []
             std = []
             for xval in x:

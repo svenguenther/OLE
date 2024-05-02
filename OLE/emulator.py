@@ -79,6 +79,7 @@ class Emulator(BaseClass):
 
             # kernel fitting frequency. Every n-th state the kernel parameters are fitted.
             'kernel_fitting_frequency': 4,
+            'test_noise_levels': True,
 
             # the number of data points in cache before the emulator is to be trained
             'min_data_points': 80,
@@ -110,8 +111,7 @@ class Emulator(BaseClass):
             'quality_threshold_linear': 0.01,
             'quality_threshold_quadratic': 0.0001,
 
-            'noise_percentage' : 0.,
-
+            'error_tolerance' : 1.,
             # the radius around the checked points for which we do not need to check the quality criterium
             'quality_points_radius': 0.0,
 
@@ -258,20 +258,24 @@ class Emulator(BaseClass):
             self.write_to_log(_)
         
         # if the emulator is already trained, we can add the new state to the GP without fitting the Kernel parameters
+        emulator_updated = False
         if self.trained and state_added:
             self.added_data_points += 1
             if self.added_data_points%self.hyperparameters['kernel_fitting_frequency'] == 0:
                 self.train()
+                emulator_updated = True
             else:
-                self.update()
-
+                if self.hyperparameters['sparse_GP_points'] == 0:
+                    self.update()
+                    emulator_updated = True
+                #else: do nothing as updating does not really improve the sparese GP anyways
         
             
         if state_added:
             self.continuous_successful_calls = 0
-            return True
+            return True , emulator_updated
         else:
-            return False
+            return False , emulator_updated
 
     def update(self):
         # Update the emulator. This means that the emulator is retrained.
@@ -457,7 +461,7 @@ class Emulator(BaseClass):
 
     def set_error(self):
 
-        if self.hyperparameters['noise_percentage'] == 0.:
+        if self.hyperparameters['error_tolerance'] == 0.:
             for quantity_name, quantity in self.ini_state['quantities'].items():
                 self.emulators[quantity_name].disable_error() 
 
@@ -501,9 +505,9 @@ class Emulator(BaseClass):
 
                 for i in range(self.emulators[quantity_name].num_GPs):
                     relative_variance = var[i]/total_var
-                    error = variance_tolerance / relative_variance * self.hyperparameters['noise_percentage']
-
-
+                    #error = variance_tolerance / relative_variance * self.hyperparameters['noise_percentage']
+                    error = ((variance_tolerance / relative_variance) ** 2. ) / len(var)
+                    
                     self.emulators[quantity_name].GPs[i].hyperparameters['error_tolerance'] = error
                     print(self.emulators[quantity_name].GPs[i].hyperparameters['error_tolerance'] )
 
