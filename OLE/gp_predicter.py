@@ -53,8 +53,6 @@ class GP_predictor(BaseClass):
 
         # default hyperparameters
         defaulthyperparameters = {
-            'kernel': 'RBF',
-
             # plotting directory
             'plotting_directory': None,
 
@@ -84,7 +82,7 @@ class GP_predictor(BaseClass):
 
         # We can now initialize the data processor for this quantity.
         self.data_processor = data_processor('Data processor ' + self.quantity_name, debug=self.debug_mode)
-        self.data_processor.initialize(self.input_size, self.output_size, self.quantity_name,**kwargs)
+        self.data_processor.initialize(self.input_size, self.output_size, self.quantity_name, **kwargs)
 
         # For each dimension of the output_data we create a GP.
         self.GPs = []
@@ -421,6 +419,9 @@ class GP(BaseClass):
 
             # numer of test samples to determine the quality of the emulator
             'N_quality_samples': 5,
+
+            # number of sparse GP points
+            'sparse_GP_points': 0,
             
         }
 
@@ -652,7 +653,9 @@ class GP(BaseClass):
         
             
             if self.hyperparameters['testset_fraction'] is not None:
-                self.run_test_set_tests()
+                # check that there are test data
+                if self.test_D.n >0:
+                    self.run_test_set_tests()
 
         pass
 

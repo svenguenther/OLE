@@ -26,9 +26,10 @@ def check_cache_and_compute(self, params_values_dict,
 
     params_values_dict can be safely modified and stored.
     """
-    # global force_acceptance # OLD
+    # Try to build emulator from saved cobaya state and cache
         
-    # there is a possibility when using the emulator to load an initial state from the cache of the emulator, which then allows to perform the sampling without a single call to the theory
+    # There is a possibility when using the emulator to load an initial state from the cache of the emulator, 
+    # which then allows to perform the sampling without a single call to the theory
     if self.emulate:
         # force_acceptance = False # OLD
         if self.emulator is None:
@@ -81,11 +82,11 @@ def check_cache_and_compute(self, params_values_dict,
 
 
     start = time.time()
+    # This is a flag which is used when we want to compute the delta_loglikelihood for the emulator
     if self.skip_theory_state_from_emulator is not None:
         # here we are in the emulator and we need to use the emulator state
         state = self.skip_theory_state_from_emulator
         self.skip_theory_state_from_emulator = None
-        # self._states.appendleft(state)
         self._current_state = state
         return True
 
@@ -106,7 +107,6 @@ def check_cache_and_compute(self, params_values_dict,
                 for key, value in _state["params"].items():
                     if (value != params_values_dict[key]).any():
                         same = False
-
 
 
             if same and \
@@ -228,9 +228,13 @@ def check_cache_and_compute(self, params_values_dict,
                         self.jit_emulate = self.emulator_emulate_function
                         self.jit_emulator_samples = self.emulator_sampling_function
 
+    # transform each element in state["params"] to a float. Otherwise the cache wont work.
+    for key, value in state["params"].items():
+        state["params"][key] = float(value)
 
     # make this state the current one
-    self._states.appendleft(state)
+    _ = copy.deepcopy(state)
+    self._states.appendleft(_)
     self._current_state = state
 
     # if we want to use the emulator here, we need to initialize it here
@@ -334,7 +338,7 @@ def test_emulator(self,emulator_state):
         reference_loglike = sum(self.provider.model._loglikes_input_params(self.provider.params, cached = False, return_derived = False))
 
         # check whether the emulator is good enough
-        if not self.emulator.check_quality_criterium(emulator_sample_loglikes, reference_loglike = reference_loglike):
+        if not self.emulator.check_quality_criterium(emulator_sample_loglikes, parameters=emulator_state['parameters'], reference_loglike = reference_loglike):
             print("Emulator not good enough")
             return False, None
         else:

@@ -5,6 +5,40 @@ import jax.numpy as jnp
 
 plot_format = 'png'
 
+def data_covmat_plot(covmat, title, file_name):
+    plt.figure()
+    plt.axis('equal')
+    plt.title(title)
+    max_abs = np.max(np.abs(covmat))
+    plt.imshow(covmat, cmap='seismic', vmin=-max_abs, vmax=max_abs)
+    plt.colorbar()
+    plt.savefig(file_name)
+    plt.close()
+
+    gc.collect()
+
+def variance_plots(variances, title, y_label, file_name):
+    plt.figure()
+    plt.grid()
+    plt.title(title)
+    components = np.arange(len(variances))+1
+    plt.plot(components, variances)
+    plt.xlabel('PCA component')
+    plt.ylabel(y_label)
+    plt.savefig(file_name)
+
+def eigenvector_plots(eigenvectors, title, file_name):
+    plt.figure()
+    plt.grid()
+    plt.title(title)
+    x = np.arange(len(eigenvectors[0]))+1
+    for i in range(len(eigenvectors)):
+        plt.plot(x, eigenvectors[i], label='Component '+str(i+1))
+    plt.legend()
+    plt.xlabel('data bin')
+    plt.ylabel('Eigenvector')
+    plt.savefig(file_name)
+
 
 def plot_loglikes(loglikes, parameters, xlabel, file_name):
     plt.figure()

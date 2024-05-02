@@ -11,7 +11,7 @@ import copy
 
 import scipy as sp
 
-from OLE.plotting import data_plot_raw, data_plot_normalized, pca_parameter_plot
+from OLE.plotting import data_plot_raw, data_plot_normalized, pca_parameter_plot, variance_plots, eigenvector_plots
 
 class data_processor(BaseClass):
 
@@ -69,7 +69,39 @@ class data_processor(BaseClass):
 
             # testset fraction
             'testset_fraction': None,
+
+            # Load of (observable) covmats
+            # If obersavables are not provided, the data is normalized using the means and stds of the data.
+
+            # The observable covmats can be either 1 dimensional and represent the diagonal of the covariance matrix or 2 dimensional and represent the full covariance matrix.
+            # If None is given we compute the covariance matrix from the data.
+            'observable_covmat': None,
+
+            # Normalize by full covariance matrix? If False, we normalize by the diagonal of the covariance matrix. 
+            # Note that a full covmat normalization is computationally more expensive.
+            'normalize_by_full_covmat': False,
+            
         }
+
+        self.data_covmat = kwargs['data_covmat']
+
+        if self.data_covmat is not None:
+            # check if the data covmat is 1 or 2 dimensional
+            if len(self.data_covmat.shape) == 1:
+                # if the data covmat is 1 dimensional, we assume that it is the diagonal of the covariance matrix
+                self.data_covmat = jnp.diag(self.data_covmat)
+            elif len(self.data_covmat.shape) == 2:
+                pass 
+            else:
+                # for scalar quantities, the data covmat is a 1x1 matrix
+                self.data_covmat = jnp.array([[self.data_covmat]])
+
+            # check that size of covmat fits the output size
+            if (self.data_covmat.shape[0] != self.output_size) or (self.data_covmat.shape[1] != self.output_size):
+                raise ValueError("Size of data covmat does not fit the output size. Expected size: %d, given size: %d", self.output_size, self.data_covmat.shape[0])
+            
+            self.data_covmat = jnp.array(self.data_covmat)
+
 
         # The hyperparameters are a dictionary of the hyperparameters for the different quantities. The keys are the names of the quantities.
         self.hyperparameters = defaulthyperparameters
@@ -118,11 +150,17 @@ class data_processor(BaseClass):
 
         # calculate the means and stds of the output data
         self.output_means = jnp.mean(self.output_data_raw, axis=0)
-        self.output_stds = jnp.std(self.output_data_raw, axis=0)
+
+        if self.data_covmat is not None: 
+            self.output_stds = jnp.sqrt(jnp.diag(self.data_covmat))
+        else:
+            self.output_stds = jnp.std(self.output_data_raw, axis=0)
 
         # set all stds which are 0 to 1
         self.input_stds = jnp.where(self.input_stds == 0, 1, self.input_stds)
         self.output_stds = jnp.where(self.output_stds == 0, 1, self.output_stds)
+
+        # 
 
     def compute_compression(self):
         # Compress the normalized data. This is done by applying a PCA to the normalized data.
@@ -160,6 +198,15 @@ class data_processor(BaseClass):
 
         # calculate the projection matrix
         self.projection_matrix = copy.deepcopy(eigenvectors[:, :n_components])
+
+        # plot the explained variance, the cumulative explained variance and the eigenvectors
+        if self.hyperparameters['plotting_directory'] is not None:
+            # check that the directory exists
+            if not os.path.exists(self.hyperparameters['plotting_directory']+ "/PCA_plots"):
+                os.makedirs(self.hyperparameters['plotting_directory']+ "/PCA_plots")
+            variance_plots(explained_variance, 'explained variance '+self.quantity_name,'explained variance ', self.hyperparameters['plotting_directory']+ "/PCA_plots/explained_variance_"+self.quantity_name+'.png')
+            variance_plots(cumulative_explained_variance, 'cumulative variance '+self.quantity_name,'cumulative variance ', self.hyperparameters['plotting_directory']+ "/PCA_plots/cumulative_variance_"+self.quantity_name+'.png')
+            eigenvector_plots(eigenvectors, 'Eigenvectors '+self.quantity_name ,self.hyperparameters['plotting_directory']+ "/PCA_plots/eigenvectors_"+self.quantity_name+'.png')
         
         del eigenvectors
         del eigenvalues
@@ -178,7 +225,11 @@ class data_processor(BaseClass):
         self.input_data_normalized = (self.input_data_raw - self.input_means) / self.input_stds
 
         # normalize the output data
-        self.output_data_normalized = (self.output_data_raw - self.output_means) / self.output_stds
+        if self.hyperparameters['normalize_by_full_covmat'] and self.data_covmat is not None:
+            _ = self.output_data_raw - self.output_means
+            self.output_data_normalized = jnp.dot(jnp.linalg.inv(self.data_covmat), _.T).T
+        else:
+            self.output_data_normalized = (self.output_data_raw - self.output_means) / self.output_stds
 
         # if there is a plotting directory, plot the raw output data and the normalized output data
         if self.hyperparameters['plotting_directory'] is not None:
@@ -190,6 +241,25 @@ class data_processor(BaseClass):
 
         pass
 
+    def denormalize_data(self, output_data_normalized):
+        # denormalize the data
+        if self.hyperparameters['normalize_by_full_covmat'] and self.data_covmat is not None:
+            output_data_raw = jnp.dot(self.data_covmat, output_data_normalized.T).T + self.output_means
+        else:
+            output_data_raw = output_data_normalized * self.output_stds + self.output_means
+
+        return output_data_raw
+    
+    def denormalize_std(self, output_std_normalized):
+        # denormalize the data
+        if self.hyperparameters['normalize_by_full_covmat'] and self.data_covmat is not None:
+            output_std_raw = jnp.dot(self.data_covmat, output_std_normalized.T).T
+        else:
+            output_std_raw = output_std_normalized * self.output_stds
+
+        return output_std_raw
+
+    # data compression
     def compress_training_data(self):
         # project the output data onto the projection matrix
         self.output_data_emulator = jnp.dot(self.output_data_normalized, self.projection_matrix)
@@ -218,20 +288,7 @@ class data_processor(BaseClass):
             
         pass
 
-
-    # The following functions are used to process the input and output data of the emulator outside the training process
-    def normalize_input_data(self, input_data_raw):
-        # normalize the data
-        input_data_normalized = (input_data_raw - self.input_means) / self.input_stds
-
-        return input_data_normalized
-        
-    def denormalize_input_data(self, input_data_normalized):
-        # normalize the data
-        input_data_raw = input_data_normalized * self.input_stds + self.input_means
-
-        return input_data_raw
-
+    # The following functions are used to process the output data of the emulator outside the training process
     def decompress_data(self, output_data_emulator):
         # undo the second normalization
         output_data_emulator = output_data_emulator * self.output_pca_stds + self.output_pca_means
@@ -249,16 +306,17 @@ class data_processor(BaseClass):
         output_std_normalized = jnp.dot(output_std_emulator, jnp.abs(self.projection_matrix.T))
 
         return output_std_normalized
-    
-    def denormalize_data(self, output_data_normalized):
-        # denormalize the data
-        output_data_raw = output_data_normalized * self.output_stds + self.output_means
 
-        return output_data_raw
-    
-    def denormalize_std(self, output_std_normalized):
-        # denormalize the data
-        output_std_raw = output_std_normalized * self.output_stds
+    # The following functions are used to process the input data of the emulator outside the training process
+    def normalize_input_data(self, input_data_raw):
+        # normalize the data
+        input_data_normalized = (input_data_raw - self.input_means) / self.input_stds
 
-        return output_std_raw
+        return input_data_normalized
+        
+    def denormalize_input_data(self, input_data_normalized):
+        # normalize the data
+        input_data_raw = input_data_normalized * self.input_stds + self.input_means
+
+        return input_data_raw
 

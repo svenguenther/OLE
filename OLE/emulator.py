@@ -71,7 +71,7 @@ class Emulator(BaseClass):
 
         pass
 
-    def initialize(self, likelihood, ini_state=None, **kwargs):
+    def initialize(self, likelihood=None, ini_state=None, **kwargs):
         # default hyperparameters
         defaulthyperparameters = {
             # kernel
@@ -95,7 +95,6 @@ class Emulator(BaseClass):
             # However, if we have a state in the cache, we can load the initial state from the cache. And not a single theory call has to be made.
             'load_initial_state': False,
 
-
             ## TESTING:
 
             # should we test the performance of the emulator once it is trained? If Flase, the following parameters are not needed
@@ -104,7 +103,8 @@ class Emulator(BaseClass):
             # numer of test samples to determine the quality of the emulator
             'N_quality_samples': 5,
 
-            'jit_threshold': 100, # number of samples to be emulated before we jit the emulator to accelerate it
+            # path to a directory with data covmats to do better normalization. If given, the emulator will search for data covmats in this directoy and if one is found, it will be used for normalization
+            'data_covmat_directory': None,
 
             # here we define the quality threshold for the emulator. If the emulator is below this threshold, it is retrained. We destinguish between a constant, a linear and a quadratic threshold
             'quality_threshold_constant': 0.1,
@@ -119,7 +119,8 @@ class Emulator(BaseClass):
             'plotting_directory': None,
 
             # only relevant for cobaya
-            'cobaya_state_file': None,
+            'cobaya_state_file': None, # TODO: put this somewhere else. This is only used in the cobaya wrapper
+            'jit_threshold': 10, # number of samples to be emulated before we jit the emulator to accelerate it TODO: put this somewhere else
 
             # learn about the actual emulation task to estimate 'quality_threshold_quadratic'.
             'N_sigma': 6,
@@ -158,7 +159,8 @@ class Emulator(BaseClass):
             self.input_parameters = list(ini_state['parameters'].keys())
 
         self.likelihood = likelihood
-        self.likelihood.initialize(**kwargs)
+        if self.likelihood is not None:
+            self.likelihood.initialize(**kwargs)
 
         # A state dictionary is a nested dictionary with the following structure:
         # state = {
@@ -202,6 +204,23 @@ class Emulator(BaseClass):
 
             self.debug("Quality threshold quadratic: ", self.hyperparameters['quality_threshold_quadratic'])
 
+        # if we have a data_covmat_directory we search for the data covmat in this directory
+        self.data_covmats = {quantity_name: None for quantity_name in ini_state['quantities'].keys()}
+        if self.hyperparameters['data_covmat_directory'] is not None:
+            # check whether the directory exists
+            if not os.path.exists(self.hyperparameters['data_covmat_directory']):
+                self.warning("Data covmat directory does not exist. Cannot use data covmat for normalization.")
+            else:
+                # search for the data covmat in the directory. They should be named <quantity_name>.covmat
+                for quantity_name, quantity in ini_state['quantities'].items():
+                    covmat_file = self.hyperparameters['data_covmat_directory'] + '/' + quantity_name + '.covmat'
+                    if os.path.exists(covmat_file):
+                        self.debug("Data covmat found for quantity %s. Using it for normalization.", quantity_name)
+                        self.data_covmats[quantity_name] = np.loadtxt(covmat_file)
+                    else:
+                        self.debug("Data covmat not found for quantity %s. Not using it for normalization.", quantity_name)
+
+
         # Here: Create the emulators for the different quantities
         self.emulators = {}
 
@@ -214,7 +233,7 @@ class Emulator(BaseClass):
             
             # initialize the emulator for the quantity
             self.emulators[quantity_name] = GP_predictor(quantity_name, debug=self.debug_mode)
-            self.emulators[quantity_name].initialize(ini_state, **kwargs)
+            self.emulators[quantity_name].initialize(ini_state,data_covmat=self.data_covmats[quantity_name], **kwargs)
 
         # initialize the points which were already tested with the quality criterium
         self.quality_points = []
@@ -251,7 +270,14 @@ class Emulator(BaseClass):
 
         if state_added:
             # write to log that the state was added
-            _ = "State added to emulator: " + " ".join([key+ ': ' +str(value) for key, value in new_state['parameters'].items()]) + " at loglike: " + str(new_state['loglike']) + " max. loglike: " + str(self.data_cache.max_loglike) + "\n"
+            _ = "State added to emulator: " + "; ".join([key+ ': ' +str(value) for key, value in new_state['parameters'].items()]) + " at loglike: " + str(new_state['loglike']) + " max. loglike: " + str(self.data_cache.max_loglike) + "\n"
+            self.write_to_log(_)
+            # write to log the current size of the data cache
+            _ = "Current data cache size: %d\n" % len(self.data_cache.states)
+            self.write_to_log(_)
+        else:
+            # write to log that the state was not added
+            _ = "State not added to emulator: " + "; ".join([key+ ': ' +str(value) for key, value in new_state['parameters'].items()]) + " at loglike: " + str(new_state['loglike']) + " max. loglike: " + str(self.data_cache.max_loglike) + "\n"
             self.write_to_log(_)
             # write to log the current size of the data cache
             _ = "Current data cache size: %d\n" % len(self.data_cache.states)
@@ -355,7 +381,7 @@ class Emulator(BaseClass):
 
         del input_data_raw_jax
         del input_data_raw
-            
+
         self.trained = True
 
         jax.clear_backends()
@@ -371,6 +397,12 @@ class Emulator(BaseClass):
             for i in range(len(parameters[0])):
                 plot_loglikes(loglikes[:,0], parameters[:,i], self.input_parameters[i], self.hyperparameters['plotting_directory']+'/loglike_'+str(i)+'.png')
         pass
+
+    def set_data_covmats(self, data_covmats):
+        # set the data covmats for the different quantities
+        for quantity_name, data_covmat in data_covmats.items():
+            self.data_covmats[quantity_name] = data_covmat
+            self.emulators[quantity_name].data_processor.data_covmat = data_covmat
 
     # @partial(jax.jit, static_argnums=0)
     def emulate(self, parameters):
@@ -513,7 +545,7 @@ class Emulator(BaseClass):
 
     
 
-    def check_quality_criterium(self, loglikes, reference_loglike = None):
+    def check_quality_criterium(self, loglikes, parameters, reference_loglike = None):
         # check whether the emulator is good enough to be used
         # if the emulator is not yet trained, we return False
         if not self.trained:
@@ -539,7 +571,7 @@ class Emulator(BaseClass):
         if mean_loglike > max_loglike:
             if std_loglike > self.hyperparameters['quality_threshold_constant']:
                 self.debug("Emulator quality criterium NOT fulfilled")
-                _ = "Quality criterium NOT fulfilled; Max loglike: %f, delta loglikes: " % (max_loglike) + " ".join([str(loglike) for loglike in loglikes]) + "\n"
+                _ = "Quality criterium NOT fulfilled; "+"; ".join([key+ ': ' +str(value) for key, value in parameters.items()]) + " Max loglike: %f, delta loglikes: " % (max_loglike) + " ".join([str(loglike) for loglike in loglikes]) + "\n"
                 self.write_to_log(_)
                 return False
         else:
@@ -549,12 +581,12 @@ class Emulator(BaseClass):
             # the full criterium 
             if std_loglike > self.hyperparameters['quality_threshold_constant'] + self.hyperparameters['quality_threshold_linear']*delta_loglike + self.hyperparameters['quality_threshold_quadratic']*delta_loglike**2:
                 self.debug("Emulator quality criterium NOT fulfilled")
-                _ = "Quality criterium NOT fulfilled; Max loglike: %f, delta loglikes: " % (max_loglike) + " ".join([str(loglike) for loglike in loglikes]) + "\n"
+                _ = "Quality criterium NOT fulfilled; "+"; ".join([key+ ': ' +str(value) for key, value in parameters.items()]) + " Max loglike: %f, delta loglikes: " % (max_loglike) + " ".join([str(loglike) for loglike in loglikes]) + "\n"
                 self.write_to_log(_)
                 return False
 
         self.debug("Emulator quality criterium fulfilled")
-        _ = "Quality criterium fulfilled; Max loglike: %f, delta loglikes: " % (max_loglike) + " ".join([str(loglike) for loglike in loglikes]) + "\n"
+        _ = "Quality criterium fulfilled; "+"; ".join([key+ ': ' +str(value) for key, value in parameters.items()]) + " Max loglike: %f, delta loglikes: " % (max_loglike) + " ".join([str(loglike) for loglike in loglikes]) + "\n"
         self.write_to_log(_)
         self.continuous_successful_calls += 1
 
