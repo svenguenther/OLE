@@ -26,6 +26,9 @@ def variance_plots(variances, title, y_label, file_name):
     plt.xlabel('PCA component')
     plt.ylabel(y_label)
     plt.savefig(file_name)
+    plt.close()
+
+    gc.collect()
 
 def eigenvector_plots(eigenvectors, title, file_name):
     plt.figure()
@@ -38,6 +41,9 @@ def eigenvector_plots(eigenvectors, title, file_name):
     plt.xlabel('data bin')
     plt.ylabel('Eigenvector')
     plt.savefig(file_name)
+    plt.close()
+
+    gc.collect()
 
 
 def plot_loglikes(loglikes, parameters, xlabel, file_name):
