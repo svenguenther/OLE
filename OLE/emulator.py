@@ -493,12 +493,16 @@ class Emulator(BaseClass):
 
     def set_error(self):
 
+        if self.hyperparameters['sparse_GP_points'] > 0.:
+            # require errors for sparse GP's
+            self.hyperparameters['error_tolerance'] = 1.
+
+
         if self.hyperparameters['error_tolerance'] == 0.:
             for quantity_name, quantity in self.ini_state['quantities'].items():
                 self.emulators[quantity_name].disable_error() 
 
         else:
-
             #num_GPs = 0
             #for quantity_name, quantity in self.ini_state['quantities'].items():
             #    self.emulators[quantity_name].reset_error() 

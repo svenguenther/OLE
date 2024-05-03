@@ -32,7 +32,7 @@ Data collection:
 Normalization:
 | parameter   | default    | description       |
 | :---    | :---   | :---     |
-| ```explained_variance_cutoff``` | ```0.9999``` | The level of compression of each observable is determined by the number of PCA components. Therefore, we increase the number of PCA components until the explained variance exceeds that value |
+| ```explained_variance_cutoff``` | ```0.999``` | The level of compression of each observable is determined by the number of PCA components. Therefore, we increase the number of PCA components until the explained variance exceeds that value |
 | ```max_output_dimensions``` | ```30``` | The maximal number of PCA components. |
 | ```data_covmat_directory``` | ```None``` | We can provide the emulator with a dictionary of data covmats (keys are the names of the observables). They can be either the full (2-dimensional) covariance matrix or the (1-dimensional) diagonal of the covariance matrix. These covariance matrices are used to normalize the data. This is particular helpful to indicate the emulator which parts of the observable have to be computed precisesely and which parts have only a low significance for the total likelihood. If no covariance matrices are provided, the normalization is performed bin wise and the code assumes the entire range of the output to be of same relevance for the total likelihood. |
 | ```normalize_by_full_covmat``` | ```False``` | If the flag is set to true, we normalize the observables by the full covariance, thus, go into the data eigenspace. This is already partly that what the PCA is supposed to do. It can be computationally expensive for high dimensional observables. |
@@ -42,13 +42,14 @@ Training:
 | parameter   | default    | description       |
 | :---    | :---   | :---     |
 | ```kernel``` | ```RBF``` | GP Kernel. Currently implemented: [RBF] |
-| ```learning_rate``` | ```0.02``` | Learning rate for ADAM optimizer when fitting the GP parameters |
+| ```learning_rate``` | ```0.02``` | Learning rate for ADAM optimizer when fitting the GP parameters. Note that sparse GP typically require a smaller learning rate than ordinary ones |
 | ```num_iters``` | ```100``` | Number of training epochs. |
 | ```min_data_points``` | ```80``` | Number of minimal states in the cache before the emulator can be trained. |
 | ```kernel_fitting_frequency``` | ```20``` | Frequency of how many new data points are added to the cache until a new compression is computed and the parameters of the GP are fitted again. Since this step is rather computational expensive we do not want to refit every step. Note however, that every new point in the cache will be utilized in the prediction even if the kernels are not refitted! |
-| ```sparse_GP_points``` | ```0``` | If not set to ```0``` we try to use condensate the information of all training points into a reduced training set (sparse GPs). The initial guess of the number of estimated sparse data points is ```sparse_GP_points```. However, in the iterative search for the best number of data points there is a certain error tolerance that we deem acceptable for the acceleration. |
-| ```noise_percentage``` | ```0.0``` | Sets the noise percentage for the error tolerance for computing sparse GPs. (see ```sparse_GP_points```). |
-| ```error_tolerance``` | ```0.1``` | Default value for error tolerance for sparse GPs (see ```sparse_GP_points```). |
+| ```sparse_GP_points``` | ```0``` | If not set to ```0``` we try to use condensate the information of all training points into a reduced training set (sparse GPs). The initial guess of the number of estimated sparse data points is ```sparse_GP_points```. However, in the iterative search for the best number of data points there is a certain error tolerance that we deem acceptable for the acceleration. It should be choosen rather small as the subleading PCA components can be fit with very few data points. |
+| ```error_tolerance``` | ```1.``` | If not set to ```0``` a noise term is added to the Kernel that is determined by the ```explained_variance_cutoff``` for each PCA component. This prevents the GP from fitting random noise introduced in the PCA analysis. It is also a central component of the sparse GP method since it is used to determine the optimal number of sparse points. |
+| ```error_boost``` | ```2.``` | Since the assumed noise of the sparse GP is constnat while our target precision is dependant on the distance to the best-fit, we can allow the sparse GP to accept a larger noise for fewer sparse points and more efficency. The actual error is then regained by a non-uniform sampling of points. Values smaller or close to one lead to the number of sparse points close to the maximum data-size and the advantage of sparse GPs are lost |
+| ```excess_fraction``` | ```0.1``` | Allows a fraction of points to exxeecd the error limits to allow for fewer sparse points. Too large values lead to the GP constantly aquering new points and never converging. Too small values lead to too many sparse points being used to fit outliers in regions where the error can be very large|
 
 
 Uncertainty qualification:

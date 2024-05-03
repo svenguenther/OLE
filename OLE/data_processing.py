@@ -57,7 +57,7 @@ class data_processor(BaseClass):
 
         defaulthyperparameters = {
             # explained variance cutoff is the minimum explained variance which is required for the PCA compression. Once this value is reached, the PCA compression is stopped.
-            'explained_variance_cutoff': 0.9999,
+            'explained_variance_cutoff': 0.999,
             # this should also inform the error of the GPs to remain consistent. Or alternatively since we specify error params,
             # those might also set this parameter
 

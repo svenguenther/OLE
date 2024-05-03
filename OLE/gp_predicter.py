@@ -64,6 +64,7 @@ class GP_predictor(BaseClass):
             'excess_fraction': 0.1,
             'error_boost':2.,
 
+
         }
 
         # The hyperparameters are a dictionary of the hyperparameters for the different quantities. The keys are the names of the quantities.
@@ -422,6 +423,7 @@ class GP(BaseClass):
 
             # number of sparse GP points
             'sparse_GP_points': 0,
+            'is_sparse': False # we could have sparse_GP_points > 0 and is_sparse = False if sparse fails to converge
             
         }
 
@@ -503,17 +505,26 @@ class GP(BaseClass):
         prior = gpx.gps.Prior(mean_function=meanf, kernel=kernel)
         prior = prior.replace(jitter = 1e-20)
 
+        lr = lambda t: self.hyperparameters['learning_rate']
+
+        
         del self.opt_posterior
         self.opt_posterior = None
         gc.collect()
 
 
+
+        use_nonsparse = True
+
         if self.hyperparameters['sparse_GP_points'] > 0:
+            
+            self.hyperparameters['is_sparse'] = True
+
             sparse_trained = False
+            use_nonsparse = False
+                
 
-            #lr = lambda t: jnp.exp(-self.hyperparameters['learning_rate']*t)
-            lr = lambda t: self.hyperparameters['learning_rate']
-
+    
 
             # Create the likelihood
             likelihood = gpx.gps.Gaussian(num_datapoints=self.D.n)
@@ -534,31 +545,35 @@ class GP(BaseClass):
                 # define initial inducing points
                 z = self.input_data[:self.hyperparameters['sparse_GP_points'] ]
 
-                if len(z) >= len(self.input_data)-10:
+                if len(z) >= len(self.input_data)-self.hyperparameters['kernel_fitting_frequency']:
                     sparse_trained = True
-                    # this will be last pass... maybe swap to normal GP ... !!
-                q = gpx.variational_families.CollapsedVariationalGaussian(
-                    posterior=posterior, inducing_inputs=z
-                )
+                    use_nonsparse = True
+                    print('falling back to normal GP')
+                    lr = lr*10. # generally non-sparse GP need a larger learning rate. We could define two seperate ones?
+                
+                if not use_nonsparse:
+                    q = gpx.variational_families.CollapsedVariationalGaussian(
+                        posterior=posterior, inducing_inputs=z
+                    )
                  
-                self.opt_posterior, history = gpx.fit(
-                    model=q,
-                    objective=elbo,
-                    train_data=self.D,
-                    optim=ox.adamw(learning_rate=lr),
-                    num_iters=self.hyperparameters['num_iters'],
-                    safe=True,
-                    key=jax.random.PRNGKey(0),
-                )
-                # now we check if our error on the training points is too large
-                latent_dist = self.opt_posterior(self.input_data, train_data=self.D)
-                predictive_dist = self.opt_posterior.posterior.likelihood(latent_dist)
-                predictive_std = predictive_dist.stddev()
+                    self.opt_posterior, history = gpx.fit(
+                        model=q,
+                        objective=elbo,
+                        train_data=self.D,
+                        optim=ox.adamw(learning_rate=lr),
+                        num_iters=self.hyperparameters['num_iters'],
+                        safe=True,
+                        key=jax.random.PRNGKey(0),
+                    )
+                    # now we check if our error on the training points is too large
+                    latent_dist = self.opt_posterior(self.input_data, train_data=self.D)
+                    predictive_dist = self.opt_posterior.posterior.likelihood(latent_dist)
+                    predictive_std = predictive_dist.stddev()
 
-                add_points = False
-                n_poor = 0
-                for std in predictive_std:
-                    if std**2 > self.hyperparameters['error_tolerance'] * self.hyperparameters['error_boost']: # acceptable boost
+                    add_points = False
+                    n_poor = 0
+                    for std in predictive_std:
+                        if std**2 > self.hyperparameters['error_tolerance'] * self.hyperparameters['error_boost']: # acceptable boost
                         # we require a constant error over all points in sparse GP training. However the sampler 
                         # is happy it only points arround the best-fit are accurate and tolerates a higher error in the 
                         # outer regions. We employ a simple method to impklement this. We do not try to add points until 
@@ -580,27 +595,27 @@ class GP(BaseClass):
                         # but not leading to any convergence. The GP will be stuck on low sparse points and not becoming predictive
                         # reasonable values seem to be in the range of tnes of percent 
                 
-                        n_poor += 1
-                if n_poor > len(predictive_std) * self.hyperparameters['excess_fraction']: # acceptable ratio, allowing too much will overaquire points, allowing too little forces too many spares points
-                    add_points = True
-                if add_points:
-                    self.hyperparameters['sparse_GP_points'] += 10
-                    self.hyperparameters['sparse_GP_points'] = min(self.hyperparameters['sparse_GP_points'],len(self.input_data) -10)
+                            n_poor += 1
+                    if n_poor > len(predictive_std) * self.hyperparameters['excess_fraction']: # acceptable ratio, allowing too much will overaquire points, allowing too little forces too many spares points
+                        add_points = True
+                    if add_points:
+                        self.hyperparameters['sparse_GP_points'] += self.hyperparameters['kernel_fitting_frequency']
+                        self.hyperparameters['sparse_GP_points'] = min(self.hyperparameters['sparse_GP_points'],len(self.input_data) -self.hyperparameters['kernel_fitting_frequency'])
                     
-                if not add_points:
-                    # done
-                    sparse_trained = True
+                    if not add_points:
+                        # done
+                        sparse_trained = True
             
-            print('used ', self.hyperparameters['sparse_GP_points'], ' sparse points')
-            print(n_poor, 'points above acceptable error bounds')
+                    print('npoor/points ',n_poor, '/', self.hyperparameters['sparse_GP_points'] )
+                    
                 
-                
+               
 
-        else:
+        if use_nonsparse:
 
-            #lr = lambda t: jnp.exp(-self.hyperparameters['learning_rate']*t)
-            lr = lambda t: self.hyperparameters['learning_rate']*10.
+            self.hyperparameters['is_sparse'] = False
 
+            
             # Create the likelihood
             likelihood = gpx.gps.Gaussian(num_datapoints=self.D.n)
             likelihood = likelihood.replace_trainable(obs_stddev = False)
@@ -617,7 +632,7 @@ class GP(BaseClass):
                 model=posterior,
                 objective=negative_mll,
                 train_data=self.D,
-                optim=ox.adam(learning_rate=lr),
+                optim=ox.adam(learning_rate=lr), 
                 num_iters=self.hyperparameters['num_iters'],
                 safe=True, # what does this do?
                 key=jax.random.PRNGKey(0),
@@ -669,7 +684,7 @@ class GP(BaseClass):
         # predictive_dist = self.opt_posterior.likelihood(latent_dist)
         # predictive_mean = predictive_dist.mean()
         # ab = self.opt_posterior.predict_mean_single(input_data, self.D)
-        if self.hyperparameters['sparse_GP_points'] == 0:
+        if not self.hyperparameters['is_sparse']:
         
             if self.recompute_kernel_matrix:
                 inv_Kxx = self.opt_posterior.compute_inv_Kxx(self.D)
@@ -692,7 +707,7 @@ class GP(BaseClass):
     # @partial(jit, static_argnums=0) 
     def predict_value_and_std(self, input_data, return_std=False):
         # Predict the output data for the given input data.
-        if self.hyperparameters['sparse_GP_points'] == 0:
+        if not self.hyperparameters['is_sparse']:
             inv_Kxx = self.opt_posterior.compute_inv_Kxx(self.D)
 
             ac = self.opt_posterior.calculate_mean_single_from_inv_Kxx(input_data, self.D, inv_Kxx)
@@ -719,7 +734,7 @@ class GP(BaseClass):
 
         N = self.hyperparameters['N_quality_samples']
 
-        if self.hyperparameters['sparse_GP_points'] == 0:
+        if not self.hyperparameters['is_sparse']:
             
             if self.recompute_kernel_matrix:
                 inv_Kxx = self.opt_posterior.compute_inv_Kxx(self.D)
@@ -756,7 +771,7 @@ class GP(BaseClass):
         
         N = self.hyperparameters['N_quality_samples']
 
-        if self.hyperparameters['sparse_GP_points'] == 0:
+        if not self.hyperparameters['is_sparse']:
             if self.recompute_kernel_matrix:
                 inv_Kxx = self.opt_posterior.compute_inv_Kxx(self.D)
                 self.inv_Kxx = inv_Kxx
