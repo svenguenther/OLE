@@ -549,7 +549,7 @@ class GP(BaseClass):
                     sparse_trained = True
                     use_nonsparse = True
                     print('falling back to normal GP')
-                    lr = lr*10. # generally non-sparse GP need a larger learning rate. We could define two seperate ones?
+                    lr = lambda t: self.hyperparameters['learning_rate'] * 10. # generally non-sparse GP need a larger learning rate. We could define two seperate ones?
                 
                 if not use_nonsparse:
                     q = gpx.variational_families.CollapsedVariationalGaussian(
@@ -565,6 +565,8 @@ class GP(BaseClass):
                         safe=True,
                         key=jax.random.PRNGKey(0),
                     )
+
+
                     # now we check if our error on the training points is too large
                     latent_dist = self.opt_posterior(self.input_data, train_data=self.D)
                     predictive_dist = self.opt_posterior.posterior.likelihood(latent_dist)
@@ -596,6 +598,9 @@ class GP(BaseClass):
                         # reasonable values seem to be in the range of tnes of percent 
                 
                             n_poor += 1
+
+                    print('npoor/points ',n_poor, '/', self.hyperparameters['sparse_GP_points'] )
+                    
                     if n_poor > len(predictive_std) * self.hyperparameters['excess_fraction']: # acceptable ratio, allowing too much will overaquire points, allowing too little forces too many spares points
                         add_points = True
                     if add_points:
@@ -606,7 +611,6 @@ class GP(BaseClass):
                         # done
                         sparse_trained = True
             
-                    print('npoor/points ',n_poor, '/', self.hyperparameters['sparse_GP_points'] )
                     
                 
                

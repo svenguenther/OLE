@@ -79,8 +79,7 @@ class Emulator(BaseClass):
 
             # kernel fitting frequency. Every n-th state the kernel parameters are fitted.
             'kernel_fitting_frequency': 4,
-            'test_noise_levels': True,
-
+            'test_noise_levels': 100,
             # the number of data points in cache before the emulator is to be trained
             'min_data_points': 80,
 
@@ -112,6 +111,8 @@ class Emulator(BaseClass):
             'quality_threshold_quadratic': 0.0001,
 
             'error_tolerance' : 1.,
+            'sparse_GP_points' : 0.,
+            'test_noise_levels_counter' : 50,
             # the radius around the checked points for which we do not need to check the quality criterium
             'quality_points_radius': 0.0,
 
@@ -290,6 +291,7 @@ class Emulator(BaseClass):
             if self.added_data_points%self.hyperparameters['kernel_fitting_frequency'] == 0:
                 self.train()
                 emulator_updated = True
+                self.hyperparameters['test_noise_levels_counter'] = 100
             else:
                 if self.hyperparameters['sparse_GP_points'] == 0:
                     self.update()
