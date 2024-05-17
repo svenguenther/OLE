@@ -42,15 +42,16 @@ class MinimizeSampler(Sampler):
             self.use_gradients = kwargs['use_gradients'] if 'use_gradients' in kwargs else True
 
             # set the method for the minimization
-            self.method = 'L-BFGS-B' if 'method' not in kwargs else kwargs['method']
+            self.method = 'TNC' if 'method' not in kwargs else kwargs['method']
 
             # 
 
             # run evaluation once to train the emulator
-            if self.use_emulator:
+            if self.use_emulator and not self.emulator.trained:
                 self.info("Training emulator")
-                parameter_list = jnp.array([self.parameter_dict[key]['ref']['mean'] for key in self.parameter_dict.keys()])
-                self.compute_total_loglike_from_parameters(parameter_list/self.proposal_lengths)
+                parameter_list = jnp.array([self.parameter_dict[key]['ref']['mean'][0] for key in self.parameter_dict.keys()])
+                parameter_list = self.transform_parameters_into_normalized_eigenspace(parameter_list)
+                self.compute_total_loglike_from_normalized_parameters(parameter_list)
                 self.info("Emulator trained")
 
             # output error if we use the emulator but it is not trained
@@ -70,25 +71,20 @@ class MinimizeSampler(Sampler):
             # Run the sampler.
 
             # get the initial guess
-            initial_position = self.get_initial_position(N=1, noramlized=True)[0]
-            initial_position1 = self.get_initial_position(N=1, noramlized=False)[0]
+            initial_position = self.get_initial_position(N=1, normalized=True)[0]
+            initial_position1 = self.get_initial_position(N=1, normalized=False)[0]
 
             # get the bounds
             bounds = self.get_bounds(normalized=True)
             bounds1 = self.get_bounds(normalized=False)
 
-
-            print(initial_position)
-            print(initial_position1)
-            print(bounds)
-            print(bounds1)
-
             if self.use_gradients:
                 # create differentiable loglike
                 f = jax.jit(self.emulate_total_minusloglike_from_parameters_differentiable)     # this is the differentiable loglike
                 grad_f = jax.jit(jax.grad(self.emulate_total_minusloglike_from_parameters_differentiable))
-                hessian_f = jax.jit(jax.hessian(self.emulate_total_minusloglike_from_parameters_differentiable))
+                hessian_f = (jax.hessian(self.emulate_total_minusloglike_from_parameters_differentiable))
 
+                self.method = 'TNC'
                 res = self.optimizer(f, 
                                     initial_position, method=self.method, bounds=bounds, 
                                     jac=grad_f, 
@@ -109,12 +105,8 @@ class MinimizeSampler(Sampler):
                     self.inv_hessian = None
                 
             self.res = res
-            self.bestfit = self.denormalize_parameters(res.x)
+            self.bestfit = self.retranform_parameters_from_normalized_eigenspace(res.x)
             self.max_loglike = res.fun
-
-            print(self.bestfit)
-            print(self.max_loglike)
-            print(self.inv_hessian)
             
 
 

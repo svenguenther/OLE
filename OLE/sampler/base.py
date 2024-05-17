@@ -6,7 +6,7 @@ from OLE.theory import Theory
 from OLE.likelihood import Likelihood
 from OLE.emulator import Emulator
 from OLE.utils.mpi import *
-from OLE.plotting import data_covmat_plot
+from OLE.plotting import data_covmat_plot, covmat_diagonal_plot
 
 from functools import partial
 from typing import Tuple
@@ -20,6 +20,7 @@ import copy
 import os
 
 import numpy as np
+import jax.numpy as jnp
 
 import jax.random as random
 
@@ -43,7 +44,8 @@ class Sampler(BaseClass):
     def initialize(self, 
                    parameters, 
                    likelihood=None, 
-                   theory=None, 
+                   theory=None,
+                   emulator=None, 
                    **kwargs):
         
         # Store Theory and initialize if possible
@@ -55,6 +57,12 @@ class Sampler(BaseClass):
         self.likelihood = likelihood
         if self.likelihood is not None:
             self.likelihood.initialize(**kwargs)
+
+        # Store Emulator and initialize if possible
+        self.emulator = None
+        if emulator is not None:
+            self.emulator = emulator
+
 
         
         self.parameter_dict = parameters
@@ -74,6 +82,9 @@ class Sampler(BaseClass):
 
             # plotting directory
             'plotting_directory': None,
+
+            # status print frequency
+            'status_print_frequency': 100,
 
         }
 
@@ -114,46 +125,63 @@ class Sampler(BaseClass):
         # we can now transform the parameters into the (normalized) eigenspace
 
         # remove the parameters from the test state which are not in self.theory.requirements
-        # initialize the emulator
-        self.emulator = Emulator(**kwargs)
 
-        test_state = None
+        # if emulator was not loaded, we need to create one here:
+        if self.emulator is None:
+            # initialize the emulator
+            self.emulator = Emulator(**kwargs)
 
-        if 'load_initial_state' not in kwargs:
-            test_state = self.test_pipeline()
-        else:
-            if not kwargs['load_initial_state']:
+            test_state = None
+
+            if 'load_initial_state' not in kwargs:
                 test_state = self.test_pipeline()
+            else:
+                if not kwargs['load_initial_state']:
+                    test_state = self.test_pipeline()
 
-        # here we check the requirements of the theory code. If they are specified, we initialize the emulator with the requirements
-        # otherwise the emulator is inificalized with all parameters which could also include likelihood parameters!
-        if len(self.theory.requirements) > 0:
-            self.emulator.initialize(self.likelihood, test_state, input_parameters=self.theory.requirements, **kwargs)
-        else:
-            self.emulator.initialize(self.likelihood, test_state, **kwargs)
+            # here we check the requirements of the theory code. If they are specified, we initialize the emulator with the requirements
+            # otherwise the emulator is inificalized with all parameters which could also include likelihood parameters!
+            if len(self.theory.requirements) > 0:
+                self.emulator.initialize(self.likelihood, test_state, input_parameters=self.theory.requirements, **kwargs)
+            else:
+                self.emulator.initialize(self.likelihood, test_state, **kwargs)
 
 
         pass
 
-    def normalize_parameters(self, parameters):
-        # this function normalizes the parameters
-        return (parameters - self.proposal_means) / jnp.sqrt(self.eigenvalues)
-    
-    def denormalize_parameters(self, parameters):
-        # this function denormalizes the parameters
-        return parameters * jnp.sqrt(self.eigenvalues) + self.proposal_means
+    def print_status(self, i, chain):
+        # this function computes the effective sample size and prints the status of the chain after the i-th interation. This is only done when i%100==0
+        if ((i+1) % self.hyperparameters['status_print_frequency']) == 0:
+            ess = self.estimate_effective_sample_size(chain[:i,:])
+            mean_ess = np.mean(ess)
+            self.info("Iteration %d: Mean ESS = %f", i, mean_ess)
+            self.info("Iteration %d: Mean ESS/sek = %f", i, mean_ess/self.time_from_start())
+            
+        return 0
+
+    def estimate_effective_sample_size(self, chain):
+        ESS = np.zeros(chain.shape[1])
+
+        for i in range(chain.shape[1]):
+            mean = np.mean(chain[:,i])
+            autocorrelation_1 = np.sum((chain[1:,i]-mean)*(chain[:-1,i]-mean))/np.sum((chain[:,i]-mean)**2)
+
+            ESS[i] = len(chain) / ( (1 + autocorrelation_1)/(1-autocorrelation_1) )
+
+        return ESS
 
     def denormalize_inv_hessematrix(self, matrix):
         # this function denormalizes the matrix
-        return jnp.dot(jnp.diag(jnp.sqrt(self.eigenvalues)), jnp.dot(matrix, jnp.diag(jnp.sqrt(self.eigenvalues))))
+        
+        return jnp.dot(self.inv_eigenvectors.T,  jnp.dot( jnp.dot(matrix, jnp.diag(self.eigenvalues)), self.inv_eigenvectors))
 
     def transform_parameters_into_normalized_eigenspace(self, parameters):
         # this function transforms the parameters into the normalized eigenspace
-        return jnp.dot(parameters - self.proposal_means, self.eigenvectors) / jnp.sqrt(self.eigenvalues)
+        return jnp.dot( self.inv_eigenvectors, ( parameters - self.proposal_means ))/jnp.sqrt(self.eigenvalues)
     
     def retranform_parameters_from_normalized_eigenspace(self, parameters):
         # this function transforms the parameters back from the normalized eigenspace
-        return jnp.dot(parameters * jnp.sqrt(self.eigenvalues), self.inv_eigenvectors) + self.proposal_means
+        return jnp.dot(self.eigenvectors, parameters * jnp.sqrt(self.eigenvalues) ) + self.proposal_means
 
     def generate_covmat(self):
         # this function generates the covariance matrix either by loading it from a file or by using the proposal lengths. Note that the covmat might miss some entries which are to be filled with the proposal lengths.
@@ -186,7 +214,7 @@ class Sampler(BaseClass):
         # create the covmat from the proposal lengths
         return covmat
 
-    def get_initial_position(self, N=1, noramlized=False):
+    def get_initial_position(self, N=1, normalized=False):
         # this function returns N initial positions for the sampler. It samples from the 'ref' values of the parameters.
         positions = []
         for i in range(N):
@@ -200,8 +228,10 @@ class Sampler(BaseClass):
                     raise ValueError("Parameter %s is not defined correctly. Please check the parameter_dict."%key)
             positions.append(position)
 
-        if noramlized:
-            return self.normalize_parameters(np.array(positions))
+        if normalized:
+            for i in range(N):
+                positions[i] = self.transform_parameters_into_normalized_eigenspace(np.array(positions[i]))
+            return positions
         else:
             return np.array(positions)
 
@@ -217,8 +247,9 @@ class Sampler(BaseClass):
         if normalized:
             lower_bound = np.array([_[0] for _ in bounds])
             upper_bound = np.array([_[1] for _ in bounds])
-            normalized_bounds = self.normalize_parameters(np.vstack([lower_bound, upper_bound]))
-            
+
+            normalized_bounds = np.vstack([self.transform_parameters_into_normalized_eigenspace(lower_bound),
+                                           self.transform_parameters_into_normalized_eigenspace(upper_bound)])
             # put the bounds in the right order\
             bounds = []
             for i in range(len(normalized_bounds[0])):
@@ -270,14 +301,46 @@ class Sampler(BaseClass):
 
         # for each observable we create a function that computes the hessian with respect to the observable.
         for observable in state['quantities'].keys():
+
+            observable_values = jnp.array(state['quantities'][observable])
+
+            # function to compute likelihood as a function of the observable
             def hessian_observable(x):
                 local_state = copy.deepcopy(state)
                 local_state['quantities'][observable] = x
-                return -self.likelihood.loglike(local_state)
+                return -self.likelihood.loglike(local_state)[0]
 
-            _ = jnp.array(state['quantities'][observable])
+            # compute hessian of observables
+            observable_hessian = jnp.asarray(jax.hessian(hessian_observable)(observable_values))
 
-            data_covmats[observable] = jnp.linalg.inv(jax.hessian(hessian_observable)(_))[0]
+            # find entries which do not constiute to the loglike
+            diag_hessian = jnp.diag(observable_hessian)
+
+            mask = np.zeros(len(observable_values))
+            mask[diag_hessian!=0.0]=1
+
+            # set index = indices where mask is 1
+            index = np.where(mask==1)[0]
+            indices = jnp.meshgrid(index, index)
+
+            # observable_hessian is a n times n matrix. We need to remove the entries which do not contribute to the loglike
+            original_shape = observable_hessian.shape
+
+            observable_covmat = jnp.linalg.inv(observable_hessian[mask==1][:,mask==1])
+
+            # create the data_covmat
+            data_covmats[observable] = jnp.zeros(original_shape)
+            data_covmats[observable] = data_covmats[observable].at[indices[0],indices[1]].set(observable_covmat)
+
+            # check for nans or infs
+            if jnp.isnan(data_covmats[observable]).any() or jnp.isinf(data_covmats[observable]).any():
+                self.error("Data covariance matrix for observable %s contains nans or infs", observable)
+                raise ValueError("Data covariance matrix for observable %s contains nans or infs"%observable)
+
+            # store the diagonal of the data_covmat as txt file in the output directory
+            if not os.path.exists(self.hyperparameters['output_directory']+'/data_covmats'):
+                os.makedirs(self.hyperparameters['output_directory']+'/data_covmats')
+            np.savetxt(self.hyperparameters['output_directory']+'/data_covmats/'+observable+'.txt', jnp.diag(data_covmats[observable]))
 
         if self.hyperparameters['plotting_directory'] is not None:
             for observable in state['quantities'].keys():
@@ -286,6 +349,8 @@ class Sampler(BaseClass):
                     os.makedirs(self.hyperparameters['plotting_directory']+'/data_covmats')
 
                 data_covmat_plot(data_covmats[observable], 'data covariance matrix '+ observable, self.hyperparameters['plotting_directory']+'/data_covmats/'+observable+'.png')
+
+                covmat_diagonal_plot(data_covmats[observable], 'data diagonal covariance matrix '+ observable, self.hyperparameters['plotting_directory']+'/data_covmats/'+observable+'_diagonal.png')
 
 
         return data_covmats     
@@ -368,13 +433,13 @@ class Sampler(BaseClass):
         return state['loglike']
 
     # This function emulates the loglikelihoods for given parameters.
-    def emulate_loglike_from_normalized_parameters_differentiable(self, parameters):
+    def emulate_loglike_from_normalized_parameters_differentiable(self, parameters_norm):
         # this function is similar to the compute_loglike_from_parameters, but it returns the loglike and does not automaticailly add the state to the emulator. Thus it is differentiable.
         # if RNG is not None, we provide the mean estimate, otherwise we sample from the emulator
         self.start()
 
         # rescale the parameters
-        parameters = self.retranform_parameters_from_normalized_eigenspace(parameters)
+        parameters = self.retranform_parameters_from_normalized_eigenspace(parameters_norm)
 
         # Run the sampler.
         state = {'parameters': {}, 'quantities': {}, 'loglike': None}

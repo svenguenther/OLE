@@ -152,13 +152,14 @@ class data_processor(BaseClass):
         self.output_means = jnp.mean(self.output_data_raw, axis=0)
 
         if self.data_covmat is not None: 
-            self.output_stds = jnp.sqrt(jnp.diag(self.data_covmat))
+            self.output_stds = jnp.sqrt(jnp.abs(jnp.diag(self.data_covmat)))
         else:
             self.output_stds = jnp.std(self.output_data_raw, axis=0)
 
         # set all stds which are 0 to 1
+        
         self.input_stds = jnp.where(self.input_stds == 0, 1, self.input_stds)
-        self.output_stds = jnp.where(self.output_stds == 0, 1, self.output_stds)
+        self.output_stds = jnp.where(self.output_stds == 0, 10**10, self.output_stds)
 
         # 
 
@@ -205,8 +206,8 @@ class data_processor(BaseClass):
             if not os.path.exists(self.hyperparameters['plotting_directory']+ "/PCA_plots"):
                 os.makedirs(self.hyperparameters['plotting_directory']+ "/PCA_plots")
             variance_plots(explained_variance, 'explained variance '+self.quantity_name,'explained variance ', self.hyperparameters['plotting_directory']+ "/PCA_plots/explained_variance_"+self.quantity_name+'.png')
-            variance_plots(cumulative_explained_variance, 'cumulative variance '+self.quantity_name,'cumulative variance ', self.hyperparameters['plotting_directory']+ "/PCA_plots/cumulative_variance_"+self.quantity_name+'.png')
-            eigenvector_plots(eigenvectors, 'Eigenvectors '+self.quantity_name ,self.hyperparameters['plotting_directory']+ "/PCA_plots/eigenvectors_"+self.quantity_name+'.png')
+            variance_plots(1.0-cumulative_explained_variance, '1 - cumulative variance '+self.quantity_name,'1 - cumulative variance ', self.hyperparameters['plotting_directory']+ "/PCA_plots/cumulative_variance_"+self.quantity_name+'.png')
+            eigenvector_plots(eigenvectors[:, :n_components].T, 'Eigenvectors '+self.quantity_name ,self.hyperparameters['plotting_directory']+ "/PCA_plots/eigenvectors_"+self.quantity_name+'.png')
         
         del eigenvectors
         del eigenvalues

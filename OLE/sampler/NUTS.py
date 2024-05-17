@@ -7,6 +7,7 @@ from OLE.likelihood import Likelihood
 from OLE.emulator import Emulator
 from OLE.utils.mpi import *
 from OLE.sampler.base import Sampler
+from OLE.sampler.minimize import MinimizeSampler
 
 from functools import partial
 from typing import Tuple
@@ -73,7 +74,7 @@ class NUTSSampler(Sampler):
                 if jnp.max(loglikes) > max_loglike:
                     
                     max_loglike = jnp.max(loglikes)
-                    bestfit = step[jnp.argmax(loglikes)]
+                    bestfit = self.retranform_parameters_from_normalized_eigenspace(step[jnp.argmax(loglikes)])
                     
 
                 # accept or reject
@@ -89,9 +90,32 @@ class NUTSSampler(Sampler):
 
         else:
             # if the emulator is already trained, we can directly start with the NUTS sampler
-            bestfit = pos[0]
+            bestfit = self.retranform_parameters_from_normalized_eigenspace(pos[0])
 
-        # rescale the parameters
+        # do minimization here to get bestfit and covariance matrix (fisher matrix)
+        minimizer_params = {'method': 'TNC', 'use_emulator': True, 'use_gradients': True, 'logposterior': True}
+        minimizer = MinimizeSampler()
+
+        minimizer.initialize(parameters=self.parameter_dict, theory=self.theory, likelihood=self.likelihood, emulator=self.emulator, hyperparameters=self.hyperparameters.update(minimizer_params))
+        minimizer.minimize()
+
+        bestfit = minimizer.bestfit
+
+        self.info("Minimization after first emulator training finds:")
+        self.info("Bestfit: ")
+        self.info(bestfit)
+        self.info("Covmat: ")
+        self.info(minimizer.inv_hessian)
+        self.info("We will use this information to start the NUTS sampler.")
+
+        # set new covmat to sampler
+        # self.covmat = minimizer.inv_hessian
+        # TODO: Test and enable this
+        # go into eigenspace of covmat and build the inverse of the eigenvectors
+        # self.eigenvalues, self.eigenvectors = jnp.linalg.eigh(self.covmat)
+        # self.inv_eigenvectors = jnp.linalg.inv(self.eigenvectors)            
+            
+            
         # Run the sampler.
             
         if self.hyperparameters['compute_data_covmat']:
@@ -146,6 +170,9 @@ class NUTSSampler(Sampler):
 
         # run the warmup
         for i in range(self.M_adapt + nsteps):
+
+            print(self.time_from_start())
+
             # Initialize momentum and pick a slice, record the initial log joint probability
             RNG, r, u, logjoint0 = self._init_iteration(thetas[i], RNG)
 
@@ -236,6 +263,8 @@ class NUTSSampler(Sampler):
                         self.emulator.add_quality_point(state['parameters'])
                         
             print("Testing time: ", time.time()-start)
+
+            self.print_status(i, thetas)
 
         # save the chain and the logprobability
         # initialize the chain

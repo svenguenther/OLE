@@ -2,19 +2,43 @@ import matplotlib.pyplot as plt
 import numpy as np
 import gc
 import jax.numpy as jnp
+import copy
 
 plot_format = 'png'
 
-def data_covmat_plot(covmat, title, file_name):
+def covmat_diagonal_plot(covmat, title, file_name):
+    if np.max(np.abs(np.diag(covmat))) == 0.0:
+        return
     plt.figure()
-    plt.axis('equal')
+    plt.grid()
     plt.title(title)
-    max_abs = np.max(np.abs(covmat))
-    plt.imshow(covmat, cmap='seismic', vmin=-max_abs, vmax=max_abs)
-    plt.colorbar()
+    plt.plot(np.abs(np.diag(covmat)))
+    plt.xlabel('Data bin')
+    plt.ylabel('Diagonal Covariance')
+    plt.yscale('log')
     plt.savefig(file_name)
     plt.close()
 
+    gc.collect()
+
+def data_covmat_plot(covmat, title, file_name, log=True):
+    plt.figure()
+    plt.axis('equal')
+    plt.title(title)
+    loc_covmat = jnp.asarray(covmat)
+    max_abs = np.max(np.abs(loc_covmat))
+    if max_abs == 0.0:
+        plt.close()
+        return 
+    min_value = np.min(np.abs(loc_covmat))
+    loc_covmat =loc_covmat.at[loc_covmat == 0.0].set(min_value)
+    if log:
+        plt.imshow(jnp.abs(loc_covmat), cmap='jet', norm='log')
+    else:
+        plt.imshow(loc_covmat, cmap='seismic', vmin=-max_abs, vmax=max_abs)
+    plt.colorbar()
+    plt.savefig(file_name)
+    plt.close()
     gc.collect()
 
 def variance_plots(variances, title, y_label, file_name):
@@ -25,6 +49,7 @@ def variance_plots(variances, title, y_label, file_name):
     plt.plot(components, variances)
     plt.xlabel('PCA component')
     plt.ylabel(y_label)
+    plt.yscale('log')
     plt.savefig(file_name)
     plt.close()
 
