@@ -1,3 +1,8 @@
+<p align="center">
+  <img src="OLE_trans.png" alt="logo" width="800" class="center"/>
+</p>
+
+
 # Online Learning Émulator
 The Online Learning Émulator - OLÉ is a framework to efficiently perform statistical analyeses in cases where one can distinguish between a Theory (simulation) code in which observables are computed and likelihood codes that compute a likelihood for a given computed observable. The efficiency comes from emulating the computationally expensive theory codes with 1-O(20) parameters. 
 
