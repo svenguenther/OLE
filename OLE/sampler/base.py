@@ -149,6 +149,16 @@ class Sampler(BaseClass):
 
         pass
 
+    def update_covmat(self, covmat):
+        # this function updates the covmat
+        self.covmat = covmat
+
+        # go into eigenspace of covmat and build the inverse of the eigenvectors
+        self.eigenvalues, self.eigenvectors = jnp.linalg.eigh(self.covmat)
+        self.inv_eigenvectors = self.eigenvectors.T        
+
+        return 0
+
     def print_status(self, i, chain):
         # this function computes the effective sample size and prints the status of the chain after the i-th interation. This is only done when i%100==0
         if ((i+1) % self.hyperparameters['status_print_frequency']) == 0:
@@ -172,8 +182,13 @@ class Sampler(BaseClass):
 
     def denormalize_inv_hessematrix(self, matrix):
         # this function denormalizes the matrix
-        
-        return jnp.dot(self.inv_eigenvectors.T,  jnp.dot( jnp.dot(matrix, jnp.diag(self.eigenvalues)), self.inv_eigenvectors))
+
+        a = jnp.dot(self.eigenvectors,  
+                    jnp.dot( 
+                        jnp.dot(
+                            jnp.dot( jnp.diag(jnp.sqrt(self.eigenvalues)),matrix), jnp.diag(jnp.sqrt(self.eigenvalues))), self.eigenvectors.T))
+
+        return a
 
     def transform_parameters_into_normalized_eigenspace(self, parameters):
         # this function transforms the parameters into the normalized eigenspace

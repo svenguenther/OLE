@@ -106,14 +106,9 @@ class NUTSSampler(Sampler):
         self.info(bestfit)
         self.info("Covmat: ")
         self.info(minimizer.inv_hessian)
-        self.info("We will use this information to start the NUTS sampler.")
 
-        # set new covmat to sampler
-        # self.covmat = minimizer.inv_hessian
-        # TODO: Test and enable this
-        # go into eigenspace of covmat and build the inverse of the eigenvectors
-        # self.eigenvalues, self.eigenvectors = jnp.linalg.eigh(self.covmat)
-        # self.inv_eigenvectors = jnp.linalg.inv(self.eigenvectors)            
+        # update the covmat
+        self.update_covmat(minimizer.inv_hessian)
             
             
         # Run the sampler.
@@ -124,8 +119,7 @@ class NUTSSampler(Sampler):
 
             # translate the parameters to the state
             for i, key in enumerate(self.parameter_dict.keys()):
-                _ = self.retranform_parameters_from_normalized_eigenspace(bestfit)
-                bestfit_state['parameters'][key] = jnp.array([_[i]])
+                bestfit_state['parameters'][key] = jnp.array([bestfit[i]])
 
             data_covmats = self.calculate_data_covmat(bestfit_state['parameters'])
 
@@ -143,11 +137,11 @@ class NUTSSampler(Sampler):
         self.logp_sample_noiseFree = jax.jit(self.sample_emulate_total_loglike_from_parameters_differentiable_noiseFree)                   # this samples N realizations from the emulator to estimate the uncertainty
         # self.logp_sample = self.sample_emulate_total_loglike_from_parameters_differentiable                    # this samples N realizations from the emulator to estimate the uncertainty
 
-        self.theta0 = bestfit
+        self.theta0 = self.transform_parameters_into_normalized_eigenspace(bestfit)
 
         # we search a reasonable epsilon (step size)
         self.info("Searching for a reasonable step sizes")
-        RNG, eps = self._findReasonableEpsilon(bestfit, RNG)
+        RNG, eps = self._findReasonableEpsilon(self.theta0, RNG)
         self.info("Found reasonable step sizes: %f", eps)
 
         # Initialize variables
@@ -170,9 +164,6 @@ class NUTSSampler(Sampler):
 
         # run the warmup
         for i in range(self.M_adapt + nsteps):
-
-            print(self.time_from_start())
-
             # Initialize momentum and pick a slice, record the initial log joint probability
             RNG, r, u, logjoint0 = self._init_iteration(thetas[i], RNG)
 
@@ -220,7 +211,7 @@ class NUTSSampler(Sampler):
                 for k, key in enumerate(self.parameter_dict.keys()):
                     state['parameters'][key] = jnp.array([theta_untransformed[k]])
 
-                if self.emulator.require_quality_check(state['parameters']):
+                if self.emulator.require_quality_check(state['parameters']) and (thetas[i+1]!=thetas[i]).all():
                     # here we need to test the emulator for its performance
                     # noiseFree is only required if a noise term is used at all !!
                     loglikes_noiseFree = self.logp_sample_noiseFree(thetas[i])
@@ -254,7 +245,7 @@ class NUTSSampler(Sampler):
                             self.emulator.hyperparameters['test_noise_levels_counter'] -= 1
                             loglikes = self.logp_sample(thetas[i])
                     
-                            if not self.emulator.check_quality_criterium(jnp.array(loglikes), parameters=state['parameters']):
+                            if not self.emulator.check_quality_criterium(jnp.array(loglikes), parameters=state['parameters'], write_log=False):
                                 # if the emulator passes noiseFree but fails with noise then the noise is too large
                                 print('!!!!noise levels too large for convergence, reduce explained_variance_cutoff and or noise_percentage!!!!')
                                 # note that it is normal to trigger this from time to time. for acceptable noise at the edge of interpolation area it can happen
@@ -326,9 +317,6 @@ class NUTSSampler(Sampler):
         while jnp.isnan(logp) or jnp.any(jnp.isnan(gradlogp)):
             eps /= 2
             theta_f, r_f, logp, gradlogp = self._leapfrog(theta, r, eps)
-            print(theta)
-            print(logp)
-            print(gradlogp)
         
         # Then decide in which direction to move
         logp0, _ = self.logp_and_grad(theta)

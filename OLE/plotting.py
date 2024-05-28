@@ -61,7 +61,7 @@ def eigenvector_plots(eigenvectors, title, file_name):
     plt.title(title)
     x = np.arange(len(eigenvectors[0]))+1
     for i in range(len(eigenvectors)):
-        plt.plot(x, eigenvectors[i], label='Component '+str(i+1))
+        plt.plot(x, eigenvectors[i], label='Component '+str(i))
     plt.legend()
     plt.xlabel('data bin')
     plt.ylabel('Eigenvector')

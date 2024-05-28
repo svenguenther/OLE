@@ -551,7 +551,7 @@ class Emulator(BaseClass):
 
     
 
-    def check_quality_criterium(self, loglikes, parameters, reference_loglike = None):
+    def check_quality_criterium(self, loglikes, parameters, reference_loglike = None, write_log = True):
         # check whether the emulator is good enough to be used
         # if the emulator is not yet trained, we return False
         if not self.trained:
@@ -578,7 +578,8 @@ class Emulator(BaseClass):
             if std_loglike > self.hyperparameters['quality_threshold_constant']:
                 self.debug("Emulator quality criterium NOT fulfilled")
                 _ = "Quality criterium NOT fulfilled; "+"; ".join([key+ ': ' +str(value) for key, value in parameters.items()]) + " Max loglike: %f, delta loglikes: " % (max_loglike) + " ".join([str(loglike) for loglike in loglikes]) + "\n"
-                self.write_to_log(_)
+                if write_log: 
+                    self.write_to_log(_)
                 return False
         else:
             # calculate the absolute difference between the mean loglike and the maximum loglike
@@ -588,14 +589,16 @@ class Emulator(BaseClass):
             if std_loglike > self.hyperparameters['quality_threshold_constant'] + self.hyperparameters['quality_threshold_linear']*delta_loglike + self.hyperparameters['quality_threshold_quadratic']*delta_loglike**2:
                 self.debug("Emulator quality criterium NOT fulfilled")
                 _ = "Quality criterium NOT fulfilled; "+"; ".join([key+ ': ' +str(value) for key, value in parameters.items()]) + " Max loglike: %f, delta loglikes: " % (max_loglike) + " ".join([str(loglike) for loglike in loglikes]) + "\n"
-                self.write_to_log(_)
+                if write_log: 
+                    self.write_to_log(_)
                 return False
 
         self.debug("Emulator quality criterium fulfilled")
         _ = "Quality criterium fulfilled; "+"; ".join([key+ ': ' +str(value) for key, value in parameters.items()]) + " Max loglike: %f, delta loglikes: " % (max_loglike) + " ".join([str(loglike) for loglike in loglikes]) + "\n"
-        self.write_to_log(_)
+        if write_log: 
+            self.write_to_log(_)
         self.continuous_successful_calls += 1
-
+        
         # if any of the loglikes is above the maximum loglike, we need to update the maximum loglike
         if jnp.any(mean_loglike > max_loglike):
             self.max_loglike_encountered = mean_loglike
