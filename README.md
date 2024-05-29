@@ -119,10 +119,11 @@ Minimize sampler (computes likelihood for a given parameter set):
 NUTS sampler (computes likelihood for a given parameter set):
 | parameter   | default    | description       |
 | :---    | :---   | :---     |
-| ```nwalkers``` | ```10``` | Number of walkers in enselbe sampler in the early stage of the emulator before the emulator is trained|
+| ```nwalkers``` | ```10``` | Number of walkers in Mestropolis hastings sampler in the early stage of the emulator before the emulator is trained. More walkers increase the variety in the training data set|
 | ```target_acceptance``` | ```0.5``` | Target acceptance of NUTS |
 | ```M_adapt``` | ```1000``` | Number of steps until stepsize is fixed |
 | ```delta_max``` | ```1000``` | NUTS parameter |
+| ```minimize_nuisance_parameters``` | ```True``` | This flag indicates that during the training stage, the nuisance parameters are fitted. This allows faster acceptance of data points in particular for high dimensional nuisance parameter space. |
 
 
 Cobaya:

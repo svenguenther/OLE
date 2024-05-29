@@ -126,6 +126,11 @@ class DataCache(BaseClass):
         new_loglike = new_state['loglike']
         self.max_loglike = max(self.get_loglikes())
 
+        # check if new loglike is nan
+        if jnp.isnan(new_loglike):
+            self.error("LOGLIKE IS NAN!")
+            return False
+
         self.info("new_loglike: %f", new_loglike)
         self.info("max_loglike: %f", self.max_loglike)
 

@@ -7,6 +7,7 @@ from OLE.likelihood import Likelihood
 from OLE.emulator import Emulator
 from OLE.utils.mpi import *
 from OLE.plotting import data_covmat_plot, covmat_diagonal_plot
+from scipy.optimize import minimize
 
 from functools import partial
 from typing import Tuple
@@ -146,6 +147,12 @@ class Sampler(BaseClass):
             else:
                 self.emulator.initialize(self.likelihood, test_state, **kwargs)
 
+
+        self.nuisance_parameters = list(self.parameter_dict.keys())
+        #remove keys which are in self.theory.requirements
+        for key in self.theory.requirements:
+            if key in self.nuisance_parameters:
+                self.nuisance_parameters.remove(key)
 
         pass
 
@@ -447,6 +454,82 @@ class Sampler(BaseClass):
         self.increment(self.logger)
         return state['loglike']
 
+
+    def compute_theory_from_normalized_parameters(self, parameters):
+        self.start()
+
+        # rescale the parameters
+        parameters = self.retranform_parameters_from_normalized_eigenspace(parameters)
+
+        # Run the sampler.
+        state = {'parameters': {}, 'quantities': {}, 'loglike': None}
+
+        # translate the parameters to the state
+        for i, key in enumerate(self.parameter_dict.keys()):
+            state['parameters'][key] = jnp.array([parameters[i]])
+
+        self.debug("Calculating loglike for parameters: %s", state['parameters'])
+
+        # compute the observables. First check whether emulator is already trained
+        if not self.emulator.trained:
+
+            self.debug("emulator not trained yet -> use theory code")
+            state = self.theory.compute(state)
+            self.debug("state after theory: %s for parameters: %s", state['quantities'], state['parameters'])
+        else:
+            # here we need to test the emulator for its performance
+            emulator_sample_states, RNGkey = self.emulator.emulate_samples(state['parameters'], RNGkey=RNGkey)
+            emulator_sample_loglikes = jnp.array([self.likelihood.loglike_state(_)['loglike'] for _ in emulator_sample_states])
+            print("emulator_sample_loglikes: ", emulator_sample_loglikes)
+            # check whether the emulator is good enough
+            if not self.emulator.check_quality_criterium(emulator_sample_loglikes, parameters=state['parameters']):
+                print("Emulator not good enough")
+                state = self.theory.compute(state)
+            else:
+                print("Emulator good enough")
+                # Add the point to the quality points
+                self.emulator.add_quality_point(state['parameters'])
+            
+                self.debug("emulator available - check emulation performance")
+                state = self.emulator.emulate(state['parameters'])
+                self.debug("state after emulator: %s for parameters: %s", state['quantities'], state['parameters'])
+
+        # if we have a minimal number of states in the cache, we can train the emulator
+        if (len(self.emulator.data_cache.states) >= self.emulator.hyperparameters['min_data_points']) and not self.emulator.trained:
+            self.debug("Training emulator")
+            self.emulator.train()
+            self.debug("Emulator trained")
+
+        self.increment(self.logger)
+        return state
+    
+    @partial(jax.jit, static_argnums=(0))
+    def likelihood_function(self, parameter_values, local_state):
+        for i, key in enumerate(self.nuisance_parameters):
+            local_state['parameters'][key] = jnp.array([parameter_values[i]])
+        local_state = self.likelihood.loglike_state(local_state)
+        logprior = self.compute_logprior(local_state)
+        local_state['loglike'] = local_state['loglike'] + logprior
+        return -local_state['loglike'][0]
+    
+    
+
+    def nuisance_minimization(self, state):
+        
+        local_state = copy.deepcopy(state)
+        
+        # minimize the nuisance parameters
+        x0 = jnp.array([state['parameters'][key][0] for key in self.nuisance_parameters])
+
+        result = minimize(self.jit_likelihood_function, x0, jac=self.jit_gradient_likelihood_function, method='TNC', args=(local_state), options={'disp': True}, tol=1e-1)
+        self.debug("minimization result: %s", result)
+
+        state['loglike'] = jnp.array([float(-result.fun)])
+        for i, key in enumerate(self.nuisance_parameters):
+            state['parameters'][key] = jnp.array([result.x[i]])
+
+        return state
+
     # This function emulates the loglikelihoods for given parameters.
     def emulate_loglike_from_normalized_parameters_differentiable(self, parameters_norm):
         # this function is similar to the compute_loglike_from_parameters, but it returns the loglike and does not automaticailly add the state to the emulator. Thus it is differentiable.
@@ -575,14 +658,13 @@ class Sampler(BaseClass):
         log_prior = 0.0
         for key, value in self.parameter_dict.items():
 
-
-            log_prior+= jnp.log(1.0/(value['prior']['max']-value['prior']['min']))
-
-            # if we are outside the prior, return (almost) -inf / Make more beautiful
-            # if (state['parameters'][key][0] < value['prior']['min']) or (state['parameters'][key][0] > value['prior']['max']):
-            #     return -jnp.inf
-
-
+            
+            # if mean and std are given, we use a gaussian prior
+            if 'mean' in value['prior'].keys():
+                log_prior += -0.5*(state['parameters'][key][0]-value['prior']['mean'])**2/value['prior']['std']**2 - 0.5*jnp.log(2*jnp.pi*value['prior']['std']**2)
+            # else we sticke with the flat prior
+            else:
+                log_prior+= jnp.log(1.0/(value['prior']['max']-value['prior']['min']))
 
             log_prior -= jnp.heaviside(value['prior']['min'] - state['parameters'][key][0],  1.0) * 99999999999999999999999.  + jnp.heaviside(state['parameters'][key][0] - value['prior']['max'], 1.0) * 99999999999999999999999.
 

@@ -119,7 +119,6 @@ class my_likelihood(Likelihood):
 
 
 
-
         
         return
 
@@ -159,46 +158,37 @@ emulator_settings = {
     # the number of data points in cache before the emulator is to be trained
     'min_data_points': 80,
 
-    # maximal cache size
-    'cache_size': 1000,
-
     # name of the cache file
-    'cache_file': './output_sampler_clang_nuts/cache.pkl',
-
-    # load the cache from the cache file
-    'load_cache': True,
-
-    # load inifile from the cache file
-    #'load_initial_state': True,
-    # 'test_emulator': False, # if True the emulator is tested and potentially retrained with new data
-
-    # delta loglike for what states to be accepted to the cache
-    'delta_loglike': 300.0,
+    'cache_file': './output_clang_act_nuts/cache.pkl',
 
     # accuracy parameters for loglike:
-    'quality_threshold_constant': 0.1,
-    'quality_threshold_linear': 0.0,
-    'quality_threshold_quadratic': 0.1,
+    'quality_threshold_constant': 1.0,
+    'quality_threshold_linear': 0.1,
 
     # related so sampler
     'explained_variance_cutoff': 0.9999,
 
-    # number of walker
-    'nwalkers': 50,
+    # cache criteria
+    'dimensionality': 7,
+    'N_sigma': 5.0,
+
+    # 'compute_data_covmat': True,
+    'data_covmat_directory': './act_data_covmats',
 
     # output directory
-    'output_directory': './output_sampler_clang_nuts',
+    'output_directory': './output_clang_act_nuts',
 
-    # force by overwriting previous results
-    'force': True,
-
-    #'covmat': None,
-
-    # M adapt
+    # M adapt # burn-in of NUTS
     'M_adapt': 200,
 
-    #'plotting_directory': './plots_sampler_clang_nuts',
-    #'testset_fraction': 0.1,
+    # 'plotting_directory': './plots_sampler_clang_nuts',
+    # 'testset_fraction': 0.1,
+    'logfile': './output_clang_act_nuts/log.txt',
+
+    'learning_rate': 0.1,
+    'num_iters': 300,
+
+
 }
 
 
@@ -208,65 +198,23 @@ my_sampler = NUTSSampler(debug=False)
 # my_sampler = EnsembleSampler(debug=False)
 
 
-my_parameters = {'h': {'prior': {'min': 0.64, 'max': 0.72}, 
+my_parameters = {'h': {'prior': {'min': 0.60, 'max': 0.80}, 
                        'ref': {'mean': 0.68, 'std': 0.01},
                        'proposal': 0.01,},
-                    'n_s': {'prior': {'min': 0.92, 'max': 1.0}, 'ref': {'mean': 0.965, 'std': 0.005},
+                    'n_s': {'prior': {'min': 0.9, 'max': 1.1}, 'ref': {'mean': 0.965, 'std': 0.005},
                             'proposal': 0.01,}, 
-                    'omega_b': {'prior': {'min': 0.0216, 'max': 0.024}, 'ref': {'mean': 0.0223, 'std': 0.0003},
+                    'omega_b': {'prior': {'min': 0.02, 'max': 0.024}, 'ref': {'mean': 0.0223, 'std': 0.0003},
                                 'proposal': 0.0002,}, 
-                    'omega_cdm': {'prior': {'min': 0.110, 'max': 0.13}, 'ref': {'mean': 0.120, 'std': 0.002},
+                    'omega_cdm': {'prior': {'min': 0.10, 'max': 0.14}, 'ref': {'mean': 0.120, 'std': 0.002},
                                   'proposal': 0.002,}, 
                     'tau_reio': {'prior': {'min': 0.01, 'max': 0.1}, 'ref': {'mean': 0.055, 'std': 0.01},
                                  'proposal': 0.01,},
-                    'logA': {'prior': {'min': 2.9, 'max': 3.3}, 'ref': {'mean': 3.1, 'std': 0.05},
+                    'logA': {'prior': {'min': 2.8, 'max': 3.3}, 'ref': {'mean': 3.1, 'std': 0.05},
                              'proposal': 0.05},
 
                     # ACT_DR4_TTTEEE
                     'yp': {'prior': {'min': 0.9, 'max': 1.1}, 'ref': {'mean': 1.0, 'std': 0.0001}, 'proposal': 0.0001},
-
-
-                    # SPT3G_2018_TTTEEE
-
-                    # 'EE_Poisson_150x150': {'prior': {'min': -1.0, 'max': 1.0}, 'ref': {'mean': 0.040469, 'std': 0.003448}, 'proposal': 0.003448},
-                    # 'EE_Poisson_150x220': {'prior': {'min': -1.0, 'max': 1.0}, 'ref': {'mean': 0.018962, 'std': 0.005689}, 'proposal': 0.005689},
-                    # 'EE_Poisson_220x220': {'prior': {'min': -1.0, 'max': 1.0}, 'ref': {'mean': 0.047557, 'std': 0.014267}, 'proposal': 0.014267},
-                    # 'EE_Poisson_90x150': {'prior': {'min': -1.0, 'max': 1.0}, 'ref': {'mean': 0.018048, 'std': 0.005414}, 'proposal': 0.005414},
-                    # 'EE_Poisson_90x220': {'prior': {'min': -1.0, 'max': 1.0}, 'ref': {'mean': 0.015719, 'std': 0.004716}, 'proposal': 0.004716},
-                    # 'EE_Poisson_90x90': {'prior': {'min': -1.0, 'max': 1.0}, 'ref': {'mean': 0.040469, 'std': 0.012141}, 'proposal': 0.012141},
-                    # 'EE_PolGalDust_Alpha': {'prior': {'min': -10.0, 'max': 1.0}, 'ref': {'mean': -2.42, 'std': 0.04}, 'proposal': 0.04},
-                    # 'EE_PolGalDust_Amp': {'prior': {'min': -1.0, 'max': 1.0}, 'ref': {'mean': 0.05, 'std': 0.022}, 'proposal': 0.022},
-                    # 'EE_PolGalDust_Beta': {'prior': {'min': -1.0, 'max': 10.0}, 'ref': {'mean': 1.51, 'std': 0.04}, 'proposal': 0.04},
-                    # 'Ecal150': {'prior': {'min': 0.0, 'max': 2.0}, 'ref': {'mean': 1.0, 'std': 0.1}, 'proposal': 0.01},
-                    # 'Ecal220': {'prior': {'min': 0.0, 'max': 2.0}, 'ref': {'mean': 1.0, 'std': 0.1}, 'proposal': 0.01},
-                    # 'Ecal90': {'prior': {'min': 0.0, 'max': 2.0}, 'ref': {'mean': 1.0, 'std': 0.1}, 'proposal': 0.01},
-                    # 'Kappa': {'prior': {'min': -1.0, 'max': 1.0}, 'ref': {'mean': 0.0, 'std': 0.00045}, 'proposal': 0.00045},
-                    # 'TE_PolGalDust_Alpha': {'prior': {'min': -10.0, 'max': 1.0}, 'ref': {'mean': -2.42, 'std': 0.04}, 'proposal': 0.04},
-                    # 'TE_PolGalDust_Amp': {'prior': {'min': -1.0, 'max': 1.0}, 'ref': {'mean': 0.12, 'std': 0.051}, 'proposal': 0.051},
-                    # 'TE_PolGalDust_Beta': {'prior': {'min': -1.0, 'max': 10.0}, 'ref': {'mean': 1.51, 'std': 0.04}, 'proposal': 0.04},
-                    # 'TT_CIBClustering_Amp': {'prior': {'min': -10.0, 'max': 100.0}, 'ref': {'mean': 3.2263, 'std': 1.8354}, 'proposal': 1.8354},
-                    # 'TT_CIBClustering_Beta': {'prior': {'min': -10.0, 'max': 100.0}, 'ref': {'mean': 2.2642, 'std': 0.3814}, 'proposal': 0.3814},
-                    # 'TT_GalCirrus_Alpha': {'prior': {'min': -10.0, 'max': 1.0}, 'ref': {'mean': -2.53, 'std': 0.05}, 'proposal': 0.05},
-                    # 'TT_GalCirrus_Amp': {'prior': {'min': -1.0, 'max': 10.0}, 'ref': {'mean': 1.88, 'std': 0.48}, 'proposal': 0.48},
-                    # 'TT_GalCirrus_Beta': {'prior': {'min': -1.0, 'max': 10.0}, 'ref': {'mean': 1.48, 'std': 0.02}, 'proposal': 0.02},
-                    # 'TT_Poisson_150x150': {'prior': {'min': -100.0, 'max': 100.0}, 'ref': {'mean': 15.3455, 'std': 4.132}, 'proposal': 4.132},
-                    # 'TT_Poisson_150x220': {'prior': {'min': -100.0, 'max': 100.0}, 'ref': {'mean': 28.3573, 'std': 4.1925}, 'proposal': 4.1925},
-                    # 'TT_Poisson_220x220': {'prior': {'min': -100.0, 'max': 1000.0}, 'ref': {'mean': 75.9719, 'std': 14.8624}, 'proposal': 14.8624},
-                    # 'TT_Poisson_90x150': {'prior': {'min': -100.0, 'max': 100.0}, 'ref': {'mean': 22.4417, 'std': 7.0881}, 'proposal': 7.0881},
-                    # 'TT_Poisson_90x220': {'prior': {'min': -100.0, 'max': 100.0}, 'ref': {'mean': 20.7004, 'std': 5.9235}, 'proposal': 5.9235},
-                    # 'TT_Poisson_90x90': {'prior': {'min': -100.0, 'max': 100.0}, 'ref': {'mean': 51.3204, 'std': 9.442}, 'proposal': 9.442},
-                    # 'TT_kSZ_Amp': {'prior': {'min': -100.0, 'max': 100.0}, 'ref': {'mean': 3.7287, 'std': 4.644}, 'proposal': 4.644},
-                    # 'TT_tSZ_Amp': {'prior': {'min': -100.0, 'max': 100.0}, 'ref': {'mean': 3.2279, 'std': 2.3764}, 'proposal': 2.3764},
-                    # 'TT_tSZ_CIB_Corr_Amp': {'prior': {'min': -10.0, 'max': 10.0}, 'ref': {'mean': 0.1801, 'std': 0.3342}, 'proposal': 0.3342},                    
-                    # 'Tcal150': {'prior': {'min': 0.0, 'max': 2.0}, 'ref': {'mean': 1.0, 'std': 0.1}, 'proposal': 0.01},
-                    # 'Tcal220': {'prior': {'min': 0.0, 'max': 2.0}, 'ref': {'mean': 1.0, 'std': 0.1}, 'proposal': 0.01},
-                    # 'Tcal90': {'prior': {'min': 0.0, 'max': 2.0}, 'ref': {'mean': 1.0, 'std': 0.1}, 'proposal': 0.01}
 }
-
-
-for key in my_parameters:
-    my_parameters[key]['proposal'] = my_parameters[key]['proposal']/1.0
-    my_parameters[key]['ref']['std'] = my_parameters[key]['proposal']/1.0
     
 
 covmat_path = None#'./covmat_candl.txt'
@@ -277,18 +225,8 @@ start = time.time()
 my_sampler.initialize(theory=my_theory, likelihood=my_likelihood, parameters=my_parameters, covmat = covmat_path, **emulator_settings)
 
 # Note the total run steps are   (nsteps * nwalkers * MPI_size)
-n_steps = 200
+n_steps = 1000
 my_sampler.run_mcmc(n_steps)
 
 end = time.time()
 print("Time elapsed: ", end - start)
-
-# chains = np.array(my_sampler.chain)
-
-# # do corner
-# import corner
-# import matplotlib.pyplot as plt
-
-# fig = corner.corner(chains.reshape(-1, chains.shape[-1]), labels=[r"$h$", r"$n_s$", r"$\omega_b$", r"$\omega_{cdm}$", r"$\tau_{reio}$", r"$A_{planck}$", r"$\log(10^{10} A_s)$"])
-# plt.savefig('corner.png')
-# plt.show()

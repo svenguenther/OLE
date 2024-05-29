@@ -42,6 +42,9 @@ class NUTSSampler(Sampler):
         self.M_adapt = kwargs['M_adapt'] if 'M_adapt' in kwargs else 1000
         self.delta_max = kwargs['delta_max'] if 'delta_max' in kwargs else 1000
 
+        # minimize nuisance parameters
+        self.minimize_nuisance_parameters = kwargs['minimize_nuisance_parameters'] if 'minimize_nuisance_parameters' in kwargs else True
+
         pass
     
     
@@ -63,20 +66,43 @@ class NUTSSampler(Sampler):
         max_loglike = -jnp.inf
         bestfit = None
 
+        self.jit_likelihood_function = jax.jit(self.likelihood_function)
+        self.jit_gradient_likelihood_function = jax.jit(jax.grad(self.likelihood_function))
+
         if not self.emulator.trained:
             while not self.emulator.trained:
                 # We perform vanilla MH sampling for one step
                 # The covmat is the identity matrix
                 RNG, subkey = jax.random.split(RNG)
                 step = pos+jnp.ones((self.nwalkers,self.ndim)) * jax.random.normal(subkey, shape=(self.nwalkers,self.ndim))
-                loglikes = jnp.array([self.compute_total_loglike_from_normalized_parameters(step[i]) for i in range(self.nwalkers)])
+
+
+                # if we have a large number of nuisance parameters, this phase can take a lot of time if no covmat is given. 
+                # Here we provide the user with the possibility to minimize the nuisance parameters for each theory step.
+                if (self.minimize_nuisance_parameters) and (len(self.nuisance_parameters)>0):
+                    theory_states = [self.compute_theory_from_normalized_parameters(step[i]) for i in range(self.nwalkers)]
+
+                    # minimize the nuisance parameters. It takes the state with the calculated theory and minimizes the nuisance parameters
+                    for i in range(self.nwalkers):
+                        theory_states[i] = self.nuisance_minimization(theory_states[i])
+                        self.emulator.add_state(theory_states[i])
+
+                        if (len(self.emulator.data_cache.states) >= self.emulator.hyperparameters['min_data_points']) and not self.emulator.trained:
+                            self.debug("Training emulator")
+                            self.emulator.train()
+                            self.debug("Emulator trained")
+
+                    loglikes = jnp.array([theory_states[i]['loglike'].sum() for i in range(self.nwalkers)])
+
+                else:
+                    loglikes = jnp.array([self.compute_total_loglike_from_normalized_parameters(step[i]) for i in range(self.nwalkers)])
+
                 # update bestfit
                 if jnp.max(loglikes) > max_loglike:
                     
                     max_loglike = jnp.max(loglikes)
                     bestfit = self.retranform_parameters_from_normalized_eigenspace(step[jnp.argmax(loglikes)])
-                    
-
+                
                 # accept or reject
                 for i in range(self.nwalkers):
                     if loglikes[i] > current_loglikes[i]:
