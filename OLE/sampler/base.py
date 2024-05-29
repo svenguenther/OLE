@@ -154,6 +154,15 @@ class Sampler(BaseClass):
             if key in self.nuisance_parameters:
                 self.nuisance_parameters.remove(key)
 
+        if len(self.nuisance_parameters) != 0:
+            # get nuisance mean and std from the parameter_dict
+            self.nuisance_means = jnp.zeros(len(self.nuisance_parameters))
+            self.nuisance_stds = jnp.zeros(len(self.nuisance_parameters))
+
+            for i, key in enumerate(self.nuisance_parameters):
+                self.nuisance_means = self.nuisance_means.at[i].set(self.parameter_dict[key]['ref']['mean'])
+                self.nuisance_stds = self.nuisance_stds.at[i].set(self.parameter_dict[key]['ref']['std'])
+
         pass
 
     def update_covmat(self, covmat):
@@ -506,7 +515,7 @@ class Sampler(BaseClass):
     @partial(jax.jit, static_argnums=(0))
     def likelihood_function(self, parameter_values, local_state):
         for i, key in enumerate(self.nuisance_parameters):
-            local_state['parameters'][key] = jnp.array([parameter_values[i]])
+            local_state['parameters'][key] = jnp.array([parameter_values[i]])*self.nuisance_stds[i] + self.nuisance_means[i]
         local_state = self.likelihood.loglike_state(local_state)
         logprior = self.compute_logprior(local_state)
         local_state['loglike'] = local_state['loglike'] + logprior
@@ -519,14 +528,20 @@ class Sampler(BaseClass):
         local_state = copy.deepcopy(state)
         
         # minimize the nuisance parameters
-        x0 = jnp.array([state['parameters'][key][0] for key in self.nuisance_parameters])
+        x0 = (jnp.array([state['parameters'][key][0] for key in self.nuisance_parameters])-self.nuisance_means)/self.nuisance_stds
+
+        state['loglike'] = -self.jit_likelihood_function(x0, local_state)
+        # check for nan
+        if jnp.isnan(state['loglike']):
+            self.error("Nuisance minimization: loglike is nan")
+            return state
 
         result = minimize(self.jit_likelihood_function, x0, jac=self.jit_gradient_likelihood_function, method='TNC', args=(local_state), options={'disp': True}, tol=1e-1)
         self.debug("minimization result: %s", result)
 
         state['loglike'] = jnp.array([float(-result.fun)])
         for i, key in enumerate(self.nuisance_parameters):
-            state['parameters'][key] = jnp.array([result.x[i]])
+            state['parameters'][key] = jnp.array([result.x[i]])*self.nuisance_stds[i] + self.nuisance_means[i]
 
         return state
 
