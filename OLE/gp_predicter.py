@@ -388,7 +388,7 @@ class GP_predictor(BaseClass):
                 os.makedirs(self.hyperparameters['plotting_directory']+ "/predictions/")
 
             # plot the prediction
-            plot_prediction_test(prediction, true, std, self.quantity_name, self.data_processor.input_data_raw[jnp.array(test_indices[i])], self.hyperparameters['plotting_directory']+ "/predictions/"+self.quantity_name+'_prediction_'+str(i)+'.png')
+            plot_prediction_test(prediction, true, std, self.quantity_name, self.data_processor.input_data_raw[jnp.array(test_indices[i])], self.hyperparameters['plotting_directory']+ "/predictions/"+self.quantity_name+'_prediction_'+str(i)+'.png', self.data_processor.data_covmat)
 
 
 

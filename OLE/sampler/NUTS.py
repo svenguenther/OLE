@@ -119,10 +119,10 @@ class NUTSSampler(Sampler):
             bestfit = self.retranform_parameters_from_normalized_eigenspace(pos[0])
 
         # do minimization here to get bestfit and covariance matrix (fisher matrix)
-        minimizer_params = {'method': 'TNC', 'use_emulator': True, 'use_gradients': True, 'logposterior': True}
+        minimizer_params = {**{'method': 'TNC', 'use_emulator': True, 'use_gradients': True, 'logposterior': True}, **self.hyperparameters}
         minimizer = MinimizeSampler()
 
-        minimizer.initialize(parameters=self.parameter_dict, theory=self.theory, likelihood=self.likelihood, emulator=self.emulator, hyperparameters=self.hyperparameters.update(minimizer_params))
+        minimizer.initialize(parameters=self.parameter_dict, theory=self.theory, likelihood=self.likelihood, emulator=self.emulator, **minimizer_params)
         minimizer.minimize()
 
         bestfit = minimizer.bestfit
@@ -134,7 +134,11 @@ class NUTSSampler(Sampler):
         self.info(minimizer.inv_hessian)
 
         # update the covmat
-        self.update_covmat(minimizer.inv_hessian)
+        if minimizer.res.success:
+            self.info("Updating covmat with Fisher matrix")
+            self.update_covmat(minimizer.inv_hessian)
+        else:
+            self.info("Minimization failed. Not updating covmat.")
             
             
         # Run the sampler.
