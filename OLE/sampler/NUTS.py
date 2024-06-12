@@ -135,8 +135,15 @@ class NUTSSampler(Sampler):
 
         # update the covmat
         if minimizer.res.success:
-            self.info("Updating covmat with Fisher matrix")
-            self.update_covmat(minimizer.inv_hessian)
+            # check if there are any NaNs in the covmat
+            if jnp.any(jnp.isnan(minimizer.inv_hessian)):
+                self.info("Minimization failed. Nans in covmat. Not updating covmat.")
+            # check if any of the diagonal elements are zero or negative
+            elif jnp.any(jnp.diag(minimizer.inv_hessian)<=0):
+                self.info("Minimization failed. Eigenvalues are <=0. Not updating covmat.")
+            else:
+                self.info("Updating covmat with Fisher matrix")
+                self.update_covmat(minimizer.inv_hessian)
         else:
             self.info("Minimization failed. Not updating covmat.")
             

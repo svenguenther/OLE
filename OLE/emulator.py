@@ -535,11 +535,13 @@ class Emulator(BaseClass):
             # this could be in gp_predictor
             print('set the noise levels to ')
             for quantity_name, quantity in self.ini_state['quantities'].items():
-                
+
                 # check whether the quantity is in the veto list
                 if self.hyperparameters['veto_list'] is not None:
                     if quantity_name in self.hyperparameters['veto_list']:
                         continue
+
+                # Ali memory bug <3
 
                 var = self.emulators[quantity_name].data_processor.output_pca_stds**2 * len(self.emulators[quantity_name].data_processor.output_data_emulator)
                 # this is analytical for the variance of the components. since we compare to the total we might drop the len of data

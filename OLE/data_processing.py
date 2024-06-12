@@ -159,7 +159,7 @@ class data_processor(BaseClass):
         # set all stds which are 0 to 1
         
         self.input_stds = jnp.where(self.input_stds == 0, 1, self.input_stds)
-        self.output_stds = jnp.where(self.output_stds == 0, 10**10, self.output_stds)
+        self.output_stds = jnp.where(self.output_stds == 0, 10**8, self.output_stds)
 
         # 
 

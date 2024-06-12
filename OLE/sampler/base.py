@@ -171,6 +171,21 @@ class Sampler(BaseClass):
 
         # go into eigenspace of covmat and build the inverse of the eigenvectors
         self.eigenvalues, self.eigenvectors = jnp.linalg.eigh(self.covmat)
+
+        # search for negative eigenvalues
+        if jnp.any(self.eigenvalues < 0):
+            self.error("Covmat contains negative eigenvalues")
+            raise ValueError("Covmat contains negative eigenvalues")
+        
+        # search for nan or inf in the eigenvalues and eigenvectors\
+        if jnp.isnan(self.eigenvalues).any() or jnp.isinf(self.eigenvalues).any():
+            self.error("Covmat contains nans or infs")
+            raise ValueError("Covmat contains nans or infs")
+        
+        if jnp.isnan(self.eigenvectors).any() or jnp.isinf(self.eigenvectors).any():
+            self.error("Covmat contains nans or infs")
+            raise ValueError("Covmat contains nans or infs")
+
         self.inv_eigenvectors = self.eigenvectors.T        
 
         return 0
