@@ -224,7 +224,7 @@ start = time.time()
 my_sampler.initialize(theory=my_theory, likelihood=my_likelihood, parameters=my_parameters, covmat = covmat_path, **emulator_settings)
 
 # Note the total run steps are   (nsteps * nwalkers * MPI_size)
-n_steps = 10#1000
+n_steps = 1000
 my_sampler.run_mcmc(n_steps)
 
 end = time.time()
