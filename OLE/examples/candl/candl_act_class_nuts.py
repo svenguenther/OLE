@@ -30,9 +30,6 @@
 from jax import config
 # config.update("jax_debug_nans", True)
 
-import sys
-sys.path.insert(0, "/Users/lennart/Research/software/OLE")
-
 from OLE.theory import Theory
 from OLE.likelihood import Likelihood
 import jax.numpy as jnp
