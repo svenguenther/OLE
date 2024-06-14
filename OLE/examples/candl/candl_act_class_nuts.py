@@ -30,6 +30,8 @@
 from jax import config
 # config.update("jax_debug_nans", True)
 
+import sys
+sys.path.insert(0, "/Users/lennart/Research/software/OLE")
 
 from OLE.theory import Theory
 from OLE.likelihood import Likelihood
@@ -137,7 +139,7 @@ class my_likelihood(Likelihood):
               'TE': state['quantities']['te'][2:]*ell*(ell+1)* 2.7255e6**2 / (2*jnp.pi),
               'EE': state['quantities']['ee'][2:]*ell*(ell+1)* 2.7255e6**2 / (2*jnp.pi),
             #   'BB': state['quantities']['bb'][2:]*ell*(ell+1)* 2.7255e6**2 / (2*jnp.pi),
-              'ell': ell[2:]}
+              'ell': ell}
 
         candl_input = {key: state['parameters'][key][0] for key in input_keys}
         candl_input['Dl'] = Dl
@@ -225,7 +227,7 @@ start = time.time()
 my_sampler.initialize(theory=my_theory, likelihood=my_likelihood, parameters=my_parameters, covmat = covmat_path, **emulator_settings)
 
 # Note the total run steps are   (nsteps * nwalkers * MPI_size)
-n_steps = 1000
+n_steps = 10#1000
 my_sampler.run_mcmc(n_steps)
 
 end = time.time()
