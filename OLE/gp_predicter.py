@@ -63,6 +63,7 @@ class GP_predictor(BaseClass):
             'error_tolerance': 1.,
             'excess_fraction': 0.1,
             'error_boost':2.,
+            'kernel_fitting_frequency': 4,
 
 
         }
@@ -549,7 +550,7 @@ class GP(BaseClass):
                     sparse_trained = True
                     use_nonsparse = True
                     print('falling back to normal GP')
-                    lr = lambda t: self.hyperparameters['learning_rate'] * 10. # generally non-sparse GP need a larger learning rate. We could define two seperate ones?
+                    lr = lambda t: self.hyperparameters['learning_rate'] * 3. # generally non-sparse GP need a larger learning rate. We could define two seperate ones?
                 
                 if not use_nonsparse:
                     q = gpx.variational_families.CollapsedVariationalGaussian(
