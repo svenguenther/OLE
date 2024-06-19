@@ -62,7 +62,7 @@ class GP_predictor(BaseClass):
             #error
             'error_tolerance': 1.,
             'excess_fraction': 0.1,
-            'error_boost':2.,
+            'error_boost':0.1,
             'kernel_fitting_frequency': 4,
 
 
@@ -494,26 +494,6 @@ class GP(BaseClass):
             raise ValueError('Kernel not implemented')
         
         
-        if self.hyperparameters['error_tolerance'] > 0.:
-            kernelWhite = gpx.kernels.White(variance = self.hyperparameters['error_tolerance'] )
-            kernelError = kernelWhite.replace_trainable(variance=False)
-            kernel = gpx.kernels.SumKernel(kernels = [kernelNoiseFree ,kernelError])
-        else:         
-            kernel = kernelNoiseFree
-        
-        
-        meanf = gpx.mean_functions.Zero()
-        prior = gpx.gps.Prior(mean_function=meanf, kernel=kernel)
-        prior = prior.replace(jitter = 1e-20)
-
-        lr = lambda t: self.hyperparameters['learning_rate']
-
-        
-        del self.opt_posterior
-        self.opt_posterior = None
-        gc.collect()
-
-
 
         use_nonsparse = True
 
@@ -525,7 +505,29 @@ class GP(BaseClass):
             use_nonsparse = False
                 
 
-    
+            if self.hyperparameters['error_tolerance'] == 0.:
+                kernel = kernelNoiseFree
+                use_nonsparse = True
+                sparse_trained = True
+                print("sparse GP training requires error_tolerance")
+            else: 
+
+                kernelWhite = gpx.kernels.White(variance = self.hyperparameters['error_tolerance'] * self.hyperparameters['error_boost'] )
+                # we reduce the white noise term by a factor to leave room for the unceratinity of the sparese GP. A boost of zero removes the white noise
+                # and applies all error budget to the sparse GP. Close to a value of one the sparse GP cannot converge as all error budget is used by the white noise
+                # a small allocation of white noise may be numerically ideal to smooth out the noise present in the data
+                kernelError = kernelWhite.replace_trainable(variance=False)
+                kernel = gpx.kernels.SumKernel(kernels = [kernelNoiseFree ,kernelError])
+        
+            meanf = gpx.mean_functions.Zero()
+            prior = gpx.gps.Prior(mean_function=meanf, kernel=kernel)
+            prior = prior.replace(jitter = 1e-20)
+
+            lr = lambda t: self.hyperparameters['learning_rate'] / 3. # sparse GP typically require a lower learning rate
+
+            del self.opt_posterior
+            self.opt_posterior = None
+            gc.collect()
 
             # Create the likelihood
             likelihood = gpx.gps.Gaussian(num_datapoints=self.D.n)
@@ -550,8 +552,7 @@ class GP(BaseClass):
                     sparse_trained = True
                     use_nonsparse = True
                     print('falling back to normal GP')
-                    lr = lambda t: self.hyperparameters['learning_rate'] * 3. # generally non-sparse GP need a larger learning rate. We could define two seperate ones?
-                
+                    
                 if not use_nonsparse:
                     q = gpx.variational_families.CollapsedVariationalGaussian(
                         posterior=posterior, inducing_inputs=z
@@ -576,27 +577,7 @@ class GP(BaseClass):
                     add_points = False
                     n_poor = 0
                     for std in predictive_std:
-                        if std**2 > self.hyperparameters['error_tolerance'] * self.hyperparameters['error_boost']: # acceptable boost
-                        # we require a constant error over all points in sparse GP training. However the sampler 
-                        # is happy it only points arround the best-fit are accurate and tolerates a higher error in the 
-                        # outer regions. We employ a simple method to impklement this. We do not try to add points until 
-                        # we reach the target error everywhere, but accept higher errors. The sampler will then notice if
-                        # the GP is not accurate enough and aqquire more points in the relevant rehgions only. This provides
-                        # a higher focus on those regions and implicltly implements a non-uniform error demand. 
-
-                        # Our method is controlled by two parameters. We multiply the error_tolerance by a constant factor. 
-                        # If this factor is too small we force optimal convergence everywhere leading to too many sparse points
-                        # and nullifying some advantages of the sparse sampling. If it is choosen too large we will aquire 
-                        # unnessecary points and could alrady have a working interpolator if we would add more sparse points.
-                        # A value around a few is a ggod choice, whith less than 2 being a bis small. 
-                        # Less than 1 will never converge and a non-sparse GP should be used instead
-
-                        # The second parameter is that we will accept a fraction of outlying points at even higher errors.
-                        # If this region is too poorly described the GP will add more points and eventually force a more accurate description
-                        # If this parameter is small, the GP will use too many sparse points trying to reach a constant error everywhere
-                        # If it is too large, the GP is happy to irgnore large regions which then causes new points to be aqquired 
-                        # but not leading to any convergence. The GP will be stuck on low sparse points and not becoming predictive
-                        # reasonable values seem to be in the range of tnes of percent 
+                        if std**2 > self.hyperparameters['error_tolerance']: 
                 
                             n_poor += 1
 
@@ -620,7 +601,24 @@ class GP(BaseClass):
 
             self.hyperparameters['is_sparse'] = False
 
-            
+            if self.hyperparameters['error_tolerance'] > 0.:
+                kernelWhite = gpx.kernels.White(variance = self.hyperparameters['error_tolerance'] )
+                kernelError = kernelWhite.replace_trainable(variance=False)
+                kernel = gpx.kernels.SumKernel(kernels = [kernelNoiseFree ,kernelError])
+            else:         
+                kernel = kernelNoiseFree
+
+            meanf = gpx.mean_functions.Zero()
+            prior = gpx.gps.Prior(mean_function=meanf, kernel=kernel)
+            prior = prior.replace(jitter = 1e-20)
+
+            lr = lambda t: self.hyperparameters['learning_rate']
+
+        
+            del self.opt_posterior
+            self.opt_posterior = None
+            gc.collect()
+
             # Create the likelihood
             likelihood = gpx.gps.Gaussian(num_datapoints=self.D.n)
             likelihood = likelihood.replace_trainable(obs_stddev = False)
