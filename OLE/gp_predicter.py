@@ -76,11 +76,11 @@ class GP_predictor(BaseClass):
 
         # We need to determine the dimensionality of the quantity to be emulated. This is done by looking at the example state.
         self.output_size = len(ini_state['quantities'][self.quantity_name])
-        self.info('Output size: %d', self.output_size)
+        self.debug('Output size: %d', self.output_size)
 
         # We need to determine the dimensionality of the parameters. This is done by looking at the example state.
         self.input_size = len(ini_state['parameters'])
-        self.info('Input size: %d', self.input_size)
+        self.debug('Input size: %d', self.input_size)
 
         # We can now initialize the data processor for this quantity.
         self.data_processor = data_processor('Data processor ' + self.quantity_name, debug=self.debug_mode)

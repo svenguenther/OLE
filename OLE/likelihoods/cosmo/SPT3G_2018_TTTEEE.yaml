@@ -1,0 +1,330 @@
+EE_Poisson_150x150:
+    prior:
+        min: 0
+        max: 5
+        mean: 0.011495
+        std: 0.01
+    ref:
+        mean: 0.011495
+        std: 0.01
+    proposal: 0.01
+EE_Poisson_150x220:
+    prior:
+        min: 0
+        max: 5
+        mean: 0.018962
+        std: 0.01
+    ref:
+        mean: 0.018962
+        std: 0.01
+    proposal: 0.01
+EE_Poisson_220x220:
+    prior:
+        min: 0
+        max: 5
+        mean: 0.047557
+        std: 0.01
+    ref:
+        mean: 0.047557
+        std: 0.01
+    proposal: 0.01
+EE_Poisson_90x150:
+    prior:
+        min: 0
+        max: 5
+        mean: 0.018048
+        std: 0.01
+    ref:
+        mean: 0.018048
+        std: 0.01
+    proposal: 0.01
+EE_Poisson_90x220:
+    prior:
+        min: 0
+        max: 5
+        mean: 0.015719
+        std: 0.01
+    ref:
+        mean: 0.015719
+        std: 0.01
+    proposal: 0.01
+EE_Poisson_90x90:
+    prior:
+        min: 0
+        max: 5
+        mean: 0.040469
+        std: 0.01
+    ref:
+        mean: 0.040469
+        std: 0.01
+    proposal: 0.01
+EE_PolGalDust_Alpha:
+    prior:
+        min: -5
+        max: -1
+        mean: -2.42
+        std: 0.04
+    ref:
+        mean: -2.42
+        std: 0.04
+    proposal: 0.04
+EE_PolGalDust_Amp:
+    prior:
+        min: 0
+        max: 5
+        mean: 0.05
+        std: 0.02
+    ref:
+        mean: 0.05
+        std: 0.02
+    proposal: 0.02
+EE_PolGalDust_Beta:
+    prior:
+        min: 0.5
+        max: 2.5
+        mean: 1.51
+        std: 0.04
+    ref:
+        mean: 1.51
+        std: 0.04
+    proposal: 0.04
+Kappa:
+    prior:
+        min: -0.01
+        max: 0.01
+        mean: 0
+        std: 0.00045
+    ref:
+        mean: 0
+        std: 0.00045
+    proposal: 0.00045
+TE_PolGalDust_Alpha:
+    prior:
+        min: -5
+        max: -1
+        mean: -2.42
+        std: 0.04
+    ref:
+        mean: -2.42
+        std: 0.04
+    proposal: 0.04
+TE_PolGalDust_Amp:
+    prior:
+        min: 0
+        max: 5
+        mean: 0.12
+        std: 0.051
+    ref:
+        mean: 0.12
+        std: 0.051
+    proposal: 0.051
+TE_PolGalDust_Beta:
+    prior:
+        min: 0.5
+        max: 2.5
+        mean: 1.51
+        std: 0.04
+    ref:
+        mean: 1.51
+        std: 0.04
+    proposal: 0.04
+TT_CIBClustering_Amp:
+    prior:
+        min: 0
+        max: 20
+        mean: 3.2263
+        std: 1
+    ref:
+        mean: 3.2263
+        std: 1
+    proposal: 1
+TT_CIBClustering_Beta:
+    prior:
+        min: 0
+        max: 5
+        mean: 2.2952
+        std: 0.5
+    ref:
+        mean: 2.2952
+        std: 0.5
+    proposal: 0.5
+TT_GalCirrus_Alpha:
+    prior:
+        min: -3
+        max: -2
+        mean: -2.53
+        std: 0.05
+    ref:
+        mean: -2.53
+        std: 0.05
+    proposal: 0.05
+TT_GalCirrus_Amp:
+    prior:
+        min: 0
+        max: 10
+        mean: 1.88
+        std: 0.2
+    ref:
+        mean: 1.88
+        std: 0.2
+    proposal: 0.2
+TT_GalCirrus_Beta:
+    prior:
+        min: 0
+        max: 2
+        mean: 1.48
+        std: 0.1
+    ref:
+        mean: 1.48
+        std: 0.1
+    proposal: 0.1
+TT_Poisson_150x150:
+    prior:
+        min: 0
+        max: 200
+        mean: 15.8306
+        std: 5
+    ref:
+        mean: 15.8306
+        std: 5
+    proposal: 5
+TT_Poisson_150x220:
+    prior:
+        min: 0
+        max: 200
+        mean: 15.8306
+        std: 5
+    ref:
+        mean: 15.8306
+        std: 5
+    proposal: 5
+TT_Poisson_220x220:
+    prior:
+        min: 0
+        max: 200
+        mean: 68.2457
+        std: 5
+    ref:
+        mean: 68.2457
+        std: 5
+    proposal: 5
+TT_Poisson_90x150:
+    prior:
+        min: 0
+        max: 200
+        mean: 23.9268
+        std: 5
+    ref:
+        mean: 23.9268
+        std: 5
+    proposal: 5
+TT_Poisson_90x220:
+    prior:
+        min: 0
+        max: 200
+        mean: 21.5341
+        std: 5
+    ref:
+        mean: 21.5341
+        std: 5
+    proposal: 5
+TT_Poisson_90x90:
+    prior:
+        min: 0
+        max: 200
+        mean: 52.8146
+        std: 5
+    ref:
+        mean: 52.8146
+        std: 5
+    proposal: 5
+TT_kSZ_Amp:
+    prior:
+        min: 0
+        max: 20
+        mean: 3
+        std: 1
+    ref:
+        mean: 3
+        std: 1
+    proposal: 1
+TT_tSZ_Amp:
+    prior:
+        min: 0
+        max: 20
+        mean: 3.42
+        std: 0.5
+    ref:
+        mean: 3.42
+        std: 0.5
+    proposal: 0.5
+TT_tSZ_CIB_Corr_Amp:
+    prior:
+        min: -1
+        max: 1
+        mean: 0.1144
+        std: 0.1
+    ref:
+        mean: 0.1144
+        std: 0.1
+    proposal: 0.1
+Tcal150:
+    prior:
+        min: 0.9
+        max: 1.1
+        mean: 1
+        std: 0.01
+    ref:
+        mean: 1
+        std: 0.01
+    proposal: 0.01
+Tcal220:
+    prior:
+        min: 0.9
+        max: 1.1
+        mean: 1
+        std: 0.01
+    ref:
+        mean: 1
+        std: 0.01
+    proposal: 0.01
+Tcal90:
+    prior:
+        min: 0.9
+        max: 1.1
+        mean: 1
+        std: 0.01
+    ref:
+        mean: 1
+        std: 0.01
+    proposal: 0.01
+Ecal150:
+    prior:
+        min: 0.9
+        max: 1.1
+        mean: 1
+        std: 0.01
+    ref:
+        mean: 1
+        std: 0.01
+    proposal: 0.01
+Ecal220:
+    prior:
+        min: 0.9
+        max: 1.1
+        mean: 1
+        std: 0.01
+    ref:
+        mean: 1
+        std: 0.01
+    proposal: 0.01
+Ecal90:
+    prior:
+        min: 0.9
+        max: 1.1
+        mean: 1
+        std: 0.01
+    ref:
+        mean: 1
+        std: 0.01
+    proposal: 0.01

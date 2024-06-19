@@ -127,7 +127,8 @@ class Emulator(BaseClass):
             'N_sigma': 6,
             'dimensionality': None, # if we give the dimensionality, the code estimates where we need to be accruate in the quality criterium (inside of N_sigma). Thus, we can estimate the quality_threshold_quadratic, in a way, that it becomes dominant over the linear at this point!
 
-
+            # a dictionary for the likelihood settings
+            'likelihood_settings': {},
         }
 
         # The hyperparameters are a dictionary of the hyperparameters for the different quantities. The keys are the names of the quantities.
@@ -161,7 +162,7 @@ class Emulator(BaseClass):
 
         self.likelihood = likelihood
         if self.likelihood is not None:
-            self.likelihood.initialize(**kwargs)
+            self.likelihood.initialize(**self.hyperparameters['likelihood_settings'])
 
         # A state dictionary is a nested dictionary with the following structure:
         # state = {
@@ -231,6 +232,9 @@ class Emulator(BaseClass):
             if self.hyperparameters['veto_list'] is not None:
                 if quantity_name in self.hyperparameters['veto_list']:
                     continue
+
+            # write that we create an emulator for this quantity
+            self.info("Create emulator for %s", quantity_name)
             
             # initialize the emulator for the quantity
             self.emulators[quantity_name] = GP_predictor(quantity_name, debug=self.debug_mode)
@@ -350,7 +354,7 @@ class Emulator(BaseClass):
         input_data_raw_jax = jnp.array(input_data_raw)
 
         for quantity, emulator in self.emulators.items():
-            self.info("Start training emulator for quantity %s", quantity)
+            self.debug("Start training emulator for quantity %s", quantity)
             output_data_raw = self.data_cache.get_quantities(quantity)
 
             output_data_raw_jax = jnp.array(output_data_raw)
@@ -533,7 +537,7 @@ class Emulator(BaseClass):
                         
                 
             # this could be in gp_predictor
-            print('set the noise levels to ')
+            self.debug('set the noise levels to ')
             for quantity_name, quantity in self.ini_state['quantities'].items():
 
                 # check whether the quantity is in the veto list
@@ -555,7 +559,7 @@ class Emulator(BaseClass):
                     error = ((variance_tolerance / relative_variance) ** 2. ) / len(var)
                     
                     self.emulators[quantity_name].GPs[i].hyperparameters['error_tolerance'] = error
-                    print(self.emulators[quantity_name].GPs[i].hyperparameters['error_tolerance'] )
+                    self.debug(self.emulators[quantity_name].GPs[i].hyperparameters['error_tolerance'] )
 
     
 

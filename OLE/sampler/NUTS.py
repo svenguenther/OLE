@@ -122,16 +122,18 @@ class NUTSSampler(Sampler):
         minimizer_params = {**{'method': 'TNC', 'use_emulator': True, 'use_gradients': True, 'logposterior': True}, **self.hyperparameters}
         minimizer = MinimizeSampler()
 
-        minimizer.initialize(parameters=self.parameter_dict, theory=self.theory, likelihood=self.likelihood, emulator=self.emulator, **minimizer_params)
+        minimizer.initialize(parameters=self.parameter_dict, 
+                            theory=self.theory, 
+                            likelihood=self.likelihood, 
+                            emulator=self.emulator, 
+                            likelihood_settings=self.likelihood_settings,
+                            theory_settings=self.theory_settings,
+                            emulator_settings=self.emulator.hyperparameters,
+                            sampler_settings=minimizer_params,)
         minimizer.minimize()
 
         bestfit = minimizer.bestfit
 
-        self.info("Minimization after first emulator training finds:")
-        self.info("Bestfit: ")
-        self.info(bestfit)
-        self.info("Covmat: ")
-        self.info(minimizer.inv_hessian)
 
         # update the covmat
         if minimizer.res.success:
@@ -142,6 +144,11 @@ class NUTSSampler(Sampler):
             elif jnp.any(jnp.diag(minimizer.inv_hessian)<=0):
                 self.info("Minimization failed. Eigenvalues are <=0. Not updating covmat.")
             else:
+                self.info("Minimization after first emulator training finds:")
+                self.info("Bestfit: ")
+                self.info(bestfit)
+                self.debug("Covmat: ")
+                self.debug(minimizer.inv_hessian)
                 self.info("Updating covmat with Fisher matrix")
                 self.update_covmat(minimizer.inv_hessian)
         else:
@@ -177,9 +184,9 @@ class NUTSSampler(Sampler):
         self.theta0 = self.transform_parameters_into_normalized_eigenspace(bestfit)
 
         # we search a reasonable epsilon (step size)
-        self.info("Searching for a reasonable step sizes")
+        self.debug("Searching for a reasonable step sizes")
         RNG, eps = self._findReasonableEpsilon(self.theta0, RNG)
-        self.info("Found reasonable step sizes: %f", eps)
+        self.debug("Found reasonable step sizes: %f", eps)
 
         # Initialize variables
         mu = jnp.log(10 * eps)
@@ -232,7 +239,7 @@ class NUTSSampler(Sampler):
             elif i+1 == self.M_adapt + 1:
                 eps = eps_bar
 
-            print("Sample %d/%d, time: %f"%(i+1, self.M_adapt + nsteps +1, time.time()-start))
+            self.debug("Sample %d/%d, time: %f"%(i+1, self.M_adapt + nsteps +1, time.time()-start))
 
 
             start = time.time()
@@ -253,9 +260,9 @@ class NUTSSampler(Sampler):
                     # noiseFree is only required if a noise term is used at all !!
                     loglikes_noiseFree = self.logp_sample_noiseFree(thetas[i])
 
-                    #print('dumping loglikes emulated')
-                    #print(jnp.std(jnp.array(loglikes)))
-                    #print(jnp.std(jnp.array(loglikes_noiseFree)))
+                    self.debug('dumping loglikes emulated')
+                    self.debug(jnp.std(jnp.array(loglikes)))
+                    self.debug(jnp.std(jnp.array(loglikes_noiseFree)))
 
                     # check whether the emulator is good enough
                     if not self.emulator.check_quality_criterium(jnp.array(loglikes_noiseFree), parameters=state['parameters']):
@@ -269,7 +276,7 @@ class NUTSSampler(Sampler):
                         
                         a,rejit_required = self.emulator.add_state(state)
 
-                        print("Emulator not good enough")
+                        self.debug("Emulator not good enough")
 
                         # update the differential loglikes
                         if rejit_required:
@@ -284,13 +291,13 @@ class NUTSSampler(Sampler):
                     
                             if not self.emulator.check_quality_criterium(jnp.array(loglikes), parameters=state['parameters'], write_log=False):
                                 # if the emulator passes noiseFree but fails with noise then the noise is too large
-                                print('!!!!noise levels too large for convergence, reduce explained_variance_cutoff and or noise_percentage!!!!')
+                                self.info('!!!!noise levels too large for convergence, reduce explained_variance_cutoff and or noise_percentage!!!!')
                                 # note that it is normal to trigger this from time to time. for acceptable noise at the edge of interpolation area it can happen
-                        print("Emulator good enough")
+                        self.debug("Emulator good enough")
                         # Add the point to the quality points
                         self.emulator.add_quality_point(state['parameters'])
                         
-            print("Testing time: ", time.time()-start)
+            self.debug("Testing time: ", time.time()-start)
 
             self.print_status(i, thetas)
 
@@ -340,8 +347,6 @@ class NUTSSampler(Sampler):
         r = random.normal(subkey, shape=theta.shape)
 
         logp, gradlogp = self.logp_and_grad(theta)
-        print(logp)
-        print(gradlogp)
 
         if jnp.isnan(logp):
             raise ValueError("log probability of initial value is NaN.")

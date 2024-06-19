@@ -10,6 +10,7 @@ class Theory(BaseClass):
         super().__init__(name, **kwargs)
 
     def initialize(self, **kwargs):
+        self.hyperparameters = kwargs
         pass
 
     def compute(self, state):

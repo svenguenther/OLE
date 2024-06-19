@@ -47,26 +47,40 @@ class Sampler(BaseClass):
                    likelihood=None, 
                    theory=None,
                    emulator=None, 
+                   emulator_settings={},
+                   likelihood_settings={},
+                    theory_settings={},
+                    sampler_settings={},
                    **kwargs):
-        
-        # Store Theory and initialize if possible
-        self.theory = theory
-        if self.theory is not None:
-            self.theory.initialize(**kwargs)
 
         # Store Likelihood and initialize if possible
         self.likelihood = likelihood
         if self.likelihood is not None:
-            self.likelihood.initialize(**kwargs)
+            self.likelihood_settings = likelihood_settings
+            self.likelihood.initialize(**likelihood_settings)
+
+        # update theory settings by likelihood
+        if theory is not None:
+            theory_settings = self.likelihood.update_theory_settings(theory_settings)
+
+        # Store Theory and initialize if possible
+        self.theory = theory
+        if self.theory is not None:
+            self.theory_settings = theory_settings
+            self.theory.initialize(**theory_settings)
 
         # Store Emulator and initialize if possible
         self.emulator = None
         if emulator is not None:
             self.emulator = emulator
 
+        # load default parameter dictionary from likelihood
+        if self.likelihood is not None:
+            self.parameter_dict = self.likelihood.nuisance_sample_dict
 
-        
-        self.parameter_dict = parameters
+        # Update on parameters if given
+        if parameters is not None:
+            self.parameter_dict.update(parameters)   
 
         defaulthyperparameters = {
             # output directory for the chain
@@ -85,14 +99,14 @@ class Sampler(BaseClass):
             'plotting_directory': None,
 
             # status print frequency
-            'status_print_frequency': 100,
+            'status_print_frequency': 20,
 
         }
 
         # The hyperparameters are a dictionary of the hyperparameters for the different quantities. The keys are the names of the quantities.
         self.hyperparameters = defaulthyperparameters
 
-        for key, value in kwargs.items():
+        for key, value in sampler_settings.items():
             self.hyperparameters[key] = value
 
         # create output directory
@@ -116,6 +130,8 @@ class Sampler(BaseClass):
             else:
                 self.proposal_means = self.proposal_means.at[i].set(0.5*(self.parameter_dict[key]['prior']['min']+self.parameter_dict[key]['prior']['max']))
 
+        
+
         # generate the covariance matrix
         self.covmat = self.generate_covmat()
 
@@ -127,25 +143,28 @@ class Sampler(BaseClass):
 
         # remove the parameters from the test state which are not in self.theory.requirements
 
+        # the likelihood will be initialized once again in the emulator. As a consequence we need to provide the emulator settings with the likelihood settings
+        emulator_settings['likelihood_settings'] = likelihood_settings
+
         # if emulator was not loaded, we need to create one here:
         if self.emulator is None:
             # initialize the emulator
-            self.emulator = Emulator(**kwargs)
+            self.emulator = Emulator(**emulator_settings)
 
             test_state = None
 
-            if 'load_initial_state' not in kwargs:
+            if 'load_initial_state' not in emulator_settings:
                 test_state = self.test_pipeline()
             else:
-                if not kwargs['load_initial_state']:
+                if not emulator_settings['load_initial_state']:
                     test_state = self.test_pipeline()
 
             # here we check the requirements of the theory code. If they are specified, we initialize the emulator with the requirements
             # otherwise the emulator is inificalized with all parameters which could also include likelihood parameters!
             if len(self.theory.requirements) > 0:
-                self.emulator.initialize(self.likelihood, test_state, input_parameters=self.theory.requirements, **kwargs)
+                self.emulator.initialize(self.likelihood, test_state, input_parameters=self.theory.requirements, **emulator_settings)
             else:
-                self.emulator.initialize(self.likelihood, test_state, **kwargs)
+                self.emulator.initialize(self.likelihood, test_state, **emulator_settings)
 
 
         self.nuisance_parameters = list(self.parameter_dict.keys())
@@ -329,8 +348,8 @@ class Sampler(BaseClass):
         # compute the loglikelihood
         state = self.likelihood.loglike_state(state)
 
-        self.info("Test pipeline:")
-        self.info(state)
+        self.debug("Test pipeline:")
+        self.debug(state)
 
         return state
 

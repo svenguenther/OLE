@@ -4,9 +4,17 @@ from OLE.utils.base import BaseClass
 class Likelihood(BaseClass):
     
         def __init__(self, name=None, **kwargs):
+            self.input_keys = []
+            self.nuisance_sample_dict = {}
+            self.hyperparameters = {}
             super().__init__(name, **kwargs)
+
+        def update_theory_settings(self, theory_settings):
+            # this function can be used to update the theory settings
+            return theory_settings
     
         def initialize(self, **kwargs):
+            self.hyperparameters = kwargs
             pass
     
         def loglike(self, state):

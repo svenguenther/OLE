@@ -33,16 +33,16 @@ class MinimizeSampler(Sampler):
             super().initialize(**kwargs)
     
             # flag whether to use the emulator or not
-            self.use_emulator = kwargs['use_emulator'] if 'use_emulator' in kwargs else True
+            self.use_emulator = self.hyperparameters['use_emulator'] if 'use_emulator' in self.hyperparameters else True
 
             # check wether we want to calculate the loglikelihood or the logposterior
-            self.logposterior = kwargs['logposterior'] if 'logposterior' in kwargs else False
+            self.logposterior = self.hyperparameters['logposterior'] if 'logposterior' in self.hyperparameters else False
 
             # check whether to use the gradients
-            self.use_gradients = kwargs['use_gradients'] if 'use_gradients' in kwargs else True
+            self.use_gradients = self.hyperparameters['use_gradients'] if 'use_gradients' in self.hyperparameters else True
 
             # set the method for the minimization
-            self.method = 'TNC' if 'method' not in kwargs else kwargs['method']
+            self.method = 'TNC' if 'method' not in self.hyperparameters else self.hyperparameters['method']
 
             # 
 
@@ -88,7 +88,7 @@ class MinimizeSampler(Sampler):
                 res = self.optimizer(f, 
                                     initial_position, method=self.method, bounds=bounds, 
                                     jac=grad_f, 
-                                    options={'disp': True, 'maxfun':2000},#, 'ftol': 1e-20, 'gtol': 1e-10 },
+                                    options={'disp': False, 'maxfun':2000},#, 'ftol': 1e-20, 'gtol': 1e-10 },
                                     )
                 
                 self.inv_hessian = self.denormalize_inv_hessematrix( np.linalg.inv(hessian_f(res.x)) )
