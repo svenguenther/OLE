@@ -138,7 +138,7 @@ class my_likelihood(Likelihood):
               'TE': state['quantities']['te'][2:]*ell*(ell+1)* 2.7255e6**2 / (2*jnp.pi),
               'EE': state['quantities']['ee'][2:]*ell*(ell+1)* 2.7255e6**2 / (2*jnp.pi),
             #   'BB': state['quantities']['bb'][2:]*ell*(ell+1)* 2.7255e6**2 / (2*jnp.pi),
-              'ell': ell[2:]}
+              'ell': ell}
 
         candl_input = {key: state['parameters'][key][0] for key in input_keys}
         candl_input['Dl'] = Dl
