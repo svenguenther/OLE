@@ -88,7 +88,7 @@ class MinimizeSampler(Sampler):
                 res = self.optimizer(f, 
                                     initial_position, method=self.method, bounds=bounds, 
                                     jac=grad_f, 
-                                    options={'disp': True},#, 'ftol': 1e-20, 'gtol': 1e-10 },
+                                    options={'disp': True, 'maxfun':2000},#, 'ftol': 1e-20, 'gtol': 1e-10 },
                                     )
                 
                 self.inv_hessian = self.denormalize_inv_hessematrix( np.linalg.inv(hessian_f(res.x)) )
@@ -107,6 +107,24 @@ class MinimizeSampler(Sampler):
             self.res = res
             self.bestfit = self.retranform_parameters_from_normalized_eigenspace(res.x)
             self.max_loglike = res.fun
+
+            # now we want to store inv_hessian in self.hyperparameters['output_directory']/fisher.covmat as txt file. First line will be the name of the parameters
+            if self.inv_hessian is not None:
+                with open(self.hyperparameters['output_directory'] + '/fisher.covmat', 'w') as f:
+                    f.write(' '.join([key for key in self.parameter_dict.keys()]) + '\n')
+                    for row in self.inv_hessian:
+                        f.write(' '.join([str(val) for val in row]) + '\n')
+
+            # now store bestfit with max likelihood
+            with open(self.hyperparameters['output_directory'] + '/bestfit.txt', 'w') as f:
+                f.write(' '.join([key for key in self.parameter_dict.keys()]) + '\n')
+                f.write(' '.join([str(val) for val in self.bestfit]) + '\n')
+                f.write(' '.join([str(self.max_loglike)]) + '\n')
+
+
+
+
+
             
 
 

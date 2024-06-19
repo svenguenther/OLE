@@ -119,10 +119,10 @@ class NUTSSampler(Sampler):
             bestfit = self.retranform_parameters_from_normalized_eigenspace(pos[0])
 
         # do minimization here to get bestfit and covariance matrix (fisher matrix)
-        minimizer_params = {'method': 'TNC', 'use_emulator': True, 'use_gradients': True, 'logposterior': True}
+        minimizer_params = {**{'method': 'TNC', 'use_emulator': True, 'use_gradients': True, 'logposterior': True}, **self.hyperparameters}
         minimizer = MinimizeSampler()
 
-        minimizer.initialize(parameters=self.parameter_dict, theory=self.theory, likelihood=self.likelihood, emulator=self.emulator, hyperparameters=self.hyperparameters.update(minimizer_params))
+        minimizer.initialize(parameters=self.parameter_dict, theory=self.theory, likelihood=self.likelihood, emulator=self.emulator, **minimizer_params)
         minimizer.minimize()
 
         bestfit = minimizer.bestfit
@@ -134,7 +134,18 @@ class NUTSSampler(Sampler):
         self.info(minimizer.inv_hessian)
 
         # update the covmat
-        self.update_covmat(minimizer.inv_hessian)
+        if minimizer.res.success:
+            # check if there are any NaNs in the covmat
+            if jnp.any(jnp.isnan(minimizer.inv_hessian)):
+                self.info("Minimization failed. Nans in covmat. Not updating covmat.")
+            # check if any of the diagonal elements are zero or negative
+            elif jnp.any(jnp.diag(minimizer.inv_hessian)<=0):
+                self.info("Minimization failed. Eigenvalues are <=0. Not updating covmat.")
+            else:
+                self.info("Updating covmat with Fisher matrix")
+                self.update_covmat(minimizer.inv_hessian)
+        else:
+            self.info("Minimization failed. Not updating covmat.")
             
             
         # Run the sampler.

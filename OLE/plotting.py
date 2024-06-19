@@ -173,8 +173,6 @@ def data_plot_raw(data, label, file_name):
     gc.collect()
 
 def data_plot_normalized(data, label, file_name):
-    print(len(data.shape))
-    print(len(data[0].shape))
     if data.shape[1] == 1:
         # just scatter the data
         plt.figure()
@@ -241,7 +239,10 @@ def plot_pca_components_test_set(true, pred, pred_std, title, file_name):
 
     gc.collect()
 
-def plot_prediction_test(prediction, true, std, title, data_point, file_name):
+def plot_prediction_test(prediction, true, std, title, data_point, file_name, data_covmat):
+
+    # create mask where data_covmat is zero
+    mask = jnp.where(jnp.diag(data_covmat) == 0.0, 0.0, 1.0)
 
     X = np.array(range(len(true[0])))
     norm_factor = plot_normalization(X, true, title)
@@ -257,28 +258,30 @@ def plot_prediction_test(prediction, true, std, title, data_point, file_name):
     ax[0].text(0.05, 0.95, 'Data point: ' + str(data_point), ha='left', va='bottom', transform=plt.gca().transAxes)
 
     if len(prediction) == 1:
-        ax[0].errorbar([0], prediction*norm_factor, yerr=std, fmt='o', label='Prediction')
+        # plot masked prediction
+        ax[0].errorbar([0], prediction*norm_factor*mask, yerr=std*mask, fmt='o', label='Masked Prediction')
         ax[0].errorbar([0], true*norm_factor, fmt='o', label='True')
 
-        # make residuals
-        ax[1].errorbar([0], true*norm_factor-prediction*norm_factor, yerr=std*norm_factor, fmt='o')
+        # plot masked residuals
+        ax[1].errorbar([0], (true-prediction)*norm_factor*mask, yerr=std*norm_factor*mask, fmt='o', label='Masked Residuals')
 
-        # make residuals 
-        ax[2].errorbar([0], (true-prediction)/std, yerr=std/std, fmt='o')
+        # plot masked residuals
+        ax[2].errorbar([0], (true-prediction)/std*mask, yerr=std/std*mask, fmt='o', label='Masked Residuals')
 
     else:
+        # plot masked prediction
+        ax[0].plot(range(len(true[0])), prediction*norm_factor*mask, label='Prediction')
 
-        ax[0].plot(range(len(true[0])), prediction*norm_factor, label='Prediction')
         # make errorband around the prediction
-        ax[0].fill_between(range(len(true[0])), (prediction-std)*norm_factor, (prediction+std)*norm_factor, alpha=0.5, label='1$\sigma$')
+        ax[0].fill_between(range(len(true[0])), (prediction-std)*norm_factor*mask, (prediction+std)*norm_factor*mask, alpha=0.5, label='1$\sigma$')
         ax[0].plot(range(len(true[0])), true[0]*norm_factor, label='True')
 
         # make residuals
-        ax[1].plot(range(len(true[0])), true[0]*norm_factor-prediction*norm_factor, label='Residuals')
-        ax[1].fill_between(range(len(true[0])), -std*norm_factor, std*norm_factor, alpha=0.5, label='1$\sigma$')
+        ax[1].plot(range(len(true[0])), (true[0]-prediction)*norm_factor*mask, label='Residuals')
+        ax[1].fill_between(range(len(true[0])), -std*norm_factor*mask, std*norm_factor*mask, alpha=0.5, label='1$\sigma$')
 
         # make residuals
-        ax[2].plot(range(len(true[0])), (true[0]-prediction)/std, label='Residuals')
+        ax[2].plot(range(len(true[0])), (true[0]-prediction)*mask/std, label='Residuals')
         ax[2].fill_between(range(len(true[0])), -1, 1, alpha=0.5, label='1$\sigma$')
 
 
