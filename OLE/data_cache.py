@@ -131,8 +131,7 @@ class DataCache(BaseClass):
             self.error("LOGLIKE IS NAN!")
             return False
 
-        self.info("new_loglike: %f", new_loglike)
-        self.info("max_loglike: %f", self.max_loglike)
+        self.info("Loglikelihood of incoming state: %f, Current bestfit Loglikelihood %f" %(new_loglike, self.max_loglike))
 
         # check if the new loglike is larger than the maximum loglike
         if (self.max_loglike - new_loglike) > self.hyperparameters['delta_loglike']:
@@ -158,7 +157,7 @@ class DataCache(BaseClass):
         # add a state to the cache
         self.states.append(new_state)
 
-        self.info("Added state to cache: %s", new_state['parameters'])
+        self.debug("Added state to cache: %s", new_state['parameters'])
         self.info("Cache size: %d/%d", len(self.states), self.hyperparameters['cache_size'])
 
         # if there exists a chache file, store the cache in the file

@@ -220,8 +220,7 @@ class Emulator(BaseClass):
                         self.debug("Data covmat found for quantity %s. Using it for normalization.", quantity_name)
                         self.data_covmats[quantity_name] = np.loadtxt(covmat_file)
                     else:
-                        self.debug("Data covmat not found for quantity %s. Not using it for normalization.", quantity_name)
-
+                        self.warning("Data covmat not found for quantity %s. Not using it for normalization.", quantity_name)
 
         # Here: Create the emulators for the different quantities
         self.emulators = {}
@@ -559,7 +558,7 @@ class Emulator(BaseClass):
                     error = ((variance_tolerance / relative_variance) ** 2. ) / len(var)
                     
                     self.emulators[quantity_name].GPs[i].hyperparameters['error_tolerance'] = error
-                    self.debug(self.emulators[quantity_name].GPs[i].hyperparameters['error_tolerance'] )
+                    self.debug("Error tolerance for GP %d of quantity %s: %e" % (i, quantity_name, error))
 
     
 
@@ -692,6 +691,9 @@ class Emulator(BaseClass):
             return
         
         file_name = self.hyperparameters['logfile']+'_'+str(get_mpi_rank())+'.log'
+        # check if file/directory exists, otherwise create it
+        if not os.path.exists(os.path.dirname(file_name)):
+            os.makedirs(os.path.dirname(file_name))
         with open(file_name, 'a') as logfile:
             # add timestamp to message
             message = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()) + " " + message

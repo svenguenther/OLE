@@ -32,7 +32,7 @@ class candl_likelihood(Likelihood):
         self.input_keys = list(np.unique(self.candl_like.required_nuisance_parameters + self.candl_like.required_prior_parameters))
 
         # Grab spectrum conversion helper
-        self.cl2dl = self.candl_like.ells * (self.candl_like.ells + 1) / (2.0 * jnp.pi)
+        self.cl2dl = self.candl_like.ells * (self.candl_like.ells + 1) / (2.0 * jnp.pi) * (2.7255e6)**2
 
         # Grab nuisance parameters.
         if kwargs["candl_dataset"] == 'candl.data.ACT_DR4_TTTEEE':
@@ -64,7 +64,8 @@ class candl_likelihood(Likelihood):
         # Grab calculated spectra, convert to Dl
         Dl = {'ell': self.candl_like.ells}
         for spec_type in self.candl_like.unique_spec_types:
-            Dl[spec_type] = state['quantities'][spec_type.lower()][2:] * self.cl2dl
+            Dl[spec_type] = state['quantities'][spec_type.lower()][2:] * self.cl2dl 
+
 
         # Shuffle into parameters, spectra into dictionary, convert tau naming conventions
         candl_input = {}

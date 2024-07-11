@@ -56,14 +56,19 @@ emulator_settings = {
 
     # cache criteria
     'dimensionality': 7,
-    'N_sigma': 5.0,
+    'N_sigma': 4.0,
 
     # 'plotting_directory': './plots_sampler_clang_nuts',
-    # 'testset_fraction': 0.1,
+    # 'testset_fraction': 0.01,
     'logfile': './output_clang_act_nuts/log.txt',
 
     'learning_rate': 0.1,
     'num_iters': 300,
+
+    # 'compute_data_covmat': True,
+    'data_covmat_directory': './act_data_covmats',
+
+    'debug': False,
 }
 
 likelihood_settings = {
@@ -79,9 +84,6 @@ sampling_settings = {
     # output directory
     'output_directory': './output_clang_act_nuts',
 
-    # 'compute_data_covmat': True,
-    'data_covmat_directory': './act_data_covmats',
-
     # M adapt # burn-in of NUTS
     'M_adapt': 200,
 }
@@ -89,11 +91,11 @@ sampling_settings = {
 
 # load sampler 
 from OLE.sampler import EnsembleSampler, Sampler, NUTSSampler
-my_sampler = NUTSSampler(debug=False)
-# my_sampler = EnsembleSampler(debug=False)
+my_sampler = NUTSSampler()
+# my_sampler = EnsembleSampler()
 
 
-my_parameters = {'h': {'prior': {'min': 0.60, 'max': 0.80}, 
+my_parameters = {'h': {'prior': {'min': 0.6, 'max': 0.8}, 
                        'ref': {'mean': 0.68, 'std': 0.01},
                        'proposal': 0.01,},
                     'n_s': {'prior': {'min': 0.9, 'max': 1.1}, 'ref': {'mean': 0.965, 'std': 0.005},
@@ -124,7 +126,7 @@ my_sampler.initialize(theory=my_theory,
                       emulator_settings = emulator_settings,
                       likelihood_settings = likelihood_settings,
                       theory_settings = theory_settings,
-                      sampling_settings = sampling_settings,)
+                      sampling_settings = sampling_settings)
 
 # Note the total run steps are   (nsteps * nwalkers * MPI_size)
 n_steps = 1000

@@ -56,7 +56,6 @@ my_theory = CLASS()
 my_likelihood = candl_likelihood()
 
 
-
 emulator_settings = {
     # the number of data points in cache before the emulator is to be trained
     'min_data_points': 80,
@@ -70,10 +69,11 @@ emulator_settings = {
 
     # related so sampler
     'explained_variance_cutoff': 0.9999,
+    'min_variance_per_bin': 1e-1,
 
     # cache criteria
     'dimensionality': 39,
-    'N_sigma': 5.0,
+    'N_sigma': 4.0,
 
     # M adapt # burn-in of NUTS
     'M_adapt': 200,
@@ -84,6 +84,9 @@ emulator_settings = {
 
     'learning_rate': 0.1,
     'num_iters': 300,
+
+    # 'compute_data_covmat': True,
+    'data_covmat_directory': './spt_data_covmats',
 
 }
 
@@ -103,9 +106,6 @@ sampling_settings = {
 
     'nwalkers':1,
 
-    # 'compute_data_covmat': True,
-    'data_covmat_directory': './spt_data_covmats',
-
     # M adapt # burn-in of NUTS
     'M_adapt': 200,
 }
@@ -114,7 +114,7 @@ sampling_settings = {
 
 # load sampler 
 from OLE.sampler import EnsembleSampler, Sampler, NUTSSampler
-my_sampler = NUTSSampler(debug=False)
+my_sampler = NUTSSampler()
 # my_sampler = EnsembleSampler(debug=False)
 
 

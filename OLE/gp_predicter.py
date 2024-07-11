@@ -379,7 +379,7 @@ class GP_predictor(BaseClass):
 
         # predict the test set
         for i in range(len(test_indices)):
-            self.debug('Predicting test set point: ', i)
+            self.debug('Predicting test set point: %d' %i)
             prediction, std = self.predict_value_and_std(self.data_processor.input_data_raw[jnp.array([test_indices[i]])])
 
             true = self.data_processor.output_data_raw[jnp.array([test_indices[i]])]
@@ -840,7 +840,7 @@ class GP(BaseClass):
             mean, std = self.predict_value_and_std(jnp.array([self.test_D.X[i]]))
             means = means.at[i].set(mean)
             stds = stds.at[i].set(std)
-            self.debug('Predicted: ', mean, ' True: ', self.test_D.y[i], ' Error: ', mean - self.test_D.y[i])
+            self.debug("Predicted: %f True: %f Error: %f" % (mean, self.test_D.y[i], mean - self.test_D.y[i]))
 
         # calculate the mean squared error
         mse = jnp.mean((mean - self.test_D.y)**2)

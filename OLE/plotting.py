@@ -242,7 +242,10 @@ def plot_pca_components_test_set(true, pred, pred_std, title, file_name):
 def plot_prediction_test(prediction, true, std, title, data_point, file_name, data_covmat):
 
     # create mask where data_covmat is zero
-    mask = jnp.where(jnp.diag(data_covmat) == 0.0, 0.0, 1.0)
+    if data_covmat is None:
+        mask = jnp.ones(len(true[0]))
+    else:
+        mask = jnp.where(jnp.diag(data_covmat) == 0.0, 0.0, 1.0)
 
     X = np.array(range(len(true[0])))
     norm_factor = plot_normalization(X, true, title)

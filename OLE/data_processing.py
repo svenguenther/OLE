@@ -57,7 +57,8 @@ class data_processor(BaseClass):
 
         defaulthyperparameters = {
             # explained variance cutoff is the minimum explained variance which is required for the PCA compression. Once this value is reached, the PCA compression is stopped.
-            'explained_variance_cutoff': 0.999,
+            # 'explained_variance_cutoff': 0.999, # OUTDATED TODO: REMOVE
+            'min_variance_per_bin': 1e-3,
             # this should also inform the error of the GPs to remain consistent. Or alternatively since we specify error params,
             # those might also set this parameter
 
@@ -173,7 +174,7 @@ class data_processor(BaseClass):
 
         n_eigenvalues = min(self.hyperparameters['max_output_dimensions'], self.output_size)
 
-        eigenvalues, eigenvectors = sp.sparse.linalg.eigsh(np.array(data_cov), n_eigenvalues)
+        eigenvalues, eigenvectors = sp.sparse.linalg.eigsh(np.array(data_cov), n_eigenvalues) # the eigenvectors are normalized. Thus,
 
         # sort the eigenvalues and eigenvectors
         idx = eigenvalues.argsort()[::-1]
@@ -186,8 +187,17 @@ class data_processor(BaseClass):
         # calculate the cumulative explained variance
         cumulative_explained_variance = jnp.cumsum(explained_variance)
 
-        # find the number of components which explain the variance
-        n_components = jnp.argmax(cumulative_explained_variance > self.hyperparameters['explained_variance_cutoff']) + 1
+        # find the number of components which explain the variance. 
+        min_variance_per_bin = self.hyperparameters['min_variance_per_bin'] 
+        if self.data_covmat is not None:
+            min_variance = min_variance_per_bin * len(self.data_covmat[self.data_covmat > 0.0])
+        else:
+            min_variance = min_variance_per_bin * self.output_size
+        n_components = max(len(eigenvalues[eigenvalues > min_variance]), 1) 
+        if min_variance == 0.0:
+            n_components = 1
+        # OLD
+        # n_components = jnp.argmax(cumulative_explained_variance > self.hyperparameters['explained_variance_cutoff']) + 1
 
         # if the number of components is larger than the maximal number of dimensions, set the number of components to the maximal number of dimensions
         if n_components == self.hyperparameters['max_output_dimensions']:

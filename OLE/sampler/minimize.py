@@ -84,11 +84,14 @@ class MinimizeSampler(Sampler):
                 grad_f = jax.jit(jax.grad(self.emulate_total_minusloglike_from_parameters_differentiable))
                 hessian_f = (jax.hessian(self.emulate_total_minusloglike_from_parameters_differentiable))
 
+                print(f(initial_position))
+                print(grad_f(initial_position))
+
                 self.method = 'TNC'
                 res = self.optimizer(f, 
                                     initial_position, method=self.method, bounds=bounds, 
                                     jac=grad_f, 
-                                    options={'disp': False, 'maxfun':2000},#, 'ftol': 1e-20, 'gtol': 1e-10 },
+                                    options={'disp': True, 'maxfun':2000, 'accuracy': 0.01},#, 'ftol': 1e-20, 'gtol': 1e-10 },
                                     )
                 
                 self.inv_hessian = self.denormalize_inv_hessematrix( np.linalg.inv(hessian_f(res.x)) )

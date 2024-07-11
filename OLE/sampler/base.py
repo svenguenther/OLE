@@ -50,7 +50,7 @@ class Sampler(BaseClass):
                    emulator_settings={},
                    likelihood_settings={},
                     theory_settings={},
-                    sampler_settings={},
+                    sampling_settings={},
                    **kwargs):
 
         # Store Likelihood and initialize if possible
@@ -99,14 +99,14 @@ class Sampler(BaseClass):
             'plotting_directory': None,
 
             # status print frequency
-            'status_print_frequency': 20,
+            'status_print_frequency': 50,
 
         }
 
         # The hyperparameters are a dictionary of the hyperparameters for the different quantities. The keys are the names of the quantities.
         self.hyperparameters = defaulthyperparameters
 
-        for key, value in sampler_settings.items():
+        for key, value in sampling_settings.items():
             self.hyperparameters[key] = value
 
         # create output directory
@@ -210,8 +210,10 @@ class Sampler(BaseClass):
         return 0
 
     def print_status(self, i, chain):
+        if i==0:
+            return 0
         # this function computes the effective sample size and prints the status of the chain after the i-th interation. This is only done when i%100==0
-        if ((i+1) % self.hyperparameters['status_print_frequency']) == 0:
+        if ((i) % self.hyperparameters['status_print_frequency']) == 0:
             ess = self.estimate_effective_sample_size(chain[:i,:])
             mean_ess = np.mean(ess)
             self.info("Iteration %d: Mean ESS = %f", i, mean_ess)
@@ -286,7 +288,12 @@ class Sampler(BaseClass):
             position = []
             for key, value in self.parameter_dict.items():
                 if 'ref' in list(value.keys()):
-                    position.append(value['ref']['mean'] + value['ref']['std']*np.random.normal())
+                    # create candidate from normal distribution with mean and std from the 'ref' values but ensure that it is within the prior
+                    while True:
+                        candidate = value['ref']['mean'] + value['ref']['std']*np.random.normal()
+                        if candidate > value['prior']['min'] and candidate < value['prior']['max']:
+                            break
+                    position.append(candidate)
                 elif 'prior' in list(value.keys()):
                     position.append(value['prior']['min'] + (value['prior']['max']-value['prior']['min'])*np.random.uniform())
                 else:
@@ -570,7 +577,7 @@ class Sampler(BaseClass):
             self.error("Nuisance minimization: loglike is nan")
             return state
 
-        result = minimize(self.jit_likelihood_function, x0, jac=self.jit_gradient_likelihood_function, method='TNC', args=(local_state), options={'disp': True}, tol=1e-1)
+        result = minimize(self.jit_likelihood_function, x0, jac=self.jit_gradient_likelihood_function, method='TNC', args=(local_state), options={'disp': False}, tol=1e-1)
         self.debug("minimization result: %s", result)
 
         state['loglike'] = jnp.array([float(-result.fun)])

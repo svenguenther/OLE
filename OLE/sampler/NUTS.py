@@ -34,19 +34,35 @@ class NUTSSampler(Sampler):
     def initialize(self, **kwargs):
         super().initialize(**kwargs)
 
-        self.nwalkers = kwargs['nwalkers'] if 'nwalkers' in kwargs else 10
+        self.nwalkers = kwargs['sampling_settings']['nwalkers'] if 'nwalkers' in kwargs['sampling_settings'] else 10
         self.ndim = len(self.parameter_dict)
 
         # read target_acceptanc, M_adapt, delta_max
-        self.target_acceptance = kwargs['target_acceptance'] if 'target_acceptance' in kwargs else 0.5
-        self.M_adapt = kwargs['M_adapt'] if 'M_adapt' in kwargs else 1000
-        self.delta_max = kwargs['delta_max'] if 'delta_max' in kwargs else 1000
+        self.target_acceptance = kwargs['sampling_settings']['target_acceptance'] if 'target_acceptance' in kwargs['sampling_settings'] else 0.5
+        self.M_adapt = kwargs['sampling_settings']['M_adapt'] if 'M_adapt' in kwargs['sampling_settings'] else 1000
+        self.delta_max = kwargs['sampling_settings']['delta_max'] if 'delta_max' in kwargs['sampling_settings'] else 1000
 
         # minimize nuisance parameters
-        self.minimize_nuisance_parameters = kwargs['minimize_nuisance_parameters'] if 'minimize_nuisance_parameters' in kwargs else True
+        self.minimize_nuisance_parameters = kwargs['sampling_settings']['minimize_nuisance_parameters'] if 'minimize_nuisance_parameters' in kwargs['sampling_settings'] else True
 
         pass
     
+    def _check_correct_bestfit(self, bestfit):
+        # this function checks whether the bestfit is on the edge of the prior. If it is, it will shift it slightly inside the prior.
+        # enumerate over the parameters
+        for i, key in enumerate(self.parameter_dict.keys()):
+            eps = 1e-1
+            if bestfit[i] <= self.parameter_dict[key]['prior']['min']+eps*self.parameter_dict[key]['proposal']:
+                # set warning
+                self.warning("Bestfit parameter %s is on the lower edge of the prior (%f). Shifting it slightly inside the prior."%(key,self.parameter_dict[key]['prior']['min']))
+                bestfit = bestfit.at[i].set(self.parameter_dict[key]['prior']['min'] + self.parameter_dict[key]['proposal']*eps)
+            if bestfit[i] >= self.parameter_dict[key]['prior']['max']-eps*self.parameter_dict[key]['proposal']:
+                # set warning
+                self.warning("Bestfit parameter %s is on the upper edge of the prior (%f). Shifting it slightly inside the prior."%(key,self.parameter_dict[key]['prior']['max']))
+                bestfit = bestfit.at[i].set(self.parameter_dict[key]['prior']['max'] - self.parameter_dict[key]['proposal']*eps)
+
+        return bestfit
+
     
     def run_mcmc(self, nsteps, **kwargs):
         # Run the sampler.
@@ -119,6 +135,7 @@ class NUTSSampler(Sampler):
             bestfit = self.retranform_parameters_from_normalized_eigenspace(pos[0])
 
         # do minimization here to get bestfit and covariance matrix (fisher matrix)
+        self.info("Starting minimization after first emulator training to find bestfit and covmat.")
         minimizer_params = {**{'method': 'TNC', 'use_emulator': True, 'use_gradients': True, 'logposterior': True}, **self.hyperparameters}
         minimizer = MinimizeSampler()
 
@@ -129,7 +146,7 @@ class NUTSSampler(Sampler):
                             likelihood_settings=self.likelihood_settings,
                             theory_settings=self.theory_settings,
                             emulator_settings=self.emulator.hyperparameters,
-                            sampler_settings=minimizer_params,)
+                            sampling_settings=minimizer_params,)
         minimizer.minimize()
 
         bestfit = minimizer.bestfit
@@ -154,9 +171,10 @@ class NUTSSampler(Sampler):
         else:
             self.info("Minimization failed. Not updating covmat.")
             
+        # Ensure that the bestfit is not on the edge of the prior (or outside). It it is we shift it slightly inside the prior for better initial sampling!
+        bestfit_shift = self._check_correct_bestfit(bestfit) 
             
         # Run the sampler.
-            
         if self.hyperparameters['compute_data_covmat']:
             # compute the data covariance matrix
             bestfit_state = {'parameters': {}, 'quantities': {}, 'loglike': None}
@@ -181,12 +199,12 @@ class NUTSSampler(Sampler):
         self.logp_sample_noiseFree = jax.jit(self.sample_emulate_total_loglike_from_parameters_differentiable_noiseFree)                   # this samples N realizations from the emulator to estimate the uncertainty
         # self.logp_sample = self.sample_emulate_total_loglike_from_parameters_differentiable                    # this samples N realizations from the emulator to estimate the uncertainty
 
-        self.theta0 = self.transform_parameters_into_normalized_eigenspace(bestfit)
+        self.theta0 = self.transform_parameters_into_normalized_eigenspace(bestfit_shift)
 
         # we search a reasonable epsilon (step size)
-        self.debug("Searching for a reasonable step sizes")
+        self.info("Searching for a reasonable step sizes")
         RNG, eps = self._findReasonableEpsilon(self.theta0, RNG)
-        self.debug("Found reasonable step sizes: %f", eps)
+        self.info("Found reasonable step sizes: %f", eps)
 
         # Initialize variables
         mu = jnp.log(10 * eps)
@@ -200,16 +218,17 @@ class NUTSSampler(Sampler):
         thetas = np.zeros((self.M_adapt + nsteps + 1, self.ndim))
         logps = np.zeros(self.M_adapt + nsteps + 1)
 
-        thetas[0] = bestfit
-
-
-
+        thetas[0] = self.transform_parameters_into_normalized_eigenspace(bestfit_shift)
         testing_flag = True
 
         # run the warmup
         for i in range(self.M_adapt + nsteps):
+                
+            RNG, r, u, logjoint0, loglike0 = self._init_iteration(thetas[i], RNG)
+
             # Initialize momentum and pick a slice, record the initial log joint probability
-            RNG, r, u, logjoint0 = self._init_iteration(thetas[i], RNG)
+            print('logjoint0')
+            print(logjoint0)
 
             # Initialize the trajectory
             theta_m, theta_p, r_m, r_p = thetas[i], thetas[i], r, r
@@ -231,11 +250,45 @@ class NUTSSampler(Sampler):
                 # Update theta with probability n_f / n, to effectively sample a point from the trajectory;
                 # Update the current length of the trajectory;
                 # Update the stopping indicator: check it the trajectory is making a U-turn.
+
+                print('alpha')
+                print(alpha)
+                print('n_alpha')
+                print(n_alpha)
                 RNG, thetas[i+1], n, s, k = self._trajectory_iteration_update(thetas[i+1], n, s, k, theta_m, r_m, theta_p, r_p, theta_f, n_f, s_f, RNG)
+
+            # Make Metropolis-Hastings step if NUTS was not successful
+            if alpha < 1e-10:
+                print("MH step")
+                MH_step_found = False
+                while not MH_step_found:
+                    # sample step from unitary gaussian
+                    RNG, subkey = jax.random.split(RNG)
+                    r = jax.random.normal(subkey, shape=thetas[i].shape)
+
+                    new_theta = thetas[i] + r / 10.0
+                    print('new_theta')
+                    print(new_theta)
+                    logp, gradlogp = self.logp_and_grad(new_theta)
+                    print('logp')
+                    print(logp)
+
+                    print('loglike0')
+                    print(loglike0)
+
+                    # make Metropolis-Hastings step
+                    if jnp.log(jax.random.uniform(RNG)) < logp - loglike0:
+                        thetas[i+1] = new_theta
+                        MH_step_found = True
+
+
+            print("NEW POINT:")
 
             if i+1 <= self.M_adapt:
                 # Dual averaging scheme to adapt the step size 'epsilon'.
                 H_bar, eps_bar, eps = self._adapt(mu, eps_bar, H_bar, t_0, kappa, gamma, alpha, n_alpha, i+1)
+                print('eps')
+                print(eps)
             elif i+1 == self.M_adapt + 1:
                 eps = eps_bar
 
@@ -261,7 +314,7 @@ class NUTSSampler(Sampler):
                     loglikes_noiseFree = self.logp_sample_noiseFree(thetas[i])
 
                     self.debug('dumping loglikes emulated')
-                    self.debug(jnp.std(jnp.array(loglikes)))
+                    # self.debug(jnp.std(jnp.array(loglikes)))
                     self.debug(jnp.std(jnp.array(loglikes_noiseFree)))
 
                     # check whether the emulator is good enough
@@ -404,7 +457,7 @@ class NUTSSampler(Sampler):
         return theta, r, logp, gradlogp
 
     @partial(jax.jit, static_argnums=0)
-    def _init_iteration(self, theta: ndarray, key: ndarray) -> Tuple[ndarray, ndarray, float, float]:
+    def _init_iteration(self, theta: ndarray, key: ndarray) -> Tuple[ndarray, ndarray, float, float, float]:
         """Initialize the sampling iteration
 
         Parameters
@@ -430,7 +483,7 @@ class NUTSSampler(Sampler):
         logprob, _ = self.logp_and_grad(theta)
         logjoint = logprob - .5 * jnp.dot(r, r)
         u = random.uniform(subkeys[1]) * jnp.exp(logjoint)
-        return key, r, u, logjoint
+        return key, r, u, logjoint, logprob
 
     @partial(jax.jit, static_argnums=0)
     def _draw_direction(self, key: ndarray) -> Tuple[ndarray, int]:
@@ -625,7 +678,7 @@ class NUTSSampler(Sampler):
                 key, theta_f, n_f, s_f, alpha_f, n_alpha_f = self._update_build_tree(theta_m, r_m, theta_p, r_p, theta_f, n_f, s_f, alpha_f, n_alpha_f, theta_ff, n_ff, s_ff, alpha_ff, n_alpha_ff, key)
             return key, theta_m, r_m, theta_p, r_p, theta_f, n_f, s_f, alpha_f, n_alpha_f
 
-    @partial(jax.jit, static_argnums=0)
+    # @partial(jax.jit, static_argnums=0)
     def _init_build_tree(self, theta : ndarray, r : ndarray, u : float, v : int, j : int, 
                          eps : float, logjoint0 : float, key : ndarray) -> Tuple[ndarray, 
                          ndarray, ndarray, ndarray, ndarray, ndarray, int, int, float, int]:
@@ -638,7 +691,13 @@ class NUTSSampler(Sampler):
         # Check that we are not completely off-track
         s_f = (jnp.log(u) < logjoint + self.delta_max).astype(int)
         # Compute the acceptance rate
-        prob_ratio = jnp.exp(logjoint - logjoint0)
+        print('logjoint _init_build_tree')
+        print(logjoint)
+        print('logjoint0 _init_build_tree')
+        print(logjoint0)
+        prob_ratio = jnp.exp(logjoint - logjoint0)  
+        print('prob_ratio _init_build_tree')
+        print(prob_ratio)      
         alpha_f = lax.cond(jnp.isnan(prob_ratio), lambda _: 0., lambda _: lax.min(prob_ratio, 1.), None) # Presumably if the probability ratio diverges,
                                                                                                          # it is because the log-joint probability diverges, i.e. the probability tends
                                                                                                          # to zero, so its log is -infinity. Then the acceptance rate of this step,
