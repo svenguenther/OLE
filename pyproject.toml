@@ -21,13 +21,13 @@ classifiers = [
 requires-python = ">=3.10"
 
 dependencies = [
-"gpjax >= 0.8.0",
-"numpy >= 1.23.5",
-"jax >= 0.4.23",
-"jaxlib >= 0.4.23",
-"tqdm >= 4.65.0",
-"fasteners",
-"emcee",
+"numpy == 1.24.3",
+"jax == 0.4.24",
+"jaxlib == 0.4.24",
+"gpjax == 0.8.2",
+"tqdm == 4.66.4",
+"fasteners == 0.19",
+"emcee == 3.1.6",
 ]
 
 [project.optional-dependencies]
