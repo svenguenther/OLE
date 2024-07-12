@@ -1,20 +1,17 @@
-.. OLE documentation master file, created by
-   sphinx-quickstart on Fri Jul 12 15:12:17 2024.
-   You can adapt this file completely to your liking, but it should at least
-   contain the root `toctree` directive.
+.. toctree::
+   :hidden:
+   :maxdepth: 2
 
-Online Learning Émulator
-===============================
+   Overview <self>
 
 .. toctree::
+   :hidden:
    :maxdepth: 2
-   :caption: Contents:
+   :caption: Settings
 
+   emulator/emulator
+   sampler/sampler
 
-
-Indices and tables
-==================
-
-* :ref:`genindex`
-* :ref:`modindex`
-* :ref:`search`
+.. Crop out the image used on github (using logoo on the side here)
+.. include:: ../README.rst
+   :start-line: 3 
