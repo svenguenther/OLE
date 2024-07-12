@@ -1,5 +1,10 @@
+"""
+Theory
+"""
+
 # This file contains a plain theory class that can be used to compute observables.
 from OLE.utils.base import BaseClass
+
 
 class Theory(BaseClass):
 
@@ -17,7 +22,7 @@ class Theory(BaseClass):
         # Compute the observable for the given parameters.
 
         return state
-    
+
     def requirements(self):
         # Compute the observable for the given parameters.
 

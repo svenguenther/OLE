@@ -9,8 +9,6 @@ setup(
     author=__author__,
     license="...",
     packages=["OLE"],
-    package_data={
-        "OLE": ["interfaces/*", "likelihoods/*", "samplers/*", "theories/*", "utils/*"]
-    },
+    package_data={"OLE": ["likelihoods/*", "samplers/*", "utils/*"]},
     zip_safe=False,
 )
