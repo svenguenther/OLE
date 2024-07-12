@@ -1,0 +1,47 @@
+[build-system]
+requires = ["flit_core>=3.4"]
+build-backend = "flit_core.buildapi"
+
+[project]
+name = "candl-like"
+authors = [
+{name = "S. Günther"},
+]
+
+readme = "README.rst"
+license = {file = "LICENCE.txt"}
+
+dynamic = ["version", "description"]
+
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+]
+
+requires-python = ">=3.10"
+
+dependencies = [
+"numpy >= 1.23.5",
+"jax >= 0.4.23",
+"jaxlib >= 0.4.23",
+"tqdm >= 4.65.0",
+"gpjax >= 0.8.0",
+"fasteners",
+"emcee",
+]
+
+[project.optional-dependencies]
+docs = [
+"sphinx==6.2.1",
+"sphinx-collapse==0.1.2",
+"sphinx-book-theme==1.0.1",
+"numpydoc==1.6.0",
+"myst-parser==2.0.0",
+"numpy",
+]
+
+[tool.flit.module]
+name = "ole"
+
+[project.urls]
+Source = "https://github.com/svenguenther/OLE"

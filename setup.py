@@ -1,28 +1,16 @@
 from setuptools import setup
+from ole import __author__, __version__
 
 setup(
     name="OLE",
-    version="0.1",
+    version=__version__,
     description="Online Learning Emulator",
     url="https://github.com/svenguenther/OLE",
-    author="Sven Günther",
-    author_email="sven.guenther@rwth-aachen.de",
+    author=__author__,
     license="...",
     packages=["OLE"],
-    install_requires=[
-        "numpy",
-        "jax>=0.4.23",
-        "jaxlib>=0.4.23",
-        "tqdm",
-        "gpjax>=0.8.0",
-        "fasteners",
-        "emcee",
-    ],
-    classifiers=[
-        "Development Status :: 1 - Planning",
-        "Intended Audience :: Science/Research",
-        "License :: OSI Approved :: BSD License",
-        "Operating System :: POSIX :: Linux",
-        "Programming Language :: Python :: 3.10",
-    ],
+    package_data={
+        "OLE": ["interfaces/*", "likelihoods/*", "samplers/*", "theories/*", "utils/*"]
+    },
+    zip_safe=False,
 )
