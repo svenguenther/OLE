@@ -41,7 +41,7 @@ docs = [
 ]
 
 [tool.flit.module]
-name = "ole"
+name = "OLE"
 
 [project.urls]
 Source = "https://github.com/svenguenther/OLE"
