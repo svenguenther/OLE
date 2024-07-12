@@ -15,8 +15,8 @@ Installation
 
 To install OLE run:
 
-  git clone git@github.com:svenguenther/OLE.git
-  pip install ./OLE
+    git clone git@github.com:svenguenther/OLE.git
+    pip install ./OLE
 
 Documentation
 -------------
