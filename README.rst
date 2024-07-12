@@ -13,7 +13,7 @@ This implementation involves both the emulator that can be used independently (a
 Installation
 ------------
 
-To install OLE run:
+To install OLE run::
 
     git clone git@github.com:svenguenther/OLE.git
     pip install ./OLE
