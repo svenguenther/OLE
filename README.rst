@@ -1,8 +1,13 @@
 .. image:: https://github.com/svenguenther/OLE/raw/main/docs/logos/OLE_trans.png
     :width: 800
 
+.. |docsshield| image:: https://img.shields.io/readthedocs/ole
+   :target: http://ole.readthedocs.io
+
 Online Learning Émulator
 ===============================
+
+:Documentation: |docsshield|
 
 The Online Learning Émulator - OLÉ is a framework to efficiently perform statistical analyeses in cases where one can distinguish between a Theory (simulation) code in which observables are computed and likelihood codes that compute a likelihood for a given computed observable. The efficiency comes from emulating the computationally expensive theory codes with 1-O(20) parameters. 
 
@@ -18,7 +23,7 @@ To install OLE run::
     git clone git@github.com:svenguenther/OLE.git
     pip install ./OLE
 
-Documentation
+Examples
 -------------
 
 There are some test examples in :code:`OLE/examples`. 
