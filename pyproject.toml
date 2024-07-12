@@ -21,11 +21,11 @@ classifiers = [
 requires-python = ">=3.10"
 
 dependencies = [
+"gpjax >= 0.8.0",
 "numpy >= 1.23.5",
 "jax >= 0.4.23",
 "jaxlib >= 0.4.23",
 "tqdm >= 4.65.0",
-"gpjax >= 0.8.0",
 "fasteners",
 "emcee",
 ]
