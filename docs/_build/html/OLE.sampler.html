@@ -1,0 +1,810 @@
+
+<!DOCTYPE html>
+
+
+<html lang="en" data-content_root="./" >
+
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>OLE.sampler package &#8212; OLE 2024 documentation</title>
+  
+  
+  
+  <script data-cfasync="false">
+    document.documentElement.dataset.mode = localStorage.getItem("mode") || "";
+    document.documentElement.dataset.theme = localStorage.getItem("theme") || "";
+  </script>
+  
+  <!-- Loaded before other Sphinx assets -->
+  <link href="_static/styles/theme.css?digest=dfe6caa3a7d634c4db9b" rel="stylesheet" />
+<link href="_static/styles/bootstrap.css?digest=dfe6caa3a7d634c4db9b" rel="stylesheet" />
+<link href="_static/styles/pydata-sphinx-theme.css?digest=dfe6caa3a7d634c4db9b" rel="stylesheet" />
+
+  
+  <link href="_static/vendor/fontawesome/6.5.2/css/all.min.css?digest=dfe6caa3a7d634c4db9b" rel="stylesheet" />
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="_static/vendor/fontawesome/6.5.2/webfonts/fa-solid-900.woff2" />
+<link rel="preload" as="font" type="font/woff2" crossorigin href="_static/vendor/fontawesome/6.5.2/webfonts/fa-brands-400.woff2" />
+<link rel="preload" as="font" type="font/woff2" crossorigin href="_static/vendor/fontawesome/6.5.2/webfonts/fa-regular-400.woff2" />
+
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=a746c00c" />
+    <link rel="stylesheet" type="text/css" href="_static/styles/sphinx-book-theme.css?v=a3416100" />
+    <link rel="stylesheet" type="text/css" href="_static/sphinx_collapse.css?v=226d88b4" />
+  
+  <!-- Pre-loaded scripts that we'll load fully later -->
+  <link rel="preload" as="script" href="_static/scripts/bootstrap.js?digest=dfe6caa3a7d634c4db9b" />
+<link rel="preload" as="script" href="_static/scripts/pydata-sphinx-theme.js?digest=dfe6caa3a7d634c4db9b" />
+  <script src="_static/vendor/fontawesome/6.5.2/js/all.min.js?digest=dfe6caa3a7d634c4db9b"></script>
+
+    <script src="_static/documentation_options.js?v=6ea52abf"></script>
+    <script src="_static/doctools.js?v=9a2dae69"></script>
+    <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="_static/scripts/sphinx-book-theme.js?v=887ef09a"></script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'OLE.sampler';</script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="docsearch:language" content="en"/>
+  </head>
+  
+  
+  <body data-bs-spy="scroll" data-bs-target=".bd-toc-nav" data-offset="180" data-bs-root-margin="0px 0px -60%" data-default-mode="">
+
+  
+  
+  <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+  
+  <div id="pst-scroll-pixel-helper"></div>
+  
+  <button type="button" class="btn rounded-pill" id="pst-back-to-top">
+    <i class="fa-solid fa-arrow-up"></i>Back to top</button>
+
+  
+  <input type="checkbox"
+          class="sidebar-toggle"
+          id="pst-primary-sidebar-checkbox"/>
+  <label class="overlay overlay-primary" for="pst-primary-sidebar-checkbox"></label>
+  
+  <input type="checkbox"
+          class="sidebar-toggle"
+          id="pst-secondary-sidebar-checkbox"/>
+  <label class="overlay overlay-secondary" for="pst-secondary-sidebar-checkbox"></label>
+  
+  <div class="search-button__wrapper">
+    <div class="search-button__overlay"></div>
+    <div class="search-button__search-container">
+<form class="bd-search d-flex align-items-center"
+      action="search.html"
+      method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search"
+         class="form-control"
+         name="q"
+         id="search-input"
+         placeholder="Search..."
+         aria-label="Search..."
+         autocomplete="off"
+         autocorrect="off"
+         autocapitalize="off"
+         spellcheck="false"/>
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form></div>
+  </div>
+
+  <div class="pst-async-banner-revealer d-none">
+  <aside id="bd-header-version-warning" class="d-none d-print-none" aria-label="Version warning"></aside>
+</div>
+
+  
+    <header class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+    </header>
+  
+
+  <div class="bd-container">
+    <div class="bd-container__inner bd-page-width">
+      
+      
+      
+      <div class="bd-sidebar-primary bd-sidebar">
+        
+
+  
+  <div class="sidebar-header-items sidebar-primary__section">
+    
+    
+    
+    
+  </div>
+  
+    <div class="sidebar-primary-items__start sidebar-primary__section">
+        <div class="sidebar-primary-item">
+
+  
+    
+  
+
+<a class="navbar-brand logo" href="index.html">
+  
+  
+  
+  
+  
+    
+    
+      
+    
+    
+    <img src="_static/OLE_trans.png" class="logo__image only-light" alt="OLE 2024 documentation - Home"/>
+    <script>document.write(`<img src="_static/OLE_trans.png" class="logo__image only-dark" alt="OLE 2024 documentation - Home"/>`);</script>
+  
+  
+</a></div>
+        <div class="sidebar-primary-item">
+
+ <script>
+ document.write(`
+   <button class="btn search-button-field search-button__button" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="fa-solid fa-magnifying-glass"></i>
+    <span class="search-button__default-text">Search</span>
+    <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+   </button>
+ `);
+ </script></div>
+        <div class="sidebar-primary-item"><nav class="bd-links bd-docs-nav" aria-label="Main">
+    <div class="bd-toc-item navbar-nav active">
+        <ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="index.html">Overview</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Settings</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="emulator/emulator.html">Emulator</a></li>
+<li class="toctree-l1"><a class="reference internal" href="sampler/sampler.html">Sampler</a></li>
+</ul>
+
+    </div>
+</nav></div>
+    </div>
+  
+  
+  <div class="sidebar-primary-items__end sidebar-primary__section">
+  </div>
+  
+  <div id="rtd-footer-container"></div>
+
+
+      </div>
+      
+      <main id="main-content" class="bd-main" role="main">
+        
+        
+
+<div class="sbt-scroll-pixel-helper"></div>
+
+          <div class="bd-content">
+            <div class="bd-article-container">
+              
+              <div class="bd-header-article d-print-none">
+<div class="header-article-items header-article__inner">
+  
+    <div class="header-article-items__start">
+      
+        <div class="header-article-item"><button class="sidebar-toggle primary-toggle btn btn-sm" title="Toggle primary sidebar" data-bs-placement="bottom" data-bs-toggle="tooltip">
+  <span class="fa-solid fa-bars"></span>
+</button></div>
+      
+    </div>
+  
+  
+    <div class="header-article-items__end">
+      
+        <div class="header-article-item">
+
+<div class="article-header-buttons">
+
+
+
+
+
+<div class="dropdown dropdown-download-buttons">
+  <button class="btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Download this page">
+    <i class="fas fa-download"></i>
+  </button>
+  <ul class="dropdown-menu">
+      
+      
+      
+      <li><a href="_sources/OLE.sampler.rst" target="_blank"
+   class="btn btn-sm btn-download-source-button dropdown-item"
+   title="Download source file"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-file"></i>
+  </span>
+<span class="btn__text-container">.rst</span>
+</a>
+</li>
+      
+      
+      
+      
+      <li>
+<button onclick="window.print()"
+  class="btn btn-sm btn-download-pdf-button dropdown-item"
+  title="Print to PDF"
+  data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-file-pdf"></i>
+  </span>
+<span class="btn__text-container">.pdf</span>
+</button>
+</li>
+      
+  </ul>
+</div>
+
+
+
+
+<button onclick="toggleFullScreen()"
+  class="btn btn-sm btn-fullscreen-button"
+  title="Fullscreen mode"
+  data-bs-placement="bottom" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-expand"></i>
+  </span>
+
+</button>
+
+
+
+<script>
+document.write(`
+  <button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button" title="light/dark" aria-label="light/dark" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="theme-switch fa-solid fa-sun fa-lg" data-mode="light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg" data-mode="dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto"></i>
+  </button>
+`);
+</script>
+
+
+<script>
+document.write(`
+  <button class="btn btn-sm pst-navbar-icon search-button search-button__button" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="fa-solid fa-magnifying-glass fa-lg"></i>
+  </button>
+`);
+</script>
+<button class="sidebar-toggle secondary-toggle btn btn-sm" title="Toggle secondary sidebar" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <span class="fa-solid fa-list"></span>
+</button>
+</div></div>
+      
+    </div>
+  
+</div>
+</div>
+              
+              
+
+<div id="jb-print-docs-body" class="onlyprint">
+    <h1>OLE.sampler package</h1>
+    <!-- Table of contents -->
+    <div id="print-main-content">
+        <div id="jb-print-toc">
+            
+            <div>
+                <h2> Contents </h2>
+            </div>
+            <nav aria-label="Page">
+                <ul class="visible nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#submodules">Submodules</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#module-OLE.sampler.NUTS">OLE.sampler.NUTS module</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#OLE.sampler.NUTS.NUTSSampler"><code class="docutils literal notranslate"><span class="pre">NUTSSampler</span></code></a><ul class="nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#OLE.sampler.NUTS.NUTSSampler.initialize"><code class="docutils literal notranslate"><span class="pre">NUTSSampler.initialize()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#OLE.sampler.NUTS.NUTSSampler.run_mcmc"><code class="docutils literal notranslate"><span class="pre">NUTSSampler.run_mcmc()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#module-OLE.sampler.base">OLE.sampler.base module</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#OLE.sampler.base.Sampler"><code class="docutils literal notranslate"><span class="pre">Sampler</span></code></a><ul class="nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#OLE.sampler.base.Sampler.calculate_data_covmat"><code class="docutils literal notranslate"><span class="pre">Sampler.calculate_data_covmat()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#OLE.sampler.base.Sampler.compute_loglike_from_normalized_parameters"><code class="docutils literal notranslate"><span class="pre">Sampler.compute_loglike_from_normalized_parameters()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#OLE.sampler.base.Sampler.compute_logprior"><code class="docutils literal notranslate"><span class="pre">Sampler.compute_logprior()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#OLE.sampler.base.Sampler.compute_logprior_with_border"><code class="docutils literal notranslate"><span class="pre">Sampler.compute_logprior_with_border()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#OLE.sampler.base.Sampler.compute_theory_from_normalized_parameters"><code class="docutils literal notranslate"><span class="pre">Sampler.compute_theory_from_normalized_parameters()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#OLE.sampler.base.Sampler.compute_total_loglike_from_normalized_parameters"><code class="docutils literal notranslate"><span class="pre">Sampler.compute_total_loglike_from_normalized_parameters()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#OLE.sampler.base.Sampler.denormalize_inv_hessematrix"><code class="docutils literal notranslate"><span class="pre">Sampler.denormalize_inv_hessematrix()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#OLE.sampler.base.Sampler.emulate_loglike_from_normalized_parameters_differentiable"><code class="docutils literal notranslate"><span class="pre">Sampler.emulate_loglike_from_normalized_parameters_differentiable()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#OLE.sampler.base.Sampler.emulate_total_loglike_from_parameters_differentiable"><code class="docutils literal notranslate"><span class="pre">Sampler.emulate_total_loglike_from_parameters_differentiable()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#OLE.sampler.base.Sampler.emulate_total_minusloglike_from_parameters_differentiable"><code class="docutils literal notranslate"><span class="pre">Sampler.emulate_total_minusloglike_from_parameters_differentiable()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#OLE.sampler.base.Sampler.emulator"><code class="docutils literal notranslate"><span class="pre">Sampler.emulator</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#OLE.sampler.base.Sampler.estimate_effective_sample_size"><code class="docutils literal notranslate"><span class="pre">Sampler.estimate_effective_sample_size()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#OLE.sampler.base.Sampler.generate_covmat"><code class="docutils literal notranslate"><span class="pre">Sampler.generate_covmat()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#OLE.sampler.base.Sampler.get_bounds"><code class="docutils literal notranslate"><span class="pre">Sampler.get_bounds()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#OLE.sampler.base.Sampler.get_initial_position"><code class="docutils literal notranslate"><span class="pre">Sampler.get_initial_position()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#OLE.sampler.base.Sampler.initialize"><code class="docutils literal notranslate"><span class="pre">Sampler.initialize()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#OLE.sampler.base.Sampler.likelihood"><code class="docutils literal notranslate"><span class="pre">Sampler.likelihood</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#OLE.sampler.base.Sampler.likelihood_function"><code class="docutils literal notranslate"><span class="pre">Sampler.likelihood_function()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#OLE.sampler.base.Sampler.nuisance_minimization"><code class="docutils literal notranslate"><span class="pre">Sampler.nuisance_minimization()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#OLE.sampler.base.Sampler.parameter_dict"><code class="docutils literal notranslate"><span class="pre">Sampler.parameter_dict</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#OLE.sampler.base.Sampler.print_status"><code class="docutils literal notranslate"><span class="pre">Sampler.print_status()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#OLE.sampler.base.Sampler.retranform_parameters_from_normalized_eigenspace"><code class="docutils literal notranslate"><span class="pre">Sampler.retranform_parameters_from_normalized_eigenspace()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#OLE.sampler.base.Sampler.sample"><code class="docutils literal notranslate"><span class="pre">Sampler.sample()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#OLE.sampler.base.Sampler.sample_emulate_loglike_from_normalized_parameters_differentiable"><code class="docutils literal notranslate"><span class="pre">Sampler.sample_emulate_loglike_from_normalized_parameters_differentiable()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#OLE.sampler.base.Sampler.sample_emulate_loglike_from_normalized_parameters_differentiable_noiseFree"><code class="docutils literal notranslate"><span class="pre">Sampler.sample_emulate_loglike_from_normalized_parameters_differentiable_noiseFree()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#OLE.sampler.base.Sampler.sample_emulate_total_loglike_from_parameters_differentiable"><code class="docutils literal notranslate"><span class="pre">Sampler.sample_emulate_total_loglike_from_parameters_differentiable()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#OLE.sampler.base.Sampler.sample_emulate_total_loglike_from_parameters_differentiable_noiseFree"><code class="docutils literal notranslate"><span class="pre">Sampler.sample_emulate_total_loglike_from_parameters_differentiable_noiseFree()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#OLE.sampler.base.Sampler.sample_emulate_total_minusloglike_from_parameters_differentiable"><code class="docutils literal notranslate"><span class="pre">Sampler.sample_emulate_total_minusloglike_from_parameters_differentiable()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#OLE.sampler.base.Sampler.stitch_parameters"><code class="docutils literal notranslate"><span class="pre">Sampler.stitch_parameters()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#OLE.sampler.base.Sampler.test_pipeline"><code class="docutils literal notranslate"><span class="pre">Sampler.test_pipeline()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#OLE.sampler.base.Sampler.theory"><code class="docutils literal notranslate"><span class="pre">Sampler.theory</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#OLE.sampler.base.Sampler.transform_parameters_into_normalized_eigenspace"><code class="docutils literal notranslate"><span class="pre">Sampler.transform_parameters_into_normalized_eigenspace()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#OLE.sampler.base.Sampler.update_covmat"><code class="docutils literal notranslate"><span class="pre">Sampler.update_covmat()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#module-OLE.sampler.ensemble">OLE.sampler.ensemble module</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#OLE.sampler.ensemble.EnsembleSampler"><code class="docutils literal notranslate"><span class="pre">EnsembleSampler</span></code></a><ul class="nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#OLE.sampler.ensemble.EnsembleSampler.initialize"><code class="docutils literal notranslate"><span class="pre">EnsembleSampler.initialize()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#OLE.sampler.ensemble.EnsembleSampler.run_mcmc"><code class="docutils literal notranslate"><span class="pre">EnsembleSampler.run_mcmc()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#module-OLE.sampler.evaluate">OLE.sampler.evaluate module</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#OLE.sampler.evaluate.EvaluateSampler"><code class="docutils literal notranslate"><span class="pre">EvaluateSampler</span></code></a><ul class="nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#OLE.sampler.evaluate.EvaluateSampler.initialize"><code class="docutils literal notranslate"><span class="pre">EvaluateSampler.initialize()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#OLE.sampler.evaluate.EvaluateSampler.sample"><code class="docutils literal notranslate"><span class="pre">EvaluateSampler.sample()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#module-OLE.sampler.minimize">OLE.sampler.minimize module</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#OLE.sampler.minimize.MinimizeSampler"><code class="docutils literal notranslate"><span class="pre">MinimizeSampler</span></code></a><ul class="nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#OLE.sampler.minimize.MinimizeSampler.initialize"><code class="docutils literal notranslate"><span class="pre">MinimizeSampler.initialize()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#OLE.sampler.minimize.MinimizeSampler.minimize"><code class="docutils literal notranslate"><span class="pre">MinimizeSampler.minimize()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#module-OLE.sampler">Module contents</a></li>
+</ul>
+            </nav>
+        </div>
+    </div>
+</div>
+
+              
+                
+<div id="searchbox"></div>
+                <article class="bd-article">
+                  
+  <section id="ole-sampler-package">
+<h1>OLE.sampler package<a class="headerlink" href="#ole-sampler-package" title="Link to this heading">#</a></h1>
+<section id="submodules">
+<h2>Submodules<a class="headerlink" href="#submodules" title="Link to this heading">#</a></h2>
+</section>
+<section id="module-OLE.sampler.NUTS">
+<span id="ole-sampler-nuts-module"></span><h2>OLE.sampler.NUTS module<a class="headerlink" href="#module-OLE.sampler.NUTS" title="Link to this heading">#</a></h2>
+<dl class="py class">
+<dt class="sig sig-object py" id="OLE.sampler.NUTS.NUTSSampler">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">OLE.sampler.NUTS.</span></span><span class="sig-name descname"><span class="pre">NUTSSampler</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#OLE.sampler.NUTS.NUTSSampler" title="Link to this definition">#</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#OLE.sampler.base.Sampler" title="OLE.sampler.base.Sampler"><code class="xref py py-class docutils literal notranslate"><span class="pre">Sampler</span></code></a></p>
+<dl class="py method">
+<dt class="sig sig-object py" id="OLE.sampler.NUTS.NUTSSampler.initialize">
+<span class="sig-name descname"><span class="pre">initialize</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#OLE.sampler.NUTS.NUTSSampler.initialize" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="OLE.sampler.NUTS.NUTSSampler.run_mcmc">
+<span class="sig-name descname"><span class="pre">run_mcmc</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">nsteps</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#OLE.sampler.NUTS.NUTSSampler.run_mcmc" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+</section>
+<section id="module-OLE.sampler.base">
+<span id="ole-sampler-base-module"></span><h2>OLE.sampler.base module<a class="headerlink" href="#module-OLE.sampler.base" title="Link to this heading">#</a></h2>
+<dl class="py class">
+<dt class="sig sig-object py" id="OLE.sampler.base.Sampler">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">OLE.sampler.base.</span></span><span class="sig-name descname"><span class="pre">Sampler</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#OLE.sampler.base.Sampler" title="Link to this definition">#</a></dt>
+<dd><p>Bases: <a class="reference internal" href="OLE.utils.html#OLE.utils.base.BaseClass" title="OLE.utils.base.BaseClass"><code class="xref py py-class docutils literal notranslate"><span class="pre">BaseClass</span></code></a></p>
+<dl class="py method">
+<dt class="sig sig-object py" id="OLE.sampler.base.Sampler.calculate_data_covmat">
+<span class="sig-name descname"><span class="pre">calculate_data_covmat</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">parameters</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#OLE.sampler.base.Sampler.calculate_data_covmat" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="OLE.sampler.base.Sampler.compute_loglike_from_normalized_parameters">
+<span class="sig-name descname"><span class="pre">compute_loglike_from_normalized_parameters</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">parameters</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#OLE.sampler.base.Sampler.compute_loglike_from_normalized_parameters" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="OLE.sampler.base.Sampler.compute_logprior">
+<span class="sig-name descname"><span class="pre">compute_logprior</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">state</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#OLE.sampler.base.Sampler.compute_logprior" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="OLE.sampler.base.Sampler.compute_logprior_with_border">
+<span class="sig-name descname"><span class="pre">compute_logprior_with_border</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">state</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#OLE.sampler.base.Sampler.compute_logprior_with_border" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="OLE.sampler.base.Sampler.compute_theory_from_normalized_parameters">
+<span class="sig-name descname"><span class="pre">compute_theory_from_normalized_parameters</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">parameters</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#OLE.sampler.base.Sampler.compute_theory_from_normalized_parameters" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="OLE.sampler.base.Sampler.compute_total_loglike_from_normalized_parameters">
+<span class="sig-name descname"><span class="pre">compute_total_loglike_from_normalized_parameters</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">parameters</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#OLE.sampler.base.Sampler.compute_total_loglike_from_normalized_parameters" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="OLE.sampler.base.Sampler.denormalize_inv_hessematrix">
+<span class="sig-name descname"><span class="pre">denormalize_inv_hessematrix</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">matrix</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#OLE.sampler.base.Sampler.denormalize_inv_hessematrix" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="OLE.sampler.base.Sampler.emulate_loglike_from_normalized_parameters_differentiable">
+<span class="sig-name descname"><span class="pre">emulate_loglike_from_normalized_parameters_differentiable</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">parameters_norm</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#OLE.sampler.base.Sampler.emulate_loglike_from_normalized_parameters_differentiable" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="OLE.sampler.base.Sampler.emulate_total_loglike_from_parameters_differentiable">
+<span class="sig-name descname"><span class="pre">emulate_total_loglike_from_parameters_differentiable</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">parameters</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#OLE.sampler.base.Sampler.emulate_total_loglike_from_parameters_differentiable" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="OLE.sampler.base.Sampler.emulate_total_minusloglike_from_parameters_differentiable">
+<span class="sig-name descname"><span class="pre">emulate_total_minusloglike_from_parameters_differentiable</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">parameters</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#OLE.sampler.base.Sampler.emulate_total_minusloglike_from_parameters_differentiable" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="OLE.sampler.base.Sampler.emulator">
+<span class="sig-name descname"><span class="pre">emulator</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference internal" href="OLE.html#OLE.emulator.Emulator" title="OLE.emulator.Emulator"><span class="pre">Emulator</span></a></em><a class="headerlink" href="#OLE.sampler.base.Sampler.emulator" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="OLE.sampler.base.Sampler.estimate_effective_sample_size">
+<span class="sig-name descname"><span class="pre">estimate_effective_sample_size</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">chain</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#OLE.sampler.base.Sampler.estimate_effective_sample_size" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="OLE.sampler.base.Sampler.generate_covmat">
+<span class="sig-name descname"><span class="pre">generate_covmat</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#OLE.sampler.base.Sampler.generate_covmat" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="OLE.sampler.base.Sampler.get_bounds">
+<span class="sig-name descname"><span class="pre">get_bounds</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">normalized</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#OLE.sampler.base.Sampler.get_bounds" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="OLE.sampler.base.Sampler.get_initial_position">
+<span class="sig-name descname"><span class="pre">get_initial_position</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">N</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">normalized</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#OLE.sampler.base.Sampler.get_initial_position" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="OLE.sampler.base.Sampler.initialize">
+<span class="sig-name descname"><span class="pre">initialize</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">parameters</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">likelihood</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">theory</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">emulator</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">emulator_settings</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">{}</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">likelihood_settings</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">{}</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">theory_settings</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">{}</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sampling_settings</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">{}</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#OLE.sampler.base.Sampler.initialize" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="OLE.sampler.base.Sampler.likelihood">
+<span class="sig-name descname"><span class="pre">likelihood</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference internal" href="OLE.html#OLE.likelihood.Likelihood" title="OLE.likelihood.Likelihood"><span class="pre">Likelihood</span></a></em><a class="headerlink" href="#OLE.sampler.base.Sampler.likelihood" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="OLE.sampler.base.Sampler.likelihood_function">
+<span class="sig-name descname"><span class="pre">likelihood_function</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">parameter_values</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">local_state</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#OLE.sampler.base.Sampler.likelihood_function" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="OLE.sampler.base.Sampler.nuisance_minimization">
+<span class="sig-name descname"><span class="pre">nuisance_minimization</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">state</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#OLE.sampler.base.Sampler.nuisance_minimization" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="OLE.sampler.base.Sampler.parameter_dict">
+<span class="sig-name descname"><span class="pre">parameter_dict</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.12)"><span class="pre">dict</span></a></em><a class="headerlink" href="#OLE.sampler.base.Sampler.parameter_dict" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="OLE.sampler.base.Sampler.print_status">
+<span class="sig-name descname"><span class="pre">print_status</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">i</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">chain</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#OLE.sampler.base.Sampler.print_status" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="OLE.sampler.base.Sampler.retranform_parameters_from_normalized_eigenspace">
+<span class="sig-name descname"><span class="pre">retranform_parameters_from_normalized_eigenspace</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">parameters</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#OLE.sampler.base.Sampler.retranform_parameters_from_normalized_eigenspace" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="OLE.sampler.base.Sampler.sample">
+<span class="sig-name descname"><span class="pre">sample</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#OLE.sampler.base.Sampler.sample" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="OLE.sampler.base.Sampler.sample_emulate_loglike_from_normalized_parameters_differentiable">
+<span class="sig-name descname"><span class="pre">sample_emulate_loglike_from_normalized_parameters_differentiable</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">parameters</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">N</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">RNGkey</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">Array([0,</span> <span class="pre">1721844100],</span> <span class="pre">dtype=uint32)</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#OLE.sampler.base.Sampler.sample_emulate_loglike_from_normalized_parameters_differentiable" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="OLE.sampler.base.Sampler.sample_emulate_loglike_from_normalized_parameters_differentiable_noiseFree">
+<span class="sig-name descname"><span class="pre">sample_emulate_loglike_from_normalized_parameters_differentiable_noiseFree</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">parameters</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">N</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">RNGkey</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">Array([0,</span> <span class="pre">1721844100],</span> <span class="pre">dtype=uint32)</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#OLE.sampler.base.Sampler.sample_emulate_loglike_from_normalized_parameters_differentiable_noiseFree" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="OLE.sampler.base.Sampler.sample_emulate_total_loglike_from_parameters_differentiable">
+<span class="sig-name descname"><span class="pre">sample_emulate_total_loglike_from_parameters_differentiable</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">parameters</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#OLE.sampler.base.Sampler.sample_emulate_total_loglike_from_parameters_differentiable" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="OLE.sampler.base.Sampler.sample_emulate_total_loglike_from_parameters_differentiable_noiseFree">
+<span class="sig-name descname"><span class="pre">sample_emulate_total_loglike_from_parameters_differentiable_noiseFree</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">parameters</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#OLE.sampler.base.Sampler.sample_emulate_total_loglike_from_parameters_differentiable_noiseFree" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="OLE.sampler.base.Sampler.sample_emulate_total_minusloglike_from_parameters_differentiable">
+<span class="sig-name descname"><span class="pre">sample_emulate_total_minusloglike_from_parameters_differentiable</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">parameters</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#OLE.sampler.base.Sampler.sample_emulate_total_minusloglike_from_parameters_differentiable" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="OLE.sampler.base.Sampler.stitch_parameters">
+<span class="sig-name descname"><span class="pre">stitch_parameters</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">parameters</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#OLE.sampler.base.Sampler.stitch_parameters" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="OLE.sampler.base.Sampler.test_pipeline">
+<span class="sig-name descname"><span class="pre">test_pipeline</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#OLE.sampler.base.Sampler.test_pipeline" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="OLE.sampler.base.Sampler.theory">
+<span class="sig-name descname"><span class="pre">theory</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference internal" href="OLE.html#OLE.theory.Theory" title="OLE.theory.Theory"><span class="pre">Theory</span></a></em><a class="headerlink" href="#OLE.sampler.base.Sampler.theory" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="OLE.sampler.base.Sampler.transform_parameters_into_normalized_eigenspace">
+<span class="sig-name descname"><span class="pre">transform_parameters_into_normalized_eigenspace</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">parameters</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#OLE.sampler.base.Sampler.transform_parameters_into_normalized_eigenspace" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="OLE.sampler.base.Sampler.update_covmat">
+<span class="sig-name descname"><span class="pre">update_covmat</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">covmat</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#OLE.sampler.base.Sampler.update_covmat" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+</section>
+<section id="module-OLE.sampler.ensemble">
+<span id="ole-sampler-ensemble-module"></span><h2>OLE.sampler.ensemble module<a class="headerlink" href="#module-OLE.sampler.ensemble" title="Link to this heading">#</a></h2>
+<dl class="py class">
+<dt class="sig sig-object py" id="OLE.sampler.ensemble.EnsembleSampler">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">OLE.sampler.ensemble.</span></span><span class="sig-name descname"><span class="pre">EnsembleSampler</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#OLE.sampler.ensemble.EnsembleSampler" title="Link to this definition">#</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#OLE.sampler.base.Sampler" title="OLE.sampler.base.Sampler"><code class="xref py py-class docutils literal notranslate"><span class="pre">Sampler</span></code></a></p>
+<dl class="py method">
+<dt class="sig sig-object py" id="OLE.sampler.ensemble.EnsembleSampler.initialize">
+<span class="sig-name descname"><span class="pre">initialize</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#OLE.sampler.ensemble.EnsembleSampler.initialize" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="OLE.sampler.ensemble.EnsembleSampler.run_mcmc">
+<span class="sig-name descname"><span class="pre">run_mcmc</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">nsteps</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#OLE.sampler.ensemble.EnsembleSampler.run_mcmc" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+</section>
+<section id="module-OLE.sampler.evaluate">
+<span id="ole-sampler-evaluate-module"></span><h2>OLE.sampler.evaluate module<a class="headerlink" href="#module-OLE.sampler.evaluate" title="Link to this heading">#</a></h2>
+<dl class="py class">
+<dt class="sig sig-object py" id="OLE.sampler.evaluate.EvaluateSampler">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">OLE.sampler.evaluate.</span></span><span class="sig-name descname"><span class="pre">EvaluateSampler</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#OLE.sampler.evaluate.EvaluateSampler" title="Link to this definition">#</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#OLE.sampler.base.Sampler" title="OLE.sampler.base.Sampler"><code class="xref py py-class docutils literal notranslate"><span class="pre">Sampler</span></code></a></p>
+<dl class="py method">
+<dt class="sig sig-object py" id="OLE.sampler.evaluate.EvaluateSampler.initialize">
+<span class="sig-name descname"><span class="pre">initialize</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#OLE.sampler.evaluate.EvaluateSampler.initialize" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="OLE.sampler.evaluate.EvaluateSampler.sample">
+<span class="sig-name descname"><span class="pre">sample</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">input_dicts</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#OLE.sampler.evaluate.EvaluateSampler.sample" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+</section>
+<section id="module-OLE.sampler.minimize">
+<span id="ole-sampler-minimize-module"></span><h2>OLE.sampler.minimize module<a class="headerlink" href="#module-OLE.sampler.minimize" title="Link to this heading">#</a></h2>
+<dl class="py class">
+<dt class="sig sig-object py" id="OLE.sampler.minimize.MinimizeSampler">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">OLE.sampler.minimize.</span></span><span class="sig-name descname"><span class="pre">MinimizeSampler</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#OLE.sampler.minimize.MinimizeSampler" title="Link to this definition">#</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#OLE.sampler.base.Sampler" title="OLE.sampler.base.Sampler"><code class="xref py py-class docutils literal notranslate"><span class="pre">Sampler</span></code></a></p>
+<dl class="py method">
+<dt class="sig sig-object py" id="OLE.sampler.minimize.MinimizeSampler.initialize">
+<span class="sig-name descname"><span class="pre">initialize</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#OLE.sampler.minimize.MinimizeSampler.initialize" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="OLE.sampler.minimize.MinimizeSampler.minimize">
+<span class="sig-name descname"><span class="pre">minimize</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#OLE.sampler.minimize.MinimizeSampler.minimize" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+</section>
+<section id="module-OLE.sampler">
+<span id="module-contents"></span><h2>Module contents<a class="headerlink" href="#module-OLE.sampler" title="Link to this heading">#</a></h2>
+<p>Sampler</p>
+</section>
+</section>
+
+
+                </article>
+              
+
+              
+              
+              
+              
+                <footer class="prev-next-footer d-print-none">
+                  
+<div class="prev-next-area">
+</div>
+                </footer>
+              
+            </div>
+            
+            
+              
+                <div class="bd-sidebar-secondary bd-toc"><div class="sidebar-secondary-items sidebar-secondary__inner">
+
+
+  <div class="sidebar-secondary-item">
+  <div class="page-toc tocsection onthispage">
+    <i class="fa-solid fa-list"></i> Contents
+  </div>
+  <nav class="bd-toc-nav page-toc">
+    <ul class="visible nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#submodules">Submodules</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#module-OLE.sampler.NUTS">OLE.sampler.NUTS module</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#OLE.sampler.NUTS.NUTSSampler"><code class="docutils literal notranslate"><span class="pre">NUTSSampler</span></code></a><ul class="nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#OLE.sampler.NUTS.NUTSSampler.initialize"><code class="docutils literal notranslate"><span class="pre">NUTSSampler.initialize()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#OLE.sampler.NUTS.NUTSSampler.run_mcmc"><code class="docutils literal notranslate"><span class="pre">NUTSSampler.run_mcmc()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#module-OLE.sampler.base">OLE.sampler.base module</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#OLE.sampler.base.Sampler"><code class="docutils literal notranslate"><span class="pre">Sampler</span></code></a><ul class="nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#OLE.sampler.base.Sampler.calculate_data_covmat"><code class="docutils literal notranslate"><span class="pre">Sampler.calculate_data_covmat()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#OLE.sampler.base.Sampler.compute_loglike_from_normalized_parameters"><code class="docutils literal notranslate"><span class="pre">Sampler.compute_loglike_from_normalized_parameters()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#OLE.sampler.base.Sampler.compute_logprior"><code class="docutils literal notranslate"><span class="pre">Sampler.compute_logprior()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#OLE.sampler.base.Sampler.compute_logprior_with_border"><code class="docutils literal notranslate"><span class="pre">Sampler.compute_logprior_with_border()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#OLE.sampler.base.Sampler.compute_theory_from_normalized_parameters"><code class="docutils literal notranslate"><span class="pre">Sampler.compute_theory_from_normalized_parameters()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#OLE.sampler.base.Sampler.compute_total_loglike_from_normalized_parameters"><code class="docutils literal notranslate"><span class="pre">Sampler.compute_total_loglike_from_normalized_parameters()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#OLE.sampler.base.Sampler.denormalize_inv_hessematrix"><code class="docutils literal notranslate"><span class="pre">Sampler.denormalize_inv_hessematrix()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#OLE.sampler.base.Sampler.emulate_loglike_from_normalized_parameters_differentiable"><code class="docutils literal notranslate"><span class="pre">Sampler.emulate_loglike_from_normalized_parameters_differentiable()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#OLE.sampler.base.Sampler.emulate_total_loglike_from_parameters_differentiable"><code class="docutils literal notranslate"><span class="pre">Sampler.emulate_total_loglike_from_parameters_differentiable()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#OLE.sampler.base.Sampler.emulate_total_minusloglike_from_parameters_differentiable"><code class="docutils literal notranslate"><span class="pre">Sampler.emulate_total_minusloglike_from_parameters_differentiable()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#OLE.sampler.base.Sampler.emulator"><code class="docutils literal notranslate"><span class="pre">Sampler.emulator</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#OLE.sampler.base.Sampler.estimate_effective_sample_size"><code class="docutils literal notranslate"><span class="pre">Sampler.estimate_effective_sample_size()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#OLE.sampler.base.Sampler.generate_covmat"><code class="docutils literal notranslate"><span class="pre">Sampler.generate_covmat()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#OLE.sampler.base.Sampler.get_bounds"><code class="docutils literal notranslate"><span class="pre">Sampler.get_bounds()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#OLE.sampler.base.Sampler.get_initial_position"><code class="docutils literal notranslate"><span class="pre">Sampler.get_initial_position()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#OLE.sampler.base.Sampler.initialize"><code class="docutils literal notranslate"><span class="pre">Sampler.initialize()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#OLE.sampler.base.Sampler.likelihood"><code class="docutils literal notranslate"><span class="pre">Sampler.likelihood</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#OLE.sampler.base.Sampler.likelihood_function"><code class="docutils literal notranslate"><span class="pre">Sampler.likelihood_function()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#OLE.sampler.base.Sampler.nuisance_minimization"><code class="docutils literal notranslate"><span class="pre">Sampler.nuisance_minimization()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#OLE.sampler.base.Sampler.parameter_dict"><code class="docutils literal notranslate"><span class="pre">Sampler.parameter_dict</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#OLE.sampler.base.Sampler.print_status"><code class="docutils literal notranslate"><span class="pre">Sampler.print_status()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#OLE.sampler.base.Sampler.retranform_parameters_from_normalized_eigenspace"><code class="docutils literal notranslate"><span class="pre">Sampler.retranform_parameters_from_normalized_eigenspace()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#OLE.sampler.base.Sampler.sample"><code class="docutils literal notranslate"><span class="pre">Sampler.sample()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#OLE.sampler.base.Sampler.sample_emulate_loglike_from_normalized_parameters_differentiable"><code class="docutils literal notranslate"><span class="pre">Sampler.sample_emulate_loglike_from_normalized_parameters_differentiable()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#OLE.sampler.base.Sampler.sample_emulate_loglike_from_normalized_parameters_differentiable_noiseFree"><code class="docutils literal notranslate"><span class="pre">Sampler.sample_emulate_loglike_from_normalized_parameters_differentiable_noiseFree()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#OLE.sampler.base.Sampler.sample_emulate_total_loglike_from_parameters_differentiable"><code class="docutils literal notranslate"><span class="pre">Sampler.sample_emulate_total_loglike_from_parameters_differentiable()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#OLE.sampler.base.Sampler.sample_emulate_total_loglike_from_parameters_differentiable_noiseFree"><code class="docutils literal notranslate"><span class="pre">Sampler.sample_emulate_total_loglike_from_parameters_differentiable_noiseFree()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#OLE.sampler.base.Sampler.sample_emulate_total_minusloglike_from_parameters_differentiable"><code class="docutils literal notranslate"><span class="pre">Sampler.sample_emulate_total_minusloglike_from_parameters_differentiable()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#OLE.sampler.base.Sampler.stitch_parameters"><code class="docutils literal notranslate"><span class="pre">Sampler.stitch_parameters()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#OLE.sampler.base.Sampler.test_pipeline"><code class="docutils literal notranslate"><span class="pre">Sampler.test_pipeline()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#OLE.sampler.base.Sampler.theory"><code class="docutils literal notranslate"><span class="pre">Sampler.theory</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#OLE.sampler.base.Sampler.transform_parameters_into_normalized_eigenspace"><code class="docutils literal notranslate"><span class="pre">Sampler.transform_parameters_into_normalized_eigenspace()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#OLE.sampler.base.Sampler.update_covmat"><code class="docutils literal notranslate"><span class="pre">Sampler.update_covmat()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#module-OLE.sampler.ensemble">OLE.sampler.ensemble module</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#OLE.sampler.ensemble.EnsembleSampler"><code class="docutils literal notranslate"><span class="pre">EnsembleSampler</span></code></a><ul class="nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#OLE.sampler.ensemble.EnsembleSampler.initialize"><code class="docutils literal notranslate"><span class="pre">EnsembleSampler.initialize()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#OLE.sampler.ensemble.EnsembleSampler.run_mcmc"><code class="docutils literal notranslate"><span class="pre">EnsembleSampler.run_mcmc()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#module-OLE.sampler.evaluate">OLE.sampler.evaluate module</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#OLE.sampler.evaluate.EvaluateSampler"><code class="docutils literal notranslate"><span class="pre">EvaluateSampler</span></code></a><ul class="nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#OLE.sampler.evaluate.EvaluateSampler.initialize"><code class="docutils literal notranslate"><span class="pre">EvaluateSampler.initialize()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#OLE.sampler.evaluate.EvaluateSampler.sample"><code class="docutils literal notranslate"><span class="pre">EvaluateSampler.sample()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#module-OLE.sampler.minimize">OLE.sampler.minimize module</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#OLE.sampler.minimize.MinimizeSampler"><code class="docutils literal notranslate"><span class="pre">MinimizeSampler</span></code></a><ul class="nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#OLE.sampler.minimize.MinimizeSampler.initialize"><code class="docutils literal notranslate"><span class="pre">MinimizeSampler.initialize()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#OLE.sampler.minimize.MinimizeSampler.minimize"><code class="docutils literal notranslate"><span class="pre">MinimizeSampler.minimize()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#module-OLE.sampler">Module contents</a></li>
+</ul>
+  </nav></div>
+
+</div></div>
+              
+            
+          </div>
+          <footer class="bd-footer-content">
+            
+<div class="bd-footer-content__inner container">
+  
+  <div class="footer-item">
+    
+<p class="component-author">
+By Sven Günther
+</p>
+
+  </div>
+  
+  <div class="footer-item">
+    
+
+  <p class="copyright">
+    
+      © Copyright 2024, Sven Günther.
+      <br/>
+    
+  </p>
+
+  </div>
+  
+  <div class="footer-item">
+    
+  </div>
+  
+  <div class="footer-item">
+    
+  </div>
+  
+</div>
+          </footer>
+        
+
+      </main>
+    </div>
+  </div>
+  
+  <!-- Scripts loaded after <body> so the DOM is not blocked -->
+  <script src="_static/scripts/bootstrap.js?digest=dfe6caa3a7d634c4db9b"></script>
+<script src="_static/scripts/pydata-sphinx-theme.js?digest=dfe6caa3a7d634c4db9b"></script>
+
+  <footer class="bd-footer">
+  </footer>
+  </body>
+</html>

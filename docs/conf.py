@@ -41,6 +41,7 @@ extensions = [
     "sphinx.ext.intersphinx",
     "myst_parser",
     "numpydoc",
+    "sphinx_book_theme",
 ]
 
 # Things we need for the docs to render, but don't actually need to import
@@ -54,6 +55,8 @@ intersphinx_mapping = {
 intersphinx_disabled_domains = ["std"]
 
 templates_path = ["_templates"]
+
+numpydoc_show_class_members = False
 
 # -- Options for EPUB output
 epub_show_urls = "footnote"
