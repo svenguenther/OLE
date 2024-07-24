@@ -17,8 +17,6 @@
    :maxdepth: 6
    :caption: Examples
 
-   ../OLE/examples/candl/candl_act_class_nuts
-
 .. toctree::
    :hidden:
    :maxdepth: 6

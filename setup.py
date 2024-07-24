@@ -1,5 +1,5 @@
 from setuptools import setup
-from ole import __author__, __version__
+from OLE import __author__, __version__
 
 setup(
     name="OLE",
