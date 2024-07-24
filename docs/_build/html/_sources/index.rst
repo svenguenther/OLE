@@ -14,18 +14,18 @@
 
 .. toctree::
    :hidden:
-   :maxdepth: 4
+   :maxdepth: 6
    :caption: Examples
 
-   examples/candl/candl_act_class_nuts
+   ../OLE/examples/candl/candl_act_class_nuts
 
 .. toctree::
    :hidden:
-   :maxdepth: 2
+   :maxdepth: 6
    :caption: Modules
 
-   modules
-
+   modules 
+   
 .. Crop out the image used on github (using logoo on the side here)
 .. include:: ../README.rst
    :start-line: 3 

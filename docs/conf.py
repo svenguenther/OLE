@@ -56,6 +56,8 @@ intersphinx_disabled_domains = ["std"]
 
 templates_path = ["_templates"]
 
+numpydoc_show_class_members = False
+
 # -- Options for EPUB output
 epub_show_urls = "footnote"
 

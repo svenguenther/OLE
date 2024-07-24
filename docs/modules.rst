@@ -2,8 +2,10 @@ OLE
 ==
 
 .. toctree::
-    :hidden:
-    :maxdepth: 4
+   :hidden:
+   :maxdepth: 2
 
-    emulator
-    
+   OLE.interfaces
+   OLE 
+   OLE.sampler
+   OLE.utils
