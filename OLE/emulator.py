@@ -124,7 +124,7 @@ class Emulator(BaseClass):
             'jit_threshold': 10, # number of samples to be emulated before we jit the emulator to accelerate it TODO: put this somewhere else
 
             # learn about the actual emulation task to estimate 'quality_threshold_quadratic'.
-            'N_sigma': 6,
+            'N_sigma': 4,
             'dimensionality': None, # if we give the dimensionality, the code estimates where we need to be accruate in the quality criterium (inside of N_sigma). Thus, we can estimate the quality_threshold_quadratic, in a way, that it becomes dominant over the linear at this point!
 
             # a dictionary for the likelihood settings
@@ -431,6 +431,36 @@ class Emulator(BaseClass):
     # function to get N samples from the same input parameters
     # @partial(jax.jit, static_argnums=0)
     def emulate_samples(self, parameters, RNGkey):
+        # add Sphinx documentation
+        """
+        Emulate N samples of the quantities for the given parameters.
+
+        Parameters
+        ----------
+        parameters : dict
+            The parameters for which the quantities are to be emulated.
+        RNGkey : jax.random.PRNGKey
+            The random number generator key.
+
+        Returns
+        -------
+        list
+            A list of N output states. Each output state is a dictionary with the following structure:
+            {
+                "parameters": {
+                    "parameter1": [123],
+                    "parameter2": [456],
+                    ...
+                },
+                "quantities": {
+                    "quantity1": [element1, element2, ...],
+                    "quantity2": [element1, element2, ...],
+                    ...
+                }
+            }
+        jax.random.PRNGKey
+            The updated random number generator key.
+        """
         # Prepare list of N output states
         state = {'parameters': {}, 'quantities': {}}
         state['parameters'] = parameters
@@ -625,7 +655,7 @@ class Emulator(BaseClass):
         # if we do not require a quality check, we return False
         if not self.hyperparameters['test_emulator']:
             self.debug("Quality check not required. Test emulator is False")
-            self.write_to_log("Quality check not required. Test emulator is False")
+            self.write_to_log("Quality check not required. Test emulator is False \n")
             self.continuous_successful_calls += 1
             return False
 
