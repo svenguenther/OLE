@@ -72,7 +72,7 @@ class GP_predictor(BaseClass):
             "error_tolerance": 1.0,
             "excess_fraction": 0.1,
             "error_boost": 0.1,
-            "kernel_fitting_frequency": 4,
+            "kernel_fitting_frequency": 20,
         }
 
         # The hyperparameters are a dictionary of the hyperparameters for the different quantities. The keys are the names of the quantities.
@@ -484,9 +484,9 @@ class GP(BaseClass):
             # Kernel type
             "kernel": "RBF",
             # Exponential decay learning rate
-            "learning_rate": 0.02,
+            "learning_rate": 0.1,
             # Number of iterations
-            "num_iters": 100,
+            "num_iters": 200,
             # plotting directory
             "plotting_directory": None,
             # testset fraction. If we have a testset, which is not None, then we will use this fraction of the data as a testset

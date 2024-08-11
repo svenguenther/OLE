@@ -78,7 +78,7 @@ class Emulator(BaseClass):
             'kernel': 'RBF',
 
             # kernel fitting frequency. Every n-th state the kernel parameters are fitted.
-            'kernel_fitting_frequency': 4,
+            'kernel_fitting_frequency': 20,
             'test_noise_levels': 100,
             # the number of data points in cache before the emulator is to be trained
             'min_data_points': 80,
@@ -118,6 +118,7 @@ class Emulator(BaseClass):
 
             # plotting directory
             'plotting_directory': None,
+            'testset_fraction': 0.1,
 
             # only relevant for cobaya
             'cobaya_state_file': None, # TODO: put this somewhere else. This is only used in the cobaya wrapper
@@ -129,6 +130,12 @@ class Emulator(BaseClass):
 
             # a dictionary for the likelihood settings
             'likelihood_settings': {},
+
+            # this setting is a flag whether to jit the emulator
+            'jit': True,
+
+            # print frequency for the emulator
+            'status_print_frequency': 50,
         }
 
         # The hyperparameters are a dictionary of the hyperparameters for the different quantities. The keys are the names of the quantities.
@@ -251,15 +258,21 @@ class Emulator(BaseClass):
         # this counter is used to determine the number of continously successful emulator calls
         self.continuous_successful_calls = 0
 
+        # this counter counts the number of times that self.emulate was called
+        self.emulate_counter = 0
+
+        # this counter counts the number of times that self.check_quality_criterium was called with a successful result
+        self.quality_check_successful_counter = 0
+        self.quality_check_unsuccessful_counter = 0
+
         # max loglike encountered in the run
         self.max_loglike_encountered = -np.inf
+
+
         
         pass
 
     def add_state(self, state):
-        # returns 2 if the state was added to the data cache and the emulator was trained
-        # returns 1 if the state was added to the data cache and the emulator was updated
-        # returns 0 if the state was not added to the data cache and the emulator was not updated
 
         # new state
         new_state = deepcopy(state)
@@ -409,10 +422,34 @@ class Emulator(BaseClass):
             self.data_covmats[quantity_name] = data_covmat
             self.emulators[quantity_name].data_processor.data_covmat = data_covmat
 
-    # @partial(jax.jit, static_argnums=0)
     def emulate(self, parameters):
         # Prepare output state
-        output_state = {'quantities':{}} #self.ini_state.copy()
+        output_state = self.ini_state.copy() # TODO Talk with christian about thish here
+
+        # write to log
+        self.write_parameter_dict_to_log(parameters)
+
+        # if we jit the emulator, we use the jit version of the emulator
+        if self.hyperparameters['jit']:
+            output_state_emulator = self.emulate_jit(parameters)
+        else:
+            output_state_emulator = self.emulate_nojit(parameters)
+
+        # overwrite the quantities which were emulated
+        for quantity, emulator_output in output_state_emulator['quantities'].items():
+            output_state['quantities'][quantity] = emulator_output
+
+        # overwrite the parameters
+        output_state['parameters'] = output_state_emulator['parameters']
+
+        self.emulate_counter += 1
+        self.print_status()
+        return output_state
+
+    @partial(jax.jit, static_argnums=0)
+    def emulate_jit(self, parameters):
+        # Prepare output state
+        output_state = {'quantities':{}} #self.ini_state.copy() # TODO Talk with christian about thish here
         output_state['parameters'] = parameters
 
         # Emulate the quantities for the given parameters.
@@ -421,15 +458,25 @@ class Emulator(BaseClass):
         for quantity, emulator in self.emulators.items():
             emulator_output = emulator.predict(input_data)
             output_state['quantities'][quantity] = emulator_output
+        
+        return output_state
 
-        # write to log
-        # self.write_parameter_dict_to_log(parameters)
+    def emulate_nojit(self, parameters):
+        # Prepare output state
+        output_state = {'quantities':{}}
+        output_state['parameters'] = parameters
 
+        # Emulate the quantities for the given parameters.
+        input_data = jnp.array([[parameters[key][0] for key in self.input_parameters]])
+
+        for quantity, emulator in self.emulators.items():
+            emulator_output = emulator.predict(input_data)
+            output_state['quantities'][quantity] = emulator_output
+        
         return output_state
     
 
     # function to get N samples from the same input parameters
-    # @partial(jax.jit, static_argnums=0)
     def emulate_samples(self, parameters, RNGkey):
         # add Sphinx documentation
         """
@@ -462,6 +509,26 @@ class Emulator(BaseClass):
             The updated random number generator key.
         """
         # Prepare list of N output states
+        state = deepcopy(self.ini_state) # TODO Talk with christian about thish here
+        state['parameters'] = parameters
+        output_states = [deepcopy(state) for i in range(self.hyperparameters['N_quality_samples'])]
+
+        # use jit or no jit version of the function
+        if self.hyperparameters['jit']:
+            output_states_emulator, RNGkey = self.emulate_samples_jit(parameters, RNGkey)
+        else:
+            output_states_emulator, RNGkey = self.emulate_samples_nojit(parameters, RNGkey)
+
+        # overwrite the quantities which were emulated
+        for i in range(self.hyperparameters['N_quality_samples']):
+            for quantity, emulator_output in output_states_emulator[i]['quantities'].items():
+                output_states[i]['quantities'][quantity] = emulator_output
+
+        return output_states, RNGkey
+
+    @partial(jax.jit, static_argnums=0)
+    def emulate_samples_jit(self, parameters, RNGkey):
+        # Prepare list of N output states
         state = {'parameters': {}, 'quantities': {}}
         state['parameters'] = parameters
         output_states = [deepcopy(state) for i in range(self.hyperparameters['N_quality_samples'])]
@@ -472,11 +539,29 @@ class Emulator(BaseClass):
         for quantity, emulator in self.emulators.items():
             emulator_output, RNGkey = emulator.sample_prediction(input_data, N=self.hyperparameters['N_quality_samples'], RNGkey=RNGkey)
             
+            for i in range(self.hyperparameters['N_quality_samples']):
+                output_states[i]['quantities'][quantity] = emulator_output[i,:]
+
+        return output_states, RNGkey
+
+    def emulate_samples_nojit(self, parameters, RNGkey):
+        # Prepare list of N output states
+        state = {'parameters': {}, 'quantities': {}}
+        state['parameters'] = parameters
+        output_states = [deepcopy(state) for i in range(self.hyperparameters['N_quality_samples'])]
+
+        # Emulate the quantities for the given parameters.
+        input_data = jnp.array([[parameters[key][0] for key in self.input_parameters]])
+
+        for quantity, emulator in self.emulators.items():
+            emulator_output, RNGkey = emulator.sample_prediction(input_data, N=self.hyperparameters['N_quality_samples'], RNGkey=RNGkey)
             
             for i in range(self.hyperparameters['N_quality_samples']):
                 output_states[i]['quantities'][quantity] = emulator_output[i,:]
 
         return output_states, RNGkey
+
+
 
     def emulate_samples_noiseFree(self, parameters, RNGkey):
         # Prepare list of N output states
@@ -499,32 +584,6 @@ class Emulator(BaseClass):
 
         return output_states, RNGkey
     
-
-    # OUTDATED
-    # function to get 1 sample from the same input parameters
-    # @partial(jax.jit, static_argnums=0)
-    # def emulate_sample(self, parameters, RNGkey=jax.random.PRNGKey(time.time_ns())):
-    #     # Prepare list of N output states
-
-    #     state = {'parameters': {}, 'quantities': {}}
-    #     state['parameters'] = parameters
-
-    #     # Emulate the quantities for the given parameters.
-    #     input_data = jnp.array([[value[0] for key, value in parameters.items() if key in self.input_parameters]])
-
-    #     for quantity, emulator in self.emulators.items():
-    #         emulator_output, RNGkey = emulator.sample_prediction(input_data, RNGkey=RNGkey)
-            
-    #         state['quantities'][quantity] = emulator_output[0,:]
-
-    #     return state, RNGkey
-
-    # function simply restes all errors for the GPs
-
-    #def reset_error(self):
-  
-    #    for quantity_name, quantity in self.ini_state['quantities'].items():
-    #        self.emulators[quantity_name].reset_error() 
 
     def set_error(self):
 
@@ -597,6 +656,12 @@ class Emulator(BaseClass):
         # if the emulator is not yet trained, we return False
         if not self.trained:
             self.continuous_successful_calls = 0
+            self.quality_check_unsuccessful_counter += 1
+            return False
+
+        # check for nans in the loglikes
+        if jnp.any(jnp.isnan(loglikes)):
+            self.quality_check_unsuccessful_counter += 1
             return False
 
         # if the emulator is trained, we check the quality criterium
@@ -621,6 +686,7 @@ class Emulator(BaseClass):
                 _ = "Quality criterium NOT fulfilled; "+"; ".join([key+ ': ' +str(value) for key, value in parameters.items()]) + " Max loglike: %f, delta loglikes: " % (max_loglike) + " ".join([str(loglike) for loglike in loglikes]) + "\n"
                 if write_log: 
                     self.write_to_log(_)
+                self.quality_check_unsuccessful_counter += 1
                 return False
         else:
             # calculate the absolute difference between the mean loglike and the maximum loglike
@@ -632,6 +698,7 @@ class Emulator(BaseClass):
                 _ = "Quality criterium NOT fulfilled; "+"; ".join([key+ ': ' +str(value) for key, value in parameters.items()]) + " Max loglike: %f, delta loglikes: " % (max_loglike) + " ".join([str(loglike) for loglike in loglikes]) + "\n"
                 if write_log: 
                     self.write_to_log(_)
+                self.quality_check_unsuccessful_counter += 1
                 return False
 
         self.debug("Emulator quality criterium fulfilled")
@@ -644,6 +711,7 @@ class Emulator(BaseClass):
         if jnp.any(mean_loglike > max_loglike):
             self.max_loglike_encountered = mean_loglike
 
+        self.quality_check_successful_counter += 1
         return True
     
 
@@ -714,6 +782,15 @@ class Emulator(BaseClass):
 
         return output_state
     
+    def print_status(self):
+        if self.emulate_counter%self.hyperparameters['status_print_frequency'] == 0:
+            # print the status of the emulator
+            self.info("Emulator status:")
+            self.info("Number of data points in cache: %d", len(self.data_cache.states))
+            self.info("Number of emulation calls: %d", self.emulate_counter)
+            self.info("Number of quality check successful calls: %d", self.quality_check_successful_counter)
+            self.info("Number of quality check unsuccessful calls: %d", self.quality_check_unsuccessful_counter)
+        pass
 
     def write_to_log(self, message):
         # write the message to the logfile

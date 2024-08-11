@@ -133,7 +133,7 @@ class DataCache(BaseClass):
             self.error("LOGLIKE IS NAN!")
             return False
 
-        self.info(
+        self.debug(
             "Loglikelihood of incoming state: %f, Current bestfit Loglikelihood %f"
             % (new_loglike, self.max_loglike)
         )
@@ -146,6 +146,10 @@ class DataCache(BaseClass):
         # check if the new data point is already in the cache
         for state in self.states:
             if state["parameters"] == new_state["parameters"]:
+                # update the loglike if the new loglike is larger
+                if new_loglike > state["loglike"]:
+                    state["loglike"] = new_loglike
+                    self.debug("updated loglike in cache")
                 self.debug("state already in cache")
                 return False
 

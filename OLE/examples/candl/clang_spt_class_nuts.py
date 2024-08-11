@@ -69,7 +69,7 @@ emulator_settings = {
 
     # related so sampler
     'explained_variance_cutoff': 0.9999,
-    'min_variance_per_bin': 1e-1,
+    'min_variance_per_bin': 1e-3,
 
     # cache criteria
     'dimensionality': 39,
@@ -87,6 +87,8 @@ emulator_settings = {
 
     # 'compute_data_covmat': True,
     'data_covmat_directory': './spt_data_covmats',
+
+    'veto': ['bb'],
 
 }
 

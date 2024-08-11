@@ -605,16 +605,35 @@ class Sampler(BaseClass):
         # compute logprior
         logprior = self.compute_logprior(state)
         self.debug("logprior: %f for parameters: %s", logprior, state['parameters'])
+
+        # make jax lax cond function that if the logprior is < -1e20, the loglike is -1e20, else the loglike is computed
+        def full_loglike(state):
+            self.debug("emulator available - check emulation performance")
+            state = self.emulator.emulate_jit(state['parameters'])
+            self.debug("state after emulator: %s for parameters: %s", state['quantities'], state['parameters'])
+
+            state = self.likelihood.loglike_state(state)
+            self.debug("loglike after theory: %f for parameters: %s", state['loglike'][0], state['parameters'])
+
+            state['loglike'] = state['loglike'] + logprior
+            self.debug("emulator prediction: %s", state['quantities'])
+            return state['loglike']
         
-        self.debug("emulator available - check emulation performance")
-        state = self.emulator.emulate(state['parameters'])
-        self.debug("state after emulator: %s for parameters: %s", state['quantities'], state['parameters'])
+        def full_logprior(state):
+            state['loglike'] = self.compute_logprior_with_border(state)
 
-        state = self.likelihood.loglike_state(state)
-        self.debug("loglike after theory: %f for parameters: %s", state['loglike'][0], state['parameters'])
+            # stitch parameters to the allowed parameter space
+            stitched_parameters = self.stitch_parameters(state['parameters'])
 
-        state['loglike'] = state['loglike'] + logprior
-        self.debug("emulator prediction: %s", state['quantities'])
+            # compute the observables
+            state = self.emulator.emulate_jit(stitched_parameters)
+            state = self.likelihood.loglike_state(state)
+
+            state['loglike'] = state['loglike'] + logprior
+
+            return state['loglike']
+        
+        state['loglike'] = lax.cond(logprior < -1e20, full_logprior, full_loglike, state)
 
         parameters = self.transform_parameters_into_normalized_eigenspace(parameters)
 
@@ -644,7 +663,7 @@ class Sampler(BaseClass):
 
         self.debug("emulator available - check emulation performance")
 
-        states, RNGkey = self.emulator.emulate_samples(state['parameters'], RNGkey)
+        states, RNGkey = self.emulator.emulate_samples_jit(state['parameters'], RNGkey)
 
         loglikes = [self.likelihood.loglike_state(_)['loglike'] + logprior for _ in states]
 
@@ -725,6 +744,41 @@ class Sampler(BaseClass):
             log_prior -= jnp.heaviside(value['prior']['min'] - state['parameters'][key][0],  1.0) * 99999999999999999999999.  + jnp.heaviside(state['parameters'][key][0] - value['prior']['max'], 1.0) * 99999999999999999999999.
 
         return log_prior
+    
+    def compute_logprior_with_border(self, state):
+        # This function computes the logprior. However, when we exceed the borders of the prior, we project the parameters to the border and add a penalty term to the logprior.
+        # if we have a flat prior:
+        log_prior = 0.0
+
+        for key, value in self.parameter_dict.items():
+
+            # if mean and std are given, we use a gaussian prior
+            if 'mean' in value['prior'].keys():
+                log_prior += -0.5*(state['parameters'][key][0]-value['prior']['mean'])**2/value['prior']['std']**2 - 0.5*jnp.log(2*jnp.pi*value['prior']['std']**2)
+            # else we sticke with the flat prior
+            else:
+                log_prior+= jnp.log(1.0/(value['prior']['max']-value['prior']['min']))
+
+            # add penalty term if we exceed the borders, which is linear in the distance to the border
+            distance_to_border = jnp.minimum(state['parameters'][key][0]-value['prior']['min'], value['prior']['max']-state['parameters'][key][0]) / value['proposal']
+            
+            # with jax lax cond we can add the penalty term only if we exceed the borders
+            def add_penalty_term():
+                c_lin = 1000.0 # penalty term
+                return distance_to_border * c_lin
+            
+            log_prior += lax.cond(jnp.logical_or(state['parameters'][key][0] < value['prior']['min'], state['parameters'][key][0] > value['prior']['max']), add_penalty_term, lambda: 0.0)
+
+        return log_prior
+
+    def stitch_parameters(self, parameters):
+        # this function copies the parameters and if they exceed the borders, they are projected to the border
+        stitched_parameters = copy.deepcopy(parameters)
+        for key, value in self.parameter_dict.items():
+            if 'prior' in list(value.keys()):
+                stitched_parameters[key] = jnp.minimum(jnp.maximum(parameters[key], value['prior']['min']), value['prior']['max'])
+        return stitched_parameters
+
     
     def sample(self):
         # Run the sampler.

@@ -53,13 +53,14 @@ emulator_settings = {
 
     # related so sampler
     'explained_variance_cutoff': 0.9999,
+    'min_variance_per_bin': 1e-3,
 
     # cache criteria
     'dimensionality': 7,
     'N_sigma': 4.0,
 
-    # 'plotting_directory': './plots_sampler_clang_nuts',
-    # 'testset_fraction': 0.01,
+    # 'plotting_directory': './output_clang_act_nuts/plots_sampler_clang_nuts',
+    # 'testset_fraction': 0.1,
     'logfile': './output_clang_act_nuts/log.txt',
 
     'learning_rate': 0.1,
@@ -69,6 +70,9 @@ emulator_settings = {
     'data_covmat_directory': './act_data_covmats',
 
     'debug': False,
+
+    'veto': ['bb'],
+
 }
 
 likelihood_settings = {
@@ -110,6 +114,7 @@ my_parameters = {'h': {'prior': {'min': 0.6, 'max': 0.8},
                              'proposal': 0.05},
 
                     # ACT_DR4_TTTEEE
+                    # Nuisance parameters are laoded automaticially
                     # 'yp': {'prior': {'min': 0.9, 'max': 1.1}, 'ref': {'mean': 1.0, 'std': 0.0001}, 'proposal': 0.0001},
 }
     
