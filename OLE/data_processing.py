@@ -66,7 +66,7 @@ class data_processor(BaseClass):
 
         defaulthyperparameters = {
             # explained variance cutoff is the minimum explained variance which is required for the PCA compression. Once this value is reached, the PCA compression is stopped.
-            # 'explained_variance_cutoff': 0.999, # OUTDATED TODO: REMOVE
+            'explained_variance_cutoff': 0.999, # OUTDATED TODO: REMOVE
             "min_variance_per_bin": 1e-3,
             # this should also inform the error of the GPs to remain consistent. Or alternatively since we specify error params,
             # those might also set this parameter
@@ -166,9 +166,6 @@ class data_processor(BaseClass):
         # set all stds which are 0 to 1
 
         self.input_stds = jnp.where(self.input_stds == 0, 1, self.input_stds)
-        self.output_stds = jnp.where(self.output_stds == 0, 10**8, self.output_stds)
-
-        #
 
     def compute_compression(self):
         # Compress the normalized data. This is done by applying a PCA to the normalized data.
@@ -286,9 +283,10 @@ class data_processor(BaseClass):
                 jnp.linalg.inv(self.data_covmat), _.T
             ).T
         else:
+            safe_output_stds = jnp.where(self.output_stds == 0.0, 1.0, self.output_stds)
             self.output_data_normalized = (
                 self.output_data_raw - self.output_means
-            ) / self.output_stds
+            ) / safe_output_stds
 
         # if there is a plotting directory, plot the raw output data and the normalized output data
         if self.hyperparameters["plotting_directory"] is not None:

@@ -62,20 +62,6 @@ def check_cache_and_compute(self, params_values_dict,
                             # initialize the emulator
                             self.emulator = Emulator(**self.emulator_settings)
                             self.emulator.initialize(ini_state=None, **self.emulator_settings)
-
-                            # jit the emulator functions                                         
-                            del self.emulator_emulate_function
-                            del self.emulator_sampling_function
-                            del self.jit_emulate
-                            del self.jit_emulator_samples
-                            self.emulator_emulate_function = self.emulator.emulate
-                            self.emulator_sampling_function = self.emulate_samples
-
-                            # self.jit_emulate = jax.jit(self.emulator_emulate_function)
-                            # self.jit_emulator_samples = jax.jit(self.emulator_sampling_function)
-                            self.jit_emulate = self.emulator_emulate_function
-                            self.jit_emulator_samples = self.emulator_sampling_function
-
                             self.log.info("Emulator trained")
 
                             self._current_state = self.initial_cobaya_state
@@ -172,6 +158,7 @@ def check_cache_and_compute(self, params_values_dict,
                     return False
             if self.timer:
                 self.timer.increment(self.log)
+
             if self.emulator is not None:
                 # add the new state to the emulator
                 emulator_state = translate_cobaya_state_to_emulator_state(state)
@@ -192,41 +179,9 @@ def check_cache_and_compute(self, params_values_dict,
                         # force_acceptance = True # OLD
                         self.emulator.train()
 
-                        # jit the emulator functions
-                        del self.emulator_emulate_function
-                        del self.emulator_sampling_function
-                        self.emulator_emulate_function = self.emulator.emulate
-                        self.emulator_sampling_function = self.emulate_samples
-                        gc.collect()       
-                        # self.jit_emulate = jax.jit(self.emulator_emulate_function)
-                        # self.jit_emulator_samples = jax.jit(self.emulator_sampling_function)
-
-                        self.jit_emulate = self.emulator_emulate_function
-                        self.jit_emulator_samples = self.emulator_sampling_function
-
-                        
-
                         self.log.info("Emulator trained")
-                else:
-                    if added:
-                        # force_acceptance = True #OLD
 
-                        # here we need to re jit    
-                        del self.jit_emulate
-                        del self.jit_emulator_samples
-
-                        # del self.emulator 
-
-                        gc.collect()       
-
-                        self.emulator_emulate_function = self.emulator.emulate
-                        self.emulator_sampling_function = self.emulate_samples
-
-                        # self.jit_emulate = jax.jit(self.emulator_emulate_function)
-                        # self.jit_emulator_samples = jax.jit(self.emulator_sampling_function)
-
-                        self.jit_emulate = self.emulator_emulate_function
-                        self.jit_emulator_samples = self.emulator_sampling_function
+                    gc.collect()       
 
     # transform each element in state["params"] to a float. Otherwise the cache wont work.
     for key, value in state["params"].items():
@@ -259,33 +214,6 @@ def check_cache_and_compute(self, params_values_dict,
             self.emulator = Emulator(**self.emulator_settings)
             self.emulator.initialize(ini_state = self.initial_emulator_state, **self.emulator_settings)
 
-            if self.emulator.trained:
-                # jit the emulator functions
-                del self.emulator_emulate_function
-                del self.emulator_sampling_function
-                del self.jit_emulate
-                del self.jit_emulator_samples
-                self.emulator_emulate_function = self.emulator.emulate
-                self.emulator_sampling_function = self.emulate_samples
-
-                # self.jit_emulate = jax.jit(self.emulator_emulate_function)
-                # self.jit_emulator_samples = jax.jit(self.emulator_sampling_function)
-                self.jit_emulate = self.emulator_emulate_function
-                self.jit_emulator_samples = self.emulator_sampling_function
-
-        # check if the emulator was used 'jit_threshold' times and retrain it
-        if self.emulator.continuous_successful_calls-1 == self.emulator.hyperparameters['jit_threshold']:
-            del self.emulator_emulate_function
-            del self.emulator_sampling_function
-            del self.jit_emulate
-            del self.jit_emulator_samples
-            self.emulator_emulate_function = self.emulator.emulate
-            self.emulator_sampling_function = self.emulator.emulate_samples
-
-            self.jit_emulate = jax.jit(self.emulator_emulate_function)
-            self.jit_emulator_samples = jax.jit(self.emulator_sampling_function)
-
-
     stop = time.time()
     self.log.debug("Time for check_cache_and_compute: %f", stop-start)
 
@@ -305,14 +233,13 @@ def test_emulator(self,emulator_state):
         return False, None
 
     # first we ask the emulator whether it is requried to run a quality check
-    a = time.time()
     if self.emulator.require_quality_check(emulator_state['parameters']):
         # if yes. We sample multiple emulator states and estiamte the accuracy on the loglikelihood prediction!
         # if not, we trust the emulator and we can just run it
         # sample multiple spectra
         #emulator_sample_states = self.emulator.emulate_samples(emulator_state['parameters'])
         local_key = jax.random.PRNGKey(time.time_ns())
-        emulator_sample_states, _ = self.jit_emulator_samples(emulator_state['parameters'], local_key)
+        emulator_sample_states, _ = self.emulator.emulate_samples(emulator_state['parameters'], local_key)
 
         # compute the likelihoods
         emulator_sample_loglikes = []
@@ -321,43 +248,32 @@ def test_emulator(self,emulator_state):
             # Translate the emulator state to the cobaya state
             cobaya_sample_state = translate_emulator_state_to_cobaya_state(self._current_state, emulator_sample_state)
 
+            # Be aware! This is recursive! Thus, we need to flag this out
             self.skip_theory_state_from_emulator = cobaya_sample_state
             likelihoods = list(self.provider.model._loglikes_input_params(self.provider.params, cached = False, return_derived = False))
             emulator_sample_loglikes.append(sum(likelihoods))
 
         emulator_sample_loglikes = np.array(emulator_sample_loglikes)
-        print('emulator_sample_loglikes')
-        print(emulator_sample_loglikes)
 
         # we also need the reference likelihood which is going to be used eventually
-        predictions = self.jit_emulate(emulator_state['parameters'])
+        predictions = self.emulator.emulate(emulator_state['parameters'])
         predictions_cobaya_state = translate_emulator_state_to_cobaya_state(self._current_state, predictions)
 
+        # Be aware! This is recursive! Thus, we need to flag this out
         self.skip_theory_state_from_emulator = predictions_cobaya_state
 
         reference_loglike = sum(self.provider.model._loglikes_input_params(self.provider.params, cached = False, return_derived = False))
 
         # check whether the emulator is good enough
         if not self.emulator.check_quality_criterium(emulator_sample_loglikes, parameters=emulator_state['parameters'], reference_loglike = reference_loglike):
-            print("Emulator not good enough")
             return False, None
         else:
-            print("Emulator good enough")
             # Add the point to the quality points
             self.emulator.add_quality_point(emulator_state['parameters'])
 
-        b = time.time()
-        print("Time for emulator test: ", b-a)
-
     else:
         # now run the emulator
-        a = time.time()
-        # predictions = self.emulator.emulate(emulator_state['parameters'])
-        
-        predictions = self.jit_emulate(emulator_state['parameters'])
-
-        b = time.time()
-        print("Run the emulator: ", b-a)
+        predictions = self.emulator.emulate(emulator_state['parameters'])
 
     # if we save a store theory data path we can save the emulator state
     if 'store_prediction' in self.emulator_settings.keys():
@@ -387,11 +303,6 @@ def test_emulator(self,emulator_state):
             with open(self.emulator_settings['store_prediction'], 'wb') as f:
                 pickle.dump([predictions], f)
 
-
-    self.emulator_counter += 1
-    print('emulator_counter')
-    print(self.emulator_counter)
-
     return True, predictions
 
 #@partial(jax.jit, static_argnums=(0,))
@@ -407,13 +318,8 @@ def evaluate_cobaya_pipeline(self,state):
 # give the theory class the new attribute
 Theory.emulate = False
 Theory.emulator = None
-Theory.emulator_counter = 0
 Theory.skip_theory_state_from_emulator = None
 Theory.emulator_settings = {}
-Theory.emulator_sampling_function = None
-Theory.emulator_emulate_function = None
-Theory.jit_emulate = None
-Theory.jit_emulator_samples = None
 Theory.initial_cobaya_state = None
 
 # Theory flag

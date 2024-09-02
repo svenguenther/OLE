@@ -39,7 +39,7 @@ class NUTSSampler(Sampler):
 
         # read target_acceptanc, M_adapt, delta_max
         self.target_acceptance = kwargs['sampling_settings']['target_acceptance'] if 'target_acceptance' in kwargs['sampling_settings'] else 0.5
-        self.M_adapt = kwargs['sampling_settings']['M_adapt'] if 'M_adapt' in kwargs['sampling_settings'] else 1000
+        self.M_adapt = kwargs['sampling_settings']['M_adapt'] if 'M_adapt' in kwargs['sampling_settings'] else 200
         self.delta_max = kwargs['sampling_settings']['delta_max'] if 'delta_max' in kwargs['sampling_settings'] else 1000
 
         # minimize nuisance parameters
@@ -75,6 +75,7 @@ class NUTSSampler(Sampler):
         RNG = jax.random.PRNGKey(initial_seed)
 
         pos = jax.random.normal(RNG, (self.nwalkers, self.ndim))
+        step = jnp.zeros((self.nwalkers, self.ndim))
 
         # run the warmup
         current_loglikes = -jnp.inf*jnp.ones(self.nwalkers)
@@ -89,8 +90,34 @@ class NUTSSampler(Sampler):
             while not self.emulator.trained:
                 # We perform vanilla MH sampling for one step
                 # The covmat is the identity matrix
-                RNG, subkey = jax.random.split(RNG)
-                step = pos+jnp.ones((self.nwalkers,self.ndim)) * jax.random.normal(subkey, shape=(self.nwalkers,self.ndim))
+
+                for i in range(self.nwalkers):
+
+                    proposal_found = False 
+                    counter = 0
+                    while not proposal_found:
+                        RNG, subkey = jax.random.split(RNG)
+                        step = step.at[i].set(pos[i]+jnp.ones(self.ndim) * jax.random.normal(subkey, shape=(self.ndim,)))
+
+                        step_untransformed = self.retranform_parameters_from_normalized_eigenspace(step[i] )
+
+                        # Run the sampler.
+                        state_test = {'parameters': {}, 'quantities': {}, 'loglike': None} 
+                        # translate the parameters to the state
+                        for j, key in enumerate(self.parameter_dict.keys()):
+                            state_test['parameters'][key] = jnp.array([step_untransformed[j]])
+
+                        # compute the prior
+                        logprior = self.compute_logprior(state_test)
+
+                        if logprior > -1e20:
+                            proposal_found = True
+                        else:
+                            counter += 1
+                            if counter > 1000:
+                                self.error("Could not find a proposal in 1000 trials. Check the prior boundaries.")
+                                raise ValueError
+
 
 
                 # if we have a large number of nuisance parameters, this phase can take a lot of time if no covmat is given. 
@@ -163,7 +190,9 @@ class NUTSSampler(Sampler):
             else:
                 self.info("Minimization after first emulator training finds:")
                 self.info("Bestfit: ")
-                self.info(bestfit)
+                # make a string with all parameter keys and their bestfit values
+                _ = " ".join([f"{key}: {bestfit[i]}" for i, key in enumerate(self.parameter_dict.keys())])
+                self.info(_)
                 self.debug("Covmat: ")
                 self.debug(minimizer.inv_hessian)
                 self.info("Updating covmat with Fisher matrix")
@@ -223,74 +252,51 @@ class NUTSSampler(Sampler):
 
         # run the warmup
         for i in range(self.M_adapt + nsteps):
-                
-            RNG, r, u, logjoint0, loglike0 = self._init_iteration(thetas[i], RNG)
-
             # Initialize momentum and pick a slice, record the initial log joint probability
-            print('logjoint0')
-            print(logjoint0)
 
-            # Initialize the trajectory
-            theta_m, theta_p, r_m, r_p = thetas[i], thetas[i], r, r
-            k = 0 # Trajectory iteration
-            n = 1 # Length of the trajectory
-            s = 1 # Stop indicator
-            thetas[i+1] = thetas[i] # If everything fails, the new sample is our last position
-            start = time.time()
-            while s == 1:
-                # Choose a direction
-                RNG, v = self._draw_direction(RNG)
-                
-                # Double the trajectory length in that direction
-                if v == -1:
-                    RNG, theta_m, r_m, _, _, theta_f, n_f, s_f, alpha, n_alpha = self._build_tree(theta_m, r_m, u, v, k, eps, logjoint0, RNG)
+            valid_point_flag = False # we need to check whether the point is inside the prior
+            while not valid_point_flag:
+            
+                RNG, r, u, logjoint0, loglike0 = self._init_iteration(thetas[i], RNG)
+
+                # Initialize the trajectory
+                theta_m, theta_p, r_m, r_p = thetas[i], thetas[i], r, r
+                k = 0 # Trajectory iteration
+                n = 1 # Length of the trajectory
+                s = 1 # Stop indicator
+                thetas[i+1] = thetas[i] # If everything fails, the new sample is our last position
+                start = time.time()
+
+                while s == 1:
+                    # Choose a direction
+                    RNG, v = self._draw_direction(RNG)
+                    
+                    # Double the trajectory length in that direction
+                    if v == -1:
+                        RNG, theta_m, r_m, _, _, theta_f, n_f, s_f, alpha, n_alpha = self._build_tree(theta_m, r_m, u, v, k, eps, logjoint0, RNG)
+                    else:
+                        RNG, _, _, theta_p, r_p, theta_f, n_f, s_f, alpha, n_alpha = self._build_tree(theta_p, r_p, u, v, k, eps, logjoint0, RNG)
+
+                    # Update theta with probability n_f / n, to effectively sample a point from the trajectory;
+                    # Update the current length of the trajectory;
+                    # Update the stopping indicator: check it the trajectory is making a U-turn.
+                    RNG, thetas[i+1], n, s, k = self._trajectory_iteration_update(thetas[i+1], n, s, k, theta_m, r_m, theta_p, r_p, theta_f, n_f, s_f, RNG)
+
+                if i+1 <= self.M_adapt:
+                    # Dual averaging scheme to adapt the step size 'epsilon'.
+                    H_bar, eps_bar, eps = self._adapt(mu, eps_bar, H_bar, t_0, kappa, gamma, alpha, n_alpha, i+1)
+                elif i+1 == self.M_adapt + 1:
+                    eps = eps_bar
+
+                # Check if the new sample is inside the prior
+                parameters_untransformed = {'parameters': {key: jnp.array([self.retranform_parameters_from_normalized_eigenspace(thetas[i+1])[j]]) for j, key in enumerate(self.parameter_dict.keys())}}
+                check_logprior = self.compute_logprior(parameters_untransformed)
+                if check_logprior > -1e20:
+                    valid_point_flag = True
                 else:
-                    RNG, _, _, theta_p, r_p, theta_f, n_f, s_f, alpha, n_alpha = self._build_tree(theta_p, r_p, u, v, k, eps, logjoint0, RNG)
-
-                # Update theta with probability n_f / n, to effectively sample a point from the trajectory;
-                # Update the current length of the trajectory;
-                # Update the stopping indicator: check it the trajectory is making a U-turn.
-
-                print('alpha')
-                print(alpha)
-                print('n_alpha')
-                print(n_alpha)
-                RNG, thetas[i+1], n, s, k = self._trajectory_iteration_update(thetas[i+1], n, s, k, theta_m, r_m, theta_p, r_p, theta_f, n_f, s_f, RNG)
-
-            # Make Metropolis-Hastings step if NUTS was not successful
-            if alpha < 1e-10:
-                print("MH step")
-                MH_step_found = False
-                while not MH_step_found:
-                    # sample step from unitary gaussian
-                    RNG, subkey = jax.random.split(RNG)
-                    r = jax.random.normal(subkey, shape=thetas[i].shape)
-
-                    new_theta = thetas[i] + r / 10.0
-                    print('new_theta')
-                    print(new_theta)
-                    logp, gradlogp = self.logp_and_grad(new_theta)
-                    print('logp')
-                    print(logp)
-
-                    print('loglike0')
-                    print(loglike0)
-
-                    # make Metropolis-Hastings step
-                    if jnp.log(jax.random.uniform(RNG)) < logp - loglike0:
-                        thetas[i+1] = new_theta
-                        MH_step_found = True
+                    self.warning("Sample %d/%d is outside the prior. Sampling again."%(i+1, self.M_adapt + nsteps +1))
 
 
-            print("NEW POINT:")
-
-            if i+1 <= self.M_adapt:
-                # Dual averaging scheme to adapt the step size 'epsilon'.
-                H_bar, eps_bar, eps = self._adapt(mu, eps_bar, H_bar, t_0, kappa, gamma, alpha, n_alpha, i+1)
-                print('eps')
-                print(eps)
-            elif i+1 == self.M_adapt + 1:
-                eps = eps_bar
 
             self.debug("Sample %d/%d, time: %f"%(i+1, self.M_adapt + nsteps +1, time.time()-start))
 
@@ -687,7 +693,7 @@ class NUTSSampler(Sampler):
                 key, theta_f, n_f, s_f, alpha_f, n_alpha_f = self._update_build_tree(theta_m, r_m, theta_p, r_p, theta_f, n_f, s_f, alpha_f, n_alpha_f, theta_ff, n_ff, s_ff, alpha_ff, n_alpha_ff, key)
             return key, theta_m, r_m, theta_p, r_p, theta_f, n_f, s_f, alpha_f, n_alpha_f
 
-    # @partial(jax.jit, static_argnums=0)
+    @partial(jax.jit, static_argnums=0)
     def _init_build_tree(self, theta : ndarray, r : ndarray, u : float, v : int, j : int, 
                          eps : float, logjoint0 : float, key : ndarray) -> Tuple[ndarray, 
                          ndarray, ndarray, ndarray, ndarray, ndarray, int, int, float, int]:
@@ -700,13 +706,7 @@ class NUTSSampler(Sampler):
         # Check that we are not completely off-track
         s_f = (jnp.log(u) < logjoint + self.delta_max).astype(int)
         # Compute the acceptance rate
-        print('logjoint _init_build_tree')
-        print(logjoint)
-        print('logjoint0 _init_build_tree')
-        print(logjoint0)
         prob_ratio = jnp.exp(logjoint - logjoint0)  
-        print('prob_ratio _init_build_tree')
-        print(prob_ratio)      
         alpha_f = lax.cond(jnp.isnan(prob_ratio), lambda _: 0., lambda _: lax.min(prob_ratio, 1.), None) # Presumably if the probability ratio diverges,
                                                                                                          # it is because the log-joint probability diverges, i.e. the probability tends
                                                                                                          # to zero, so its log is -infinity. Then the acceptance rate of this step,

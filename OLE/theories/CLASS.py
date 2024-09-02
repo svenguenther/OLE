@@ -45,11 +45,13 @@ class CLASS(Theory):
         self.cosmo.compute()
 
         cls = self.cosmo.lensed_cl(self.class_settings['l_max_scalars'])
+        
+        T_cmb = 2.7255
 
-        state['quantities']['tt'] = cls['tt']
-        state['quantities']['ee'] = cls['ee']
-        state['quantities']['te'] = cls['te']
-        state['quantities']['bb'] = cls['bb']
+        state['quantities']['tt'] = cls['tt'] * (T_cmb*1e6)**2
+        state['quantities']['ee'] = cls['ee'] * (T_cmb*1e6)**2
+        state['quantities']['te'] = cls['te'] * (T_cmb*1e6)**2
+        state['quantities']['bb'] = cls['bb'] * (T_cmb*1e6)**2
 
 
         return state
