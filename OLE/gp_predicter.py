@@ -616,7 +616,7 @@ class GP(BaseClass):
             # the target_error defines an error for each point which is nessecary for training a sparse GP
             # ideally we want to set it very small, but this is numerically unstable. Since we know our target
             # accuracy we should make it small compared to that so that the information in the points is still used optimally
-            target_error = jnp.sqrt(self.hyperparameters["error_tolerance"]) / 100.0
+            target_error = jnp.sqrt(self.hyperparameters["error_tolerance"]* self.hyperparameters["error_boost"]) / 100.0
             likelihood = likelihood.replace(obs_stddev=target_error)
 
             posterior = prior * likelihood
@@ -790,8 +790,74 @@ class GP(BaseClass):
 
         pass
 
-    # @partial(jit, static_argnums=0)
+    # @partial(jit, static_argnums=0) 
     def predict(self, input_data):
+        # Predict the output data for the given input data.
+
+
+        # OLD CODE
+        # latent_dist = self.opt_posterior.predict(input_data, train_data=self.D)
+        # predictive_dist = self.opt_posterior.likelihood(latent_dist)
+        # predictive_mean = predictive_dist.mean()
+        # ab = self.opt_posterior.predict_mean_single(input_data, self.D)
+        if not self.hyperparameters['is_sparse']:
+        
+            if self.recompute_kernel_matrix:
+                inv_Kxx = self.opt_posterior.compute_inv_Kxx(self.D)
+                #self.recompute_kernel_matrix = False    # TODO: This leads to memory leaks in jit mode
+                self.inv_Kxx = inv_Kxx
+            else:
+                inv_Kxx = self.inv_Kxx
+
+            ac = self.opt_posterior.calculate_mean_single_from_inv_Kxx(input_data, self.D, inv_Kxx)
+
+            return ac
+        
+        else:
+
+            if self.recompute_kernel_matrix:
+                #self.recompute_kernel_matrix = False    # TODO: This leads to memory leaks in jit mode
+                self.inducing_points = jnp.array(self.opt_posterior.inducing_inputs)
+                latent_dist = self.opt_posterior(self.inducing_points, train_data=self.D)
+                predictive_dist = self.opt_posterior.posterior.likelihood(latent_dist)
+                self.inducing_values = predictive_dist.mean()
+
+                inv_Kxx = self.opt_posterior.posterior.compute_inv_Kxx_sparse(self.D,self.inducing_points)
+                self.inv_Kxx = inv_Kxx
+                
+                
+            
+
+            else:
+                inv_Kxx = self.inv_Kxx
+
+            # Old code
+
+            #self.inducing_points = jnp.array(self.opt_posterior.inducing_inputs)
+            #latent_dist = self.opt_posterior(self.inducing_points, train_data=self.D)
+            #predictive_dist = self.opt_posterior.posterior.likelihood(latent_dist)
+            #self.inducing_values = predictive_dist.mean()
+            # have to save those along invkxx
+
+            #latent_dist = self.opt_posterior(input_data, train_data=self.D)
+            #predictive_dist = self.opt_posterior.posterior.likelihood(latent_dist)
+            #predictive_mean = predictive_dist.mean()
+
+            #test = self.opt_posterior.posterior.predict_mean_single_sparse(input_data, self.D, self.inducing_points,self.inducing_values)
+            #print('test of convergence with fast v slow methoid')
+            #print(predictive_mean[0])
+            #print(test)
+
+            #return predictive_mean[0]
+        
+            #new vwerion
+            ac = self.opt_posterior.posterior.predict_mean_single_sparse_from_inv_Kxx(input_data, self.D, self.inducing_points,self.inducing_values,self.inv_Kxx)
+
+            return ac
+           
+        
+    # @partial(jit, static_argnums=0) 
+    def predicttest(self, input_data):
         # Predict the output data for the given input data.
 
         # OLD CODE
@@ -799,32 +865,58 @@ class GP(BaseClass):
         # predictive_dist = self.opt_posterior.likelihood(latent_dist)
         # predictive_mean = predictive_dist.mean()
         # ab = self.opt_posterior.predict_mean_single(input_data, self.D)
-        if not self.hyperparameters["is_sparse"]:
-
+        if not self.hyperparameters['is_sparse']:
+        
             if self.recompute_kernel_matrix:
                 inv_Kxx = self.opt_posterior.compute_inv_Kxx(self.D)
-                # self.recompute_kernel_matrix = False    # TODO: This leads to memory leaks in jit mode
+                #self.recompute_kernel_matrix = False    # TODO: This leads to memory leaks in jit mode
                 self.inv_Kxx = inv_Kxx
             else:
                 inv_Kxx = self.inv_Kxx
 
-            ac = self.opt_posterior.calculate_mean_single_from_inv_Kxx(
-                input_data, self.D, inv_Kxx
-            )
+            ac = self.opt_posterior.calculate_mean_single_from_inv_Kxx(input_data, self.D, inv_Kxx)
 
-            return ac
-
+            return 'NOT SPARSE'
+        
         else:
+
+            if self.recompute_kernel_matrix:
+                #self.recompute_kernel_matrix = False    # TODO: This leads to memory leaks in jit mode
+                self.inducing_points = jnp.array(self.opt_posterior.inducing_inputs)
+                latent_dist = self.opt_posterior(self.inducing_points, train_data=self.D)
+                predictive_dist = self.opt_posterior.posterior.likelihood(latent_dist)
+                self.inducing_values = predictive_dist.mean()
+
+                inv_Kxx = self.opt_posterior.posterior.compute_inv_Kxx_sparse(self.D,self.inducing_points)
+                self.inv_Kxx = inv_Kxx
+                
+                
+            
+
+            else:
+                inv_Kxx = self.inv_Kxx # this actually does nothing
+
+            # have to save those along invkxx
+
             latent_dist = self.opt_posterior(input_data, train_data=self.D)
             predictive_dist = self.opt_posterior.posterior.likelihood(latent_dist)
             predictive_mean = predictive_dist.mean()
 
-            return predictive_mean[0]
+            test = self.opt_posterior.posterior.predict_mean_single_sparse(input_data, self.D, self.inducing_points,self.inducing_values)
+            test2 = self.opt_posterior.posterior.predict_mean_single_sparse_from_inv_Kxx(input_data, self.D, self.inducing_points,self.inducing_values,self.inv_Kxx)
+            
+            #print('test of convergence with fast v slow methoid')
+            #print(predictive_mean[0])
+            #print(test)
+            if 2.* predictive_mean[0] - test - test2 > 0.001:
+                print('the methods do not agree!')
+
+            return [predictive_mean[0],test,test2]
 
     # @partial(jit, static_argnums=0)
     def predict_value_and_std(self, input_data, return_std=False):
         # Predict the output data for the given input data.
-        if not self.hyperparameters["is_sparse"]:
+        if not self.hyperparameters["is_sparse"]:   # those ifs schould be decided at trace time and therefore fine.. 
             inv_Kxx = self.opt_posterior.compute_inv_Kxx(self.D)
 
             ac = self.opt_posterior.calculate_mean_single_from_inv_Kxx(
@@ -837,13 +929,16 @@ class GP(BaseClass):
 
             return ac, predictive_std[0]
 
-        else:  # TODO: implement optimisations for sparse GP
+        else:  # not much optimisation to gain here ...
             latent_dist = self.opt_posterior(input_data, train_data=self.D)
             predictive_dist = self.opt_posterior.posterior.likelihood(latent_dist)
             predictive_mean = predictive_dist.mean()
             predictive_std = predictive_dist.stddev()
 
             return predictive_mean[0], predictive_std[0]
+
+
+    
 
     # @partial(jit, static_argnums=0)
     def sample(self, input_data, RNGkey=random.PRNGKey(time.time_ns())):

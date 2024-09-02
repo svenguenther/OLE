@@ -317,6 +317,15 @@ class NUTSSampler(Sampler):
                     # self.debug(jnp.std(jnp.array(loglikes)))
                     self.debug(jnp.std(jnp.array(loglikes_noiseFree)))
 
+
+                    # remove this after enough testing
+                    #for quantity, emulatorX in self.emulator.emulators.items():
+                      
+                    #    input_data = jnp.array([[value[0] for key, value in state['parameters'].items() if key in self.emulator.input_parameters]])
+                    #    parameters_normalized = self.emulator.emulators[quantity].data_processor.normalize_input_data(input_data)
+                    #    for i in range(emulatorX.num_GPs):
+                    #        emulatorX.GPs[i].predicttest(parameters_normalized)
+
                     # check whether the emulator is good enough
                     if not self.emulator.check_quality_criterium(jnp.array(loglikes_noiseFree), parameters=state['parameters']):
                         
@@ -344,7 +353,7 @@ class NUTSSampler(Sampler):
                     
                             if not self.emulator.check_quality_criterium(jnp.array(loglikes), parameters=state['parameters'], write_log=False):
                                 # if the emulator passes noiseFree but fails with noise then the noise is too large
-                                self.info('!!!!noise levels too large for convergence, reduce explained_variance_cutoff and or noise_percentage!!!!')
+                                self.info('!!!!noise levels too large for convergence, reduce explained_variance_cutoff !!!!')
                                 # note that it is normal to trigger this from time to time. for acceptable noise at the edge of interpolation area it can happen
                         self.debug("Emulator good enough")
                         # Add the point to the quality points

@@ -54,6 +54,7 @@ emulator_settings = {
     # related so sampler
     'explained_variance_cutoff': 0.9999,
 
+    'sparse_GP_points':10,
     # cache criteria
     'dimensionality': 7,
     'N_sigma': 4.0,
@@ -61,9 +62,11 @@ emulator_settings = {
     # 'plotting_directory': './plots_sampler_clang_nuts',
     # 'testset_fraction': 0.01,
     'logfile': './output_clang_act_nuts/log.txt',
+    'plotting_directory': './output_clang_act_nuts/',
 
     'learning_rate': 0.1,
     'num_iters': 300,
+    'kernel_fitting_frequency': 20,
 
     # 'compute_data_covmat': True,
     'data_covmat_directory': './act_data_covmats',

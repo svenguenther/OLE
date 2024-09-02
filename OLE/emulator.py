@@ -417,7 +417,6 @@ class Emulator(BaseClass):
 
         # Emulate the quantities for the given parameters.
         input_data = jnp.array([[parameters[key][0] for key in self.input_parameters]])
-        
         for quantity, emulator in self.emulators.items():
             emulator_output = emulator.predict(input_data)
             output_state['quantities'][quantity] = emulator_output

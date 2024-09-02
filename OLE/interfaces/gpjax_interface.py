@@ -45,8 +45,6 @@ import time
 # It speeds up the default predict_mean method.
 #
 
-# add methods for sparse GPs
-
 def predict_mean_single(
     self,
     test_inputs: Num[Array, "N D"],
@@ -91,6 +89,47 @@ def predict_mean_single(
 
     return jnp.atleast_1d(mean.squeeze())[0]
 
+
+def predict_mean_single_sparse(
+    self,
+    test_inputs: Num[Array, "N D"],
+    train_data: Dataset,
+    inducing_points, 
+    inducing_values,
+):
+    # Shorter prediction function for single test inputs
+
+    # Unpack training data
+    #x, y, n_test, mask = train_data.X, train_data.y, train_data.n, None
+
+    # Unpack test inputs
+    t = test_inputs
+
+    # Observation noise o²
+    #obs_noise = self.likelihood.obs_noise
+    mx = self.prior.mean_function(inducing_points).flatten()
+
+    # Precompute Gram matrix, Kxx, at training inputs, x
+    Kxx = self.prior.kernel.gram(inducing_points)
+    Kxx += cola.ops.I_like(Kxx) * self.jitter
+
+    # Σ = Kxx + Io²
+    Sigma = Kxx #+ cola.ops.I_like(Kxx) * obs_noise
+    Sigma = cola.PSD(Sigma)
+
+    mean_t = self.prior.mean_function(t).flatten()
+    Kxt = self.prior.kernel.cross_covariance(inducing_points, t)
+
+    # Σ⁻¹ Kxt
+    
+    Sigma_inv_Kxt = cola.solve(Sigma, Kxt)
+
+    # μt  +  Ktx (Kxx + Io²)⁻¹ (y  -  μx)
+    mean = mean_t + jnp.matmul(Sigma_inv_Kxt.T, inducing_values - mx)
+
+    #return mean
+    return jnp.atleast_1d(mean.squeeze())[0]
+
 #
 # Compute Kxx matrix
 #
@@ -125,6 +164,60 @@ def compute_inv_Kxx(
     Sigma_inv = cola.inv(Sigma)
 
     return Sigma_inv
+
+def compute_inv_Kxx_sparse(
+    self,
+    train_data: Dataset,
+    inducing_points,
+):
+    # Shorter prediction function for single test inputs
+
+    # Precompute Gram matrix, Kxx, at training inputs, x
+    Kxx = self.prior.kernel.gram(inducing_points)
+    Kxx += cola.ops.I_like(Kxx) * self.jitter
+
+    # Σ = Kxx + Io²
+    Sigma = Kxx #+ cola.ops.I_like(Kxx) * obs_noise
+    Sigma = cola.PSD(Sigma)
+
+    # invert Sigma
+    Sigma_inv = cola.inv(Sigma)
+
+    return Sigma_inv
+
+
+def predict_mean_single_sparse_from_inv_Kxx(
+    self,
+    test_inputs: Num[Array, "N D"],
+    train_data: Dataset,
+    inducing_points, 
+    inducing_values,
+    inv_Kxx: Num[Array, "N N"],
+):
+    # Shorter prediction function for single test inputs
+
+    # Unpack training data
+    #x, y, n_test, mask = train_data.X, train_data.y, train_data.n, None
+
+    # Unpack test inputs
+    t = test_inputs
+
+    # Observation noise o²
+    #obs_noise = self.likelihood.obs_noise
+    mx = self.prior.mean_function(inducing_points).flatten()
+
+    mean_t = self.prior.mean_function(t).flatten()
+    Kxt = self.prior.kernel.cross_covariance(inducing_points, t)
+
+    # Σ⁻¹ Kxt
+
+    Sigma_inv_Kxt = inv_Kxx @ Kxt
+
+    # μt  +  Ktx (Kxx + Io²)⁻¹ (y  -  μx)
+    mean = mean_t + jnp.matmul(Sigma_inv_Kxt.T, inducing_values - mx)
+
+    #return mean
+    return jnp.atleast_1d(mean.squeeze())[0]
 
 def calculate_mean_single_from_inv_Kxx(
     self,
@@ -162,3 +255,7 @@ def calculate_mean_single_from_inv_Kxx(
 ConjugatePosterior.predict_mean_single = predict_mean_single
 ConjugatePosterior.compute_inv_Kxx = compute_inv_Kxx
 ConjugatePosterior.calculate_mean_single_from_inv_Kxx = calculate_mean_single_from_inv_Kxx
+ConjugatePosterior.predict_mean_single_sparse = predict_mean_single_sparse
+ConjugatePosterior.compute_inv_Kxx_sparse = compute_inv_Kxx_sparse
+ConjugatePosterior.predict_mean_single_sparse_from_inv_Kxx = predict_mean_single_sparse_from_inv_Kxx
+#CollapsedVariationalGaussian.predict_mean_single_sparse = predict_mean_single_sparse
