@@ -19,10 +19,11 @@
 
 .. toctree::
    :hidden:
-   :maxdepth: 6
-   :caption: Modules
+   :maxdepth: 1
+   :titlesonly:
+   :caption: API
 
-   modules 
+   api/api_example
    
 .. Crop out the image used on github (using logoo on the side here)
 .. include:: ../README.rst

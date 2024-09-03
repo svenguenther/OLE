@@ -11,7 +11,7 @@ sys.path.insert(-1, os.path.abspath(f"../OLE"))
 # import os
 # import sys
 # sys.path.insert(0, os.path.abspath('./../..'))
-sys.path.insert(0, os.path.abspath('./..'))
+sys.path.insert(0, os.path.abspath("./.."))
 # sys.path.insert(0, os.path.abspath('./../candl'))
 # sys.path.insert(0, os.path.abspath('./candl'))
 # sys.path.insert(0, os.path.abspath("."))
