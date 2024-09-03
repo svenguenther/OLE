@@ -41,7 +41,6 @@ extensions = [
     "sphinx.ext.intersphinx",
     "myst_parser",
     "numpydoc",
-    "sphinx_book_theme",
 ]
 
 # Things we need for the docs to render, but don't actually need to import
