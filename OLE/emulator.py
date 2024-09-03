@@ -255,6 +255,10 @@ class Emulator(BaseClass):
             self.data_cache.load_cache()
             self.train()
 
+        # rejit_flag. If the emulator is retrained/updated, we set this flag to True. This flag is used to determine whether the emulator is to be rejited.
+        self.rejit_flag_emulator = False
+        self.rejit_flag_sampling = False
+
         # this counter is used to determine the number of continously successful emulator calls
         self.continuous_successful_calls = 0
 
@@ -325,6 +329,7 @@ class Emulator(BaseClass):
         # Update the emulator. This means that the emulator is retrained.
         # Load the data from the cache.
         self.debug("Loading data from cache")
+        self.data_cache.load_cache()
 
         self.write_to_log("Update emulator\n")
 
@@ -344,6 +349,8 @@ class Emulator(BaseClass):
             emulator.data_processor.normalize_training_data()
             emulator.data_processor.compress_training_data()
 
+            emulator.update()
+
             del input_data_raw
             del output_data_raw
 
@@ -352,11 +359,15 @@ class Emulator(BaseClass):
             
             
         self.trained = True
+        self.rejit_flag_emulator = True
+        self.rejit_flag_sampling = True
+
         pass
 
     def train(self):
         # Load the data from the cache.
         self.debug("Loading data from cache")
+        self.data_cache.load_cache()
 
         self.write_to_log("Training emulator\n")
 
@@ -401,6 +412,8 @@ class Emulator(BaseClass):
         del input_data_raw
 
         self.trained = True
+        self.rejit_flag_emulator = True
+        self.rejit_flag_sampling = True
 
         jax.clear_backends()
 
@@ -430,8 +443,13 @@ class Emulator(BaseClass):
         self.write_parameter_dict_to_log(parameters)
 
         # if we jit the emulator, we use the jit version of the emulator
-        if self.hyperparameters['jit']:
-            output_state_emulator = self.emulate_jit(parameters)
+        if self.hyperparameters['jit'] and (self.continuous_successful_calls > self.hyperparameters['jit_threshold']):
+            if self.rejit_flag_emulator: # if the emulator was updated/retrained, we rejit the emulator
+                self.jitted_emulation_function = jax.jit(self.emulate_jit)
+                output_state_emulator = self.jitted_emulation_function(parameters)
+                self.rejit_flag_emulator = False
+            else:
+                output_state_emulator = self.jitted_emulation_function(parameters)
         else:
             output_state_emulator = self.emulate_nojit(parameters)
 
@@ -446,7 +464,6 @@ class Emulator(BaseClass):
         self.print_status()
         return output_state
 
-    @partial(jax.jit, static_argnums=0)
     def emulate_jit(self, parameters):
         # Prepare output state
         output_state = {'quantities':{}} #self.ini_state.copy() # TODO Talk with christian about thish here
@@ -513,8 +530,13 @@ class Emulator(BaseClass):
         output_states = [deepcopy(state) for i in range(self.hyperparameters['N_quality_samples'])]
 
         # use jit or no jit version of the function
-        if self.hyperparameters['jit']:
-            output_states_emulator, RNGkey = self.emulate_samples_jit(parameters, RNGkey)
+        if self.hyperparameters['jit'] and (self.continuous_successful_calls > self.hyperparameters['jit_threshold']):
+            if self.rejit_flag_sampling: # if the emulator was updated/retrained, we rejit the emulator
+                self.jitted_sampling_function = jax.jit(self.emulate_samples_jit)
+                output_states_emulator, RNGkey = self.jitted_sampling_function(parameters, RNGkey)
+                self.rejit_flag_sampling = False
+            else:
+                output_states_emulator, RNGkey = self.jitted_sampling_function(parameters, RNGkey)
         else:
             output_states_emulator, RNGkey = self.emulate_samples_nojit(parameters, RNGkey)
 
@@ -525,7 +547,7 @@ class Emulator(BaseClass):
 
         return output_states, RNGkey
 
-    @partial(jax.jit, static_argnums=0)
+    # @partial(jax.jit, static_argnums=0)
     def emulate_samples_jit(self, parameters, RNGkey):
         # Prepare list of N output states
         state = {'parameters': {}, 'quantities': {}}

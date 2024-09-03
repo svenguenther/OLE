@@ -245,16 +245,48 @@ def calculate_mean_single_from_inv_Kxx(
 
     # μt  +  Ktx (Kxx + Io²)⁻¹ (y  -  μx)
     mean = mean_t + jnp.matmul(Sigma_inv_Kxt.T, y)
-    
-    # std
-    std = self.prior.kernel.cross_covariance(t,t) - jnp.matmul(Sigma_inv_Kxt.T, Kxt)
 
     return jnp.atleast_1d(mean.squeeze())[0]
+
+def calculate_mean_std_single_from_inv_Kxx(
+    self,
+    test_inputs: Num[Array, "N D"],
+    train_data: Dataset,
+    inv_Kxx: Num[Array, "N N"],
+):
+    # Shorter prediction function for single test inputs
+
+    # Unpack training data
+    x, y, n_test, mask = train_data.X, train_data.y, train_data.n, None
+
+    # Unpack test inputs
+    t = test_inputs
+
+    # Σ = Kxx + Io²
+    # Sigma = Kxx + cola.ops.I_like(Kxx) * obs_noise
+    mean_t = self.prior.mean_function(t)
+
+    a = time.time()
+    Kxt = self.prior.kernel.cross_covariance(x, t)  # this is the slow part
+
+    # Σ⁻¹ Kxt
+    Sigma_inv_Kxt = inv_Kxx @ Kxt
+
+    # μt  +  Ktx (Kxx + Io²)⁻¹ (y  -  μx)
+    mean = mean_t + jnp.matmul(Sigma_inv_Kxt.T, y)
+    
+    # std
+    std = jnp.sqrt(self.prior.kernel.cross_covariance(t,t) - jnp.matmul(Sigma_inv_Kxt.T, Kxt))
+
+    return jnp.atleast_1d(mean.squeeze())[0], std.squeeze()
+
+
 
 
 ConjugatePosterior.predict_mean_single = predict_mean_single
 ConjugatePosterior.compute_inv_Kxx = compute_inv_Kxx
 ConjugatePosterior.calculate_mean_single_from_inv_Kxx = calculate_mean_single_from_inv_Kxx
+ConjugatePosterior.calculate_mean_std_single_from_inv_Kxx = calculate_mean_std_single_from_inv_Kxx
 ConjugatePosterior.predict_mean_single_sparse = predict_mean_single_sparse
 ConjugatePosterior.compute_inv_Kxx_sparse = compute_inv_Kxx_sparse
 ConjugatePosterior.predict_mean_single_sparse_from_inv_Kxx = predict_mean_single_sparse_from_inv_Kxx

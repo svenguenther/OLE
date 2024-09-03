@@ -182,6 +182,10 @@ class GP_predictor(BaseClass):
             output_data_compressed = output_data_compressed.at[i].set(v)
             output_std_compressed = output_std_compressed.at[i].set(s)
 
+        # TODO: BUG: SG: Here are nans on output_std_compressed, when result is very close to 0. This leads to no errorbars in plots. Investigate this please :)
+        # replace nans with zeros, but then the error is way too small. Please fix this
+        output_std_compressed = jnp.nan_to_num(output_std_compressed)
+
         # Untransform the output data.
         output_data_normalized = self.data_processor.decompress_data(
             output_data_compressed
@@ -365,6 +369,22 @@ class GP_predictor(BaseClass):
             and self.hyperparameters["testset_fraction"] is not None
         ):
             self.run_tests()
+
+        pass
+
+    def update(self):
+        # Update the GP emulator.
+
+        input_data = self.data_processor.input_data_normalized
+        output_data = self.data_processor.output_data_emulator
+
+        for i in range(self.num_GPs):
+
+            # Load the data into the GP.
+            self.GPs[i].load_data(input_data, output_data[:, i])
+
+            # compute inverse kernel matrix
+            self.GPs[i]._compute_inverse_kernel_matrix()
 
         pass
 
@@ -742,6 +762,8 @@ class GP(BaseClass):
         # del negative_mll
         # negative_mll = None
 
+        self._compute_inverse_kernel_matrix()
+
         gc.collect()
 
         # some debugging output
@@ -790,6 +812,15 @@ class GP(BaseClass):
 
         pass
 
+    def _compute_inverse_kernel_matrix(self):
+        # compute the inverse kernel matrix
+        inv_Kxx = self.opt_posterior.compute_inv_Kxx(self.D)
+        self.inv_Kxx = inv_Kxx
+
+        self.recompute_kernel_matrix = False
+
+
+
     # @partial(jit, static_argnums=0) 
     def predict(self, input_data):
         # Predict the output data for the given input data.
@@ -802,9 +833,8 @@ class GP(BaseClass):
         # ab = self.opt_posterior.predict_mean_single(input_data, self.D)
         if not self.hyperparameters['is_sparse']:
         
-            if self.recompute_kernel_matrix:
+            if self.recompute_kernel_matrix: # SG: This is safe in jit! This flag will be altered 
                 inv_Kxx = self.opt_posterior.compute_inv_Kxx(self.D)
-                #self.recompute_kernel_matrix = False    # TODO: This leads to memory leaks in jit mode
                 self.inv_Kxx = inv_Kxx
             else:
                 inv_Kxx = self.inv_Kxx
@@ -867,9 +897,8 @@ class GP(BaseClass):
         # ab = self.opt_posterior.predict_mean_single(input_data, self.D)
         if not self.hyperparameters['is_sparse']:
         
-            if self.recompute_kernel_matrix:
+            if self.recompute_kernel_matrix: # SG: This is safe in jit! This flag will be altered 
                 inv_Kxx = self.opt_posterior.compute_inv_Kxx(self.D)
-                #self.recompute_kernel_matrix = False    # TODO: This leads to memory leaks in jit mode
                 self.inv_Kxx = inv_Kxx
             else:
                 inv_Kxx = self.inv_Kxx
@@ -919,21 +948,18 @@ class GP(BaseClass):
         if not self.hyperparameters["is_sparse"]:   # those ifs schould be decided at trace time and therefore fine.. 
             inv_Kxx = self.opt_posterior.compute_inv_Kxx(self.D)
 
-            ac = self.opt_posterior.calculate_mean_single_from_inv_Kxx(
+            ac,std = self.opt_posterior.calculate_mean_std_single_from_inv_Kxx(
                 input_data, self.D, inv_Kxx
             )
 
-            latent_dist = self.opt_posterior.predict(input_data, train_data=self.D)
-            predictive_dist = self.opt_posterior.likelihood(latent_dist)
-            predictive_std = predictive_dist.stddev()
-
-            return ac, predictive_std[0]
+            return ac, std
 
         else:  # not much optimisation to gain here ...
             latent_dist = self.opt_posterior(input_data, train_data=self.D)
             predictive_dist = self.opt_posterior.posterior.likelihood(latent_dist)
             predictive_mean = predictive_dist.mean()
             predictive_std = predictive_dist.stddev()
+
 
             return predictive_mean[0], predictive_std[0]
 
@@ -954,22 +980,16 @@ class GP(BaseClass):
             else:
                 inv_Kxx = self.inv_Kxx
 
-            ac = self.opt_posterior.calculate_mean_single_from_inv_Kxx(
+            ac,std = self.opt_posterior.calculate_mean_std_single_from_inv_Kxx(
                 input_data, self.D, inv_Kxx
             )
-
-            # DOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOo
-            latent_dist = self.opt_posterior.predict(input_data, train_data=self.D)
-            predictive_dist = self.opt_posterior.likelihood(latent_dist)
-            predictive_std = predictive_dist.stddev()
-
-            #  predictive_mean = predictive_dist.mean()
 
         else:
             latent_dist = self.opt_posterior(input_data, train_data=self.D)
             predictive_dist = self.opt_posterior.posterior.likelihood(latent_dist)
             predictive_mean = predictive_dist.mean()
             predictive_std = predictive_dist.stddev()
+            std = predictive_std[0]
             ac = predictive_mean[0]
 
         # should we fix mean to the true mean and make sure we draw sym around it to only emulate the var??
@@ -978,7 +998,7 @@ class GP(BaseClass):
         RNGkey, subkey = random.split(RNGkey)
 
         return (
-            random.normal(key=subkey, shape=(N, 1)) * jnp.sqrt(predictive_std[0]) + ac,
+            random.normal(key=subkey, shape=(N, 1)) * jnp.sqrt(std) + ac,
             RNGkey,
         )
 
@@ -994,16 +1014,15 @@ class GP(BaseClass):
             else:
                 inv_Kxx = self.inv_Kxx
 
-            ac = self.opt_posterior.calculate_mean_single_from_inv_Kxx(
+            ac,std = self.opt_posterior.calculate_mean_std_single_from_inv_Kxx(
                 input_data, self.D, inv_Kxx
             )
-
-            # DOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOo
             latent_dist = self.opt_posterior.predict(input_data, train_data=self.D)
             predictive_dist = self.opt_posterior.likelihood(latent_dist)
-            predictive_std = predictive_dist.stddev() - jnp.sqrt(
+            predictive_std = jnp.array([std]) - jnp.sqrt(
                 self.hyperparameters["error_tolerance"]
             )
+            # TODO: PDF: Passt das hier so?
 
             # predictive_mean = predictive_dist.mean()
 
