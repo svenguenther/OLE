@@ -493,7 +493,7 @@ class Emulator(BaseClass):
     
 
     # function to get N samples from the same input parameters
-    def emulate_samples(self, parameters, RNGkey):
+    def emulate_samples(self, parameters, RNGkey,noise = 0):
         # add Sphinx documentation
         """
         Emulate N samples of the quantities for the given parameters.
@@ -533,12 +533,12 @@ class Emulator(BaseClass):
         if self.hyperparameters['jit'] and (self.continuous_successful_calls > self.hyperparameters['jit_threshold']):
             if self.rejit_flag_sampling: # if the emulator was updated/retrained, we rejit the emulator
                 self.jitted_sampling_function = jax.jit(self.emulate_samples_jit)
-                output_states_emulator, RNGkey = self.jitted_sampling_function(parameters, RNGkey)
+                output_states_emulator, RNGkey = self.jitted_sampling_function(parameters, RNGkey,noise)
                 self.rejit_flag_sampling = False
             else:
-                output_states_emulator, RNGkey = self.jitted_sampling_function(parameters, RNGkey)
+                output_states_emulator, RNGkey = self.jitted_sampling_function(parameters, RNGkey, noise)
         else:
-            output_states_emulator, RNGkey = self.emulate_samples_nojit(parameters, RNGkey)
+            output_states_emulator, RNGkey = self.emulate_samples_nojit(parameters, RNGkey ,noise)
 
         # overwrite the quantities which were emulated
         for i in range(self.hyperparameters['N_quality_samples']):
@@ -548,7 +548,7 @@ class Emulator(BaseClass):
         return output_states, RNGkey
 
     # @partial(jax.jit, static_argnums=0)
-    def emulate_samples_jit(self, parameters, RNGkey):
+    def emulate_samples_jit(self, parameters, RNGkey, noise = 0):
         # Prepare list of N output states
         state = {'parameters': {}, 'quantities': {}}
         state['parameters'] = parameters
@@ -558,14 +558,14 @@ class Emulator(BaseClass):
         input_data = jnp.array([[parameters[key][0] for key in self.input_parameters]])
 
         for quantity, emulator in self.emulators.items():
-            emulator_output, RNGkey = emulator.sample_prediction(input_data, N=self.hyperparameters['N_quality_samples'], RNGkey=RNGkey)
+            emulator_output, RNGkey = emulator.sample_prediction(input_data, N=self.hyperparameters['N_quality_samples'],noise=noise, RNGkey=RNGkey)
             
             for i in range(self.hyperparameters['N_quality_samples']):
                 output_states[i]['quantities'][quantity] = emulator_output[i,:]
 
         return output_states, RNGkey
 
-    def emulate_samples_nojit(self, parameters, RNGkey):
+    def emulate_samples_nojit(self, parameters, RNGkey, noise = 0):
         # Prepare list of N output states
         state = {'parameters': {}, 'quantities': {}}
         state['parameters'] = parameters
@@ -575,7 +575,7 @@ class Emulator(BaseClass):
         input_data = jnp.array([[parameters[key][0] for key in self.input_parameters]])
 
         for quantity, emulator in self.emulators.items():
-            emulator_output, RNGkey = emulator.sample_prediction(input_data, N=self.hyperparameters['N_quality_samples'], RNGkey=RNGkey)
+            emulator_output, RNGkey = emulator.sample_prediction(input_data, N=self.hyperparameters['N_quality_samples'],noise = noise, RNGkey=RNGkey)
             
             for i in range(self.hyperparameters['N_quality_samples']):
                 output_states[i]['quantities'][quantity] = emulator_output[i,:]
@@ -583,28 +583,6 @@ class Emulator(BaseClass):
         return output_states, RNGkey
 
 
-
-    def emulate_samples_noiseFree(self, parameters, RNGkey):
-        # Prepare list of N output states
-        state = {'parameters': {}, 'quantities': {}}
-        state['parameters'] = parameters
-        output_states = [deepcopy(state) for i in range(self.hyperparameters['N_quality_samples'])]
-
-        # Emulate the quantities for the given parameters.
-        input_data = jnp.array([[value[0] for key, value in parameters.items() if key in self.input_parameters]])
-
-
-
-
-        for quantity, emulator in self.emulators.items():
-            emulator_output, RNGkey = emulator.sample_prediction_noiseFree(input_data, N=self.hyperparameters['N_quality_samples'], RNGkey=RNGkey)
-            
-            
-            for i in range(self.hyperparameters['N_quality_samples']):
-                output_states[i]['quantities'][quantity] = emulator_output[i,:]
-
-        return output_states, RNGkey
-    
 
     def set_error(self):
 

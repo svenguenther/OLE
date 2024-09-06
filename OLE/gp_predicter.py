@@ -201,7 +201,7 @@ class GP_predictor(BaseClass):
         return output_data, output_std
 
     # @partial(jit, static_argnums=0)
-    def sample_prediction(self, parameters, N=1, RNGkey=random.PRNGKey(time.time_ns())):
+    def sample_prediction(self, parameters, N=1, noise = 0, RNGkey=random.PRNGKey(time.time_ns())):
         # Predict the quantity for the given parameters.
         # First we normalize the parameters.
         parameters_normalized = self.data_processor.normalize_input_data(parameters)
@@ -209,7 +209,7 @@ class GP_predictor(BaseClass):
         # Then we predict the output data for the normalized parameters.
         output_data_compressed = jnp.zeros((N, self.num_GPs))
         for i in range(self.num_GPs):
-            _, RNGkey = self.GPs[i].sample(parameters_normalized, RNGkey=RNGkey)
+            _, RNGkey = self.GPs[i].sample(parameters_normalized, noise=noise ,RNGkey=RNGkey)
             output_data_compressed = output_data_compressed.at[:, [i]].set(
                 _
             )  # this is the time consuming part
@@ -228,34 +228,6 @@ class GP_predictor(BaseClass):
 
         # @partial(jit, static_argnums=0)
 
-    def sample_prediction_noiseFree(
-        self, parameters, N=1, RNGkey=random.PRNGKey(time.time_ns())
-    ):
-        # Predict the quantity for the given parameters.
-        # First we normalize the parameters.
-        parameters_normalized = self.data_processor.normalize_input_data(parameters)
-
-        # Then we predict the output data for the normalized parameters.
-        output_data_compressed = jnp.zeros((N, self.num_GPs))
-        for i in range(self.num_GPs):
-            _, RNGkey = self.GPs[i].sample_noiseFree(
-                parameters_normalized, RNGkey=RNGkey
-            )
-            output_data_compressed = output_data_compressed.at[:, [i]].set(
-                _
-            )  # this is the time consuming part
-
-        # Untransform the output data.
-        output_data_normalized = jnp.array(
-            [
-                self.data_processor.decompress_data(output_data_compressed[i, :])
-                for i in range(N)
-            ]
-        )
-
-        # Then we denormalize the output data.
-        output_data = self.data_processor.denormalize_data(output_data_normalized)
-        return output_data, RNGkey
 
     # @partial(jit, static_argnums=0)
     def predict_gradients(self, parameters):
@@ -385,6 +357,7 @@ class GP_predictor(BaseClass):
 
             # compute inverse kernel matrix
             self.GPs[i]._compute_inverse_kernel_matrix()
+            
 
         pass
 
@@ -814,8 +787,20 @@ class GP(BaseClass):
 
     def _compute_inverse_kernel_matrix(self):
         # compute the inverse kernel matrix
-        inv_Kxx = self.opt_posterior.compute_inv_Kxx(self.D)
-        self.inv_Kxx = inv_Kxx
+        if not self.hyperparameters["is_sparse"]:
+            
+            inv_Kxx = self.opt_posterior.compute_inv_Kxx(self.D)
+            self.inv_Kxx = inv_Kxx
+
+        else:
+            # for sparse GPs compute also inducing points and values
+            self.inducing_points = jnp.array(self.opt_posterior.inducing_inputs)
+            latent_dist = self.opt_posterior(self.inducing_points, train_data=self.D)
+            predictive_dist = self.opt_posterior.posterior.likelihood(latent_dist)
+            self.inducing_values = predictive_dist.mean()
+
+            inv_Kxx = self.opt_posterior.posterior.compute_inv_Kxx_sparse(self.D,self.inducing_points)
+            self.inv_Kxx = inv_Kxx
 
         self.recompute_kernel_matrix = False
 
@@ -856,8 +841,6 @@ class GP(BaseClass):
                 self.inv_Kxx = inv_Kxx
                 
                 
-            
-
             else:
                 inv_Kxx = self.inv_Kxx
 
@@ -881,7 +864,7 @@ class GP(BaseClass):
             #return predictive_mean[0]
         
             #new vwerion
-            ac = self.opt_posterior.posterior.predict_mean_single_sparse_from_inv_Kxx(input_data, self.D, self.inducing_points,self.inducing_values,self.inv_Kxx)
+            ac = self.opt_posterior.posterior.calculate_mean_single_sparse_from_inv_Kxx(input_data, self.D, self.inducing_points,self.inducing_values,self.inv_Kxx)
 
             return ac
            
@@ -918,21 +901,17 @@ class GP(BaseClass):
 
                 inv_Kxx = self.opt_posterior.posterior.compute_inv_Kxx_sparse(self.D,self.inducing_points)
                 self.inv_Kxx = inv_Kxx
-                
-                
-            
+                 
 
             else:
                 inv_Kxx = self.inv_Kxx # this actually does nothing
-
-            # have to save those along invkxx
 
             latent_dist = self.opt_posterior(input_data, train_data=self.D)
             predictive_dist = self.opt_posterior.posterior.likelihood(latent_dist)
             predictive_mean = predictive_dist.mean()
 
             test = self.opt_posterior.posterior.predict_mean_single_sparse(input_data, self.D, self.inducing_points,self.inducing_values)
-            test2 = self.opt_posterior.posterior.predict_mean_single_sparse_from_inv_Kxx(input_data, self.D, self.inducing_points,self.inducing_values,self.inv_Kxx)
+            test2 = self.opt_posterior.posterior.calculate_mean_single_sparse_from_inv_Kxx(input_data, self.D, self.inducing_points,self.inducing_values,self.inv_Kxx)
             
             #print('test of convergence with fast v slow methoid')
             #print(predictive_mean[0])
@@ -946,7 +925,7 @@ class GP(BaseClass):
     def predict_value_and_std(self, input_data, return_std=False):
         # Predict the output data for the given input data.
         if not self.hyperparameters["is_sparse"]:   # those ifs schould be decided at trace time and therefore fine.. 
-            inv_Kxx = self.opt_posterior.compute_inv_Kxx(self.D)
+            inv_Kxx = self.opt_posterior.compute_inv_Kxx(self.D) #CF: why do we not load those?
 
             ac,std = self.opt_posterior.calculate_mean_std_single_from_inv_Kxx(
                 input_data, self.D, inv_Kxx
@@ -954,20 +933,32 @@ class GP(BaseClass):
 
             return ac, std
 
-        else:  # not much optimisation to gain here ...
-            latent_dist = self.opt_posterior(input_data, train_data=self.D)
+        else:  
+            #latent_dist = self.opt_posterior(input_data, train_data=self.D)
+            #predictive_dist = self.opt_posterior.posterior.likelihood(latent_dist)
+            #predictive_mean = predictive_dist.mean()
+            #predictive_std = predictive_dist.stddev()
+
+            #return predictive_mean[0], predictive_std[0]
+
+            inducing_points = jnp.array(self.opt_posterior.inducing_inputs)
+            latent_dist = self.opt_posterior(inducing_points, train_data=self.D)
             predictive_dist = self.opt_posterior.posterior.likelihood(latent_dist)
-            predictive_mean = predictive_dist.mean()
-            predictive_std = predictive_dist.stddev()
+            inducing_values = predictive_dist.mean()
 
+            inv_Kxx = self.opt_posterior.posterior.compute_inv_Kxx_sparse(self.D,inducing_points)
+            
+            ac,std = self.opt_posterior.posterior.calculate_mean_std_single_sparse_from_inv_Kxx(
+                input_data, self.D, inducing_points, inducing_values, inv_Kxx
+            )
 
-            return predictive_mean[0], predictive_std[0]
+            return ac, std
 
 
     
 
     # @partial(jit, static_argnums=0)
-    def sample(self, input_data, RNGkey=random.PRNGKey(time.time_ns())):
+    def sample(self, input_data, noise = 0,RNGkey=random.PRNGKey(time.time_ns())):
         # Predict the output data for the given input data.
 
         N = self.hyperparameters["N_quality_samples"]
@@ -985,64 +976,38 @@ class GP(BaseClass):
             )
 
         else:
-            latent_dist = self.opt_posterior(input_data, train_data=self.D)
-            predictive_dist = self.opt_posterior.posterior.likelihood(latent_dist)
-            predictive_mean = predictive_dist.mean()
-            predictive_std = predictive_dist.stddev()
-            std = predictive_std[0]
-            ac = predictive_mean[0]
+
+            if self.recompute_kernel_matrix: # CF: do we intend to keep this flag or remove it?
+                #self.recompute_kernel_matrix = False    # TODO: This leads to memory leaks in jit mode
+                self.inducing_points = jnp.array(self.opt_posterior.inducing_inputs)
+                latent_dist = self.opt_posterior(self.inducing_points, train_data=self.D)
+                predictive_dist = self.opt_posterior.posterior.likelihood(latent_dist)
+                self.inducing_values = predictive_dist.mean()
+
+                inv_Kxx = self.opt_posterior.posterior.compute_inv_Kxx_sparse(self.D,self.inducing_points)
+                self.inv_Kxx = inv_Kxx
+                 
+
+            else:
+                inv_Kxx = self.inv_Kxx # this actually does nothing
+
+            ac,std = self.opt_posterior.posterior.calculate_mean_std_single_sparse_from_inv_Kxx(
+                input_data, self.D, self.inducing_points, self.inducing_values, self.inv_Kxx
+            )
 
         # should we fix mean to the true mean and make sure we draw sym around it to only emulate the var??
 
         # generate new key
         RNGkey, subkey = random.split(RNGkey)
+
+        #remove the white noise, noise = 0 meand no white noise, noise = 1 is full noise
+        std -=  (1.-noise) *jnp.sqrt(self.hyperparameters["error_tolerance"])
 
         return (
             random.normal(key=subkey, shape=(N, 1)) * jnp.sqrt(std) + ac,
             RNGkey,
         )
 
-    def sample_noiseFree(self, input_data, RNGkey=random.PRNGKey(time.time_ns())):
-        # Predict the output data for the given input data.
-
-        N = self.hyperparameters["N_quality_samples"]
-
-        if not self.hyperparameters["is_sparse"]:
-            if self.recompute_kernel_matrix:
-                inv_Kxx = self.opt_posterior.compute_inv_Kxx(self.D)
-                self.inv_Kxx = inv_Kxx
-            else:
-                inv_Kxx = self.inv_Kxx
-
-            ac,std = self.opt_posterior.calculate_mean_std_single_from_inv_Kxx(
-                input_data, self.D, inv_Kxx
-            )
-            latent_dist = self.opt_posterior.predict(input_data, train_data=self.D)
-            predictive_dist = self.opt_posterior.likelihood(latent_dist)
-            predictive_std = jnp.array([std]) - jnp.sqrt(
-                self.hyperparameters["error_tolerance"]
-            )
-            # TODO: PDF: Passt das hier so?
-
-            # predictive_mean = predictive_dist.mean()
-
-        # should we fix mean to the true mean and make sure we draw sym around it to only emulate the var??
-        else:
-            latent_dist = self.opt_posterior(input_data, train_data=self.D)
-            predictive_dist = self.opt_posterior.posterior.likelihood(latent_dist)
-            predictive_mean = predictive_dist.mean()
-            predictive_std = predictive_dist.stddev() - jnp.sqrt(
-                self.hyperparameters["error_tolerance"]
-            )
-            ac = predictive_mean[0]
-
-        # generate new key
-        RNGkey, subkey = random.split(RNGkey)
-
-        return (
-            random.normal(key=subkey, shape=(N, 1)) * jnp.sqrt(predictive_std[0]) + ac,
-            RNGkey,
-        )
 
     def sample_mean(self, input_data, RNGkey=random.PRNGKey(time.time_ns())):
         # Predict the output data for the given input data.

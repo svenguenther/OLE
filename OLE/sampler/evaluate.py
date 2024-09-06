@@ -120,7 +120,7 @@ class EvaluateSampler(Sampler):
                             state = self.likelihood.loglike_state(state)
                             state['loglike'] = state['loglike'] + logprior
                         else:
-                            state, RNGkey = self.emulator.emulate_samples(state['parameters'],1,RNGkey=RNGkey)[0]
+                            state, RNGkey = self.emulator.emulate_samples(state['parameters'],1,noise =1,RNGkey=RNGkey)[0]
                             state = self.likelihood.loglike_state(state)
                             state['loglike'] = state['loglike'] + logprior
 

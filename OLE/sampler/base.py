@@ -469,7 +469,7 @@ class Sampler(BaseClass):
             self.emulator.add_state(state)
         else:
             # here we need to test the emulator for its performance
-            emulator_sample_states, RNGkey = self.emulator.emulate_samples(state['parameters'], RNGkey=RNGkey)
+            emulator_sample_states, RNGkey = self.emulator.emulate_samples(state['parameters'], RNGkey=RNGkey,noise=1)
             emulator_sample_loglikes = jnp.array([self.likelihood.loglike_state(_)['loglike'] for _ in emulator_sample_states])
             print("emulator_sample_loglikes: ", emulator_sample_loglikes)
             # check whether the emulator is good enough
@@ -528,7 +528,7 @@ class Sampler(BaseClass):
             self.debug("state after theory: %s for parameters: %s", state['quantities'], state['parameters'])
         else:
             # here we need to test the emulator for its performance
-            emulator_sample_states, RNGkey = self.emulator.emulate_samples(state['parameters'], RNGkey=RNGkey)
+            emulator_sample_states, RNGkey = self.emulator.emulate_samples(state['parameters'],RNGkey=RNGkey , noise=1)
             emulator_sample_loglikes = jnp.array([self.likelihood.loglike_state(_)['loglike'] for _ in emulator_sample_states])
             print("emulator_sample_loglikes: ", emulator_sample_loglikes)
             # check whether the emulator is good enough
@@ -642,7 +642,7 @@ class Sampler(BaseClass):
 
 
 
-    def sample_emulate_loglike_from_normalized_parameters_differentiable(self, parameters, N=1, RNGkey=jax.random.PRNGKey(int(time.time()))):
+    def sample_emulate_loglike_from_normalized_parameters_differentiable(self, parameters, N=1, RNGkey=jax.random.PRNGKey(int(time.time())), noise = 0.):
         # this function is similar to the compute_loglike_from_parameters, but it returns the loglike and does not automaticailly add the state to the emulator. Thus it is differentiable.
         # if RNG is not None, we provide the mean estimate, otherwise we sample from the emulator
         self.start()
@@ -663,35 +663,7 @@ class Sampler(BaseClass):
 
         self.debug("emulator available - check emulation performance")
 
-        states, RNGkey = self.emulator.emulate_samples_jit(state['parameters'], RNGkey)
-
-        loglikes = [self.likelihood.loglike_state(_)['loglike'] + logprior for _ in states]
-
-        self.increment(self.logger)
-        return loglikes
-
-    def sample_emulate_loglike_from_normalized_parameters_differentiable_noiseFree(self, parameters, N=1, RNGkey=jax.random.PRNGKey(int(time.time()))):
-        # this function is similar to the compute_loglike_from_parameters, but it returns the loglike and does not automaticailly add the state to the emulator. Thus it is differentiable.
-        # if RNG is not None, we provide the mean estimate, otherwise we sample from the emulator
-        self.start()
-
-        # rescale the parameters
-        parameters = self.retranform_parameters_from_normalized_eigenspace(parameters)
-
-        # Run the sampler.
-        state = {'parameters': {}, 'quantities': {}, 'loglike': None}
-
-        # translate the parameters to the state
-        for i, key in enumerate(self.parameter_dict.keys()):
-            state['parameters'][key] = jnp.array([parameters[i]])
-
-        # compute logprior
-        logprior = self.compute_logprior(state)
-        self.debug("logprior: %f for parameters: %s", logprior, state['parameters'])
-
-        self.debug("emulator available - check emulation performance")
-
-        states, RNGkey = self.emulator.emulate_samples_noiseFree(state['parameters'], RNGkey)
+        states, RNGkey = self.emulator.emulate_samples_jit(state['parameters'], RNGkey, noise = noise)
 
         loglikes = [self.likelihood.loglike_state(_)['loglike'] + logprior for _ in states]
 
@@ -707,16 +679,10 @@ class Sampler(BaseClass):
         res = self.emulate_loglike_from_normalized_parameters_differentiable(parameters)
         return res.sum()
     
-    def sample_emulate_total_loglike_from_parameters_differentiable(self, parameters):
+    def sample_emulate_total_loglike_from_parameters_differentiable(self, parameters, noise = 0):
         N = self.emulator.hyperparameters['N_quality_samples']
-        res = [_.sum() for _ in self.sample_emulate_loglike_from_normalized_parameters_differentiable(parameters, N=N)]
+        res = [_.sum() for _ in self.sample_emulate_loglike_from_normalized_parameters_differentiable(parameters, N=N , noise = noise)]
         return res
-
-    def sample_emulate_total_loglike_from_parameters_differentiable_noiseFree(self, parameters):
-        N = self.emulator.hyperparameters['N_quality_samples']
-        res = [_.sum() for _ in self.sample_emulate_loglike_from_normalized_parameters_differentiable_noiseFree(parameters, N=N)]
-        return res
-
 
     def emulate_total_minusloglike_from_parameters_differentiable(self, parameters):
         res = -self.emulate_loglike_from_normalized_parameters_differentiable(parameters)
