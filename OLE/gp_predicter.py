@@ -176,15 +176,13 @@ class GP_predictor(BaseClass):
         # Then we predict the output data for the normalized parameters.
         output_data_compressed = jnp.zeros(self.num_GPs)
         output_std_compressed = jnp.zeros(self.num_GPs)
+        output_err_tol_compressed = jnp.zeros(self.num_GPs)
 
         for i in range(self.num_GPs):
-            v, s = self.GPs[i].predict_value_and_std(parameters_normalized)
+            v, s, err_tol = self.GPs[i].predict_value_and_std(parameters_normalized)
             output_data_compressed = output_data_compressed.at[i].set(v)
             output_std_compressed = output_std_compressed.at[i].set(s)
-
-        # TODO: BUG: SG: Here are nans on output_std_compressed, when result is very close to 0. This leads to no errorbars in plots. Investigate this please :)
-        # replace nans with zeros, but then the error is way too small. Please fix this
-        output_std_compressed = jnp.nan_to_num(output_std_compressed)
+            output_err_tol_compressed = output_err_tol_compressed.at[i].set(err_tol)
 
         # Untransform the output data.
         output_data_normalized = self.data_processor.decompress_data(
@@ -193,12 +191,16 @@ class GP_predictor(BaseClass):
         output_std_normalized = self.data_processor.decompress_std(
             output_std_compressed
         )
+        output_err_tol_normalized = self.data_processor.decompress_std(
+            output_err_tol_compressed
+        )
 
         # Then we denormalize the output data.
         output_data = self.data_processor.denormalize_data(output_data_normalized)
         output_std = self.data_processor.denormalize_std(output_std_normalized)
+        output_err_tol = self.data_processor.denormalize_std(output_err_tol_normalized)
 
-        return output_data, output_std
+        return output_data, output_std, output_err_tol
 
     # @partial(jit, static_argnums=0)
     def sample_prediction(self, parameters, N=1, noise = 0, RNGkey=random.PRNGKey(time.time_ns())):
@@ -434,7 +436,7 @@ class GP_predictor(BaseClass):
         # predict the test set
         for i in range(len(test_indices)):
             self.debug("Predicting test set point: %d" % i)
-            prediction, std = self.predict_value_and_std(
+            prediction, std, err_tol = self.predict_value_and_std(
                 self.data_processor.input_data_raw[jnp.array([test_indices[i]])]
             )
 
@@ -453,6 +455,7 @@ class GP_predictor(BaseClass):
                 prediction,
                 true,
                 std,
+                err_tol,
                 self.quantity_name,
                 self.data_processor.input_data_raw[jnp.array(test_indices[i])],
                 self.hyperparameters["plotting_directory"]
@@ -763,7 +766,7 @@ class GP(BaseClass):
             std = []
             for xval in x:
                 inputDat = jnp.array([jnp.ones(len(self.input_data[0])) * xval])
-                mean, stdev = self.predict_value_and_std(inputDat)
+                mean, stdev, err_tol = self.predict_value_and_std(inputDat)
                 y.append(mean)
                 std.append(stdev)
             y = jnp.array(y)
@@ -925,13 +928,17 @@ class GP(BaseClass):
     def predict_value_and_std(self, input_data, return_std=False):
         # Predict the output data for the given input data.
         if not self.hyperparameters["is_sparse"]:   # those ifs schould be decided at trace time and therefore fine.. 
-            inv_Kxx = self.opt_posterior.compute_inv_Kxx(self.D) #CF: why do we not load those?
+            if self.recompute_kernel_matrix:
+                inv_Kxx = self.opt_posterior.compute_inv_Kxx(self.D)
+                self.inv_Kxx = inv_Kxx
+            else:
+                inv_Kxx = self.inv_Kxx            
 
             ac,std = self.opt_posterior.calculate_mean_std_single_from_inv_Kxx(
                 input_data, self.D, inv_Kxx
             )
 
-            return ac, std
+            return ac, std, jnp.sqrt(self.hyperparameters["error_tolerance"])
 
         else:  
             #latent_dist = self.opt_posterior(input_data, train_data=self.D)
@@ -952,7 +959,7 @@ class GP(BaseClass):
                 input_data, self.D, inducing_points, inducing_values, inv_Kxx
             )
 
-            return ac, std
+            return ac, std, jnp.sqrt(self.hyperparameters["error_tolerance"])
 
 
     
@@ -1001,14 +1008,20 @@ class GP(BaseClass):
         RNGkey, subkey = random.split(RNGkey)
 
         #remove the white noise, noise = 0 meand no white noise, noise = 1 is full noise
+
+        pre_std = std
         std -=  (1.-noise) *jnp.sqrt(self.hyperparameters["error_tolerance"])
+        std = jnp.abs(std) 
+        # TODO: SG: Here is a bug. Some of the computed std, can be infinetly close to zero and do not consider the white kernel into account!
+        # Then when we want to substract the white noise, we get a negative value. This leads to nan values when taking sqrt ...
+
 
         return (
             random.normal(key=subkey, shape=(N, 1)) * jnp.sqrt(std) + ac,
             RNGkey,
         )
 
-
+    # TODO: SG: Is this still needed?
     def sample_mean(self, input_data, RNGkey=random.PRNGKey(time.time_ns())):
         # Predict the output data for the given input data.
         # this need updating as we really just want the mean, but for simplicity i want to keep the structure
@@ -1029,23 +1042,19 @@ class GP(BaseClass):
 
         return random.normal(key=subkey, shape=(N, 1)) * jnp.sqrt(0.0) + ac, RNGkey
 
-    # def predict_gradient(self, input_data):
-    #     # Predict the gradient of the output data for the given input data.
-    #     gradient = grad(self.opt_posterior.predict_mean_single)
-
-    #     return gradient(input_data, self.D)
-
     # Some debugging functions
     def run_test_set_tests(self):
         # This function is used to test the test set.
         means = jnp.zeros(self.test_D.n)
         stds = jnp.zeros(self.test_D.n)
+        err_tols = jnp.zeros(self.test_D.n)
 
         # predict the test set
         for i in range(self.test_D.n):
-            mean, std = self.predict_value_and_std(jnp.array([self.test_D.X[i]]))
+            mean, std, err_tol = self.predict_value_and_std(jnp.array([self.test_D.X[i]]))
             means = means.at[i].set(mean)
             stds = stds.at[i].set(std)
+            err_tols = err_tols.at[i].set(err_tol)
             self.debug(
                 "Predicted: %f True: %f Error: %f"
                 % (mean, self.test_D.y[i], mean - self.test_D.y[i])
@@ -1067,6 +1076,7 @@ class GP(BaseClass):
             jnp.array(self.test_D.y)[:, 0],
             means,
             stds,
+            err_tols,
             self._name,
             self.hyperparameters["plotting_directory"]
             + "/test_set_prediction/"

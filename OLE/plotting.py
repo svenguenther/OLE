@@ -288,12 +288,14 @@ def loss_plot(loss, title, file_name):
     gc.collect()
 
 
-def plot_pca_components_test_set(true, pred, pred_std, title, file_name):
+def plot_pca_components_test_set(true, pred, pred_std, err_tol, title, file_name):
     # plot residuals
     plt.figure()
     plt.grid()
     plt.title(title)
-    plt.errorbar(true, true - pred, yerr=pred_std, fmt="o")
+    plt.errorbar(true, true - pred, yerr=pred_std, fmt="o", label="Prediction and total error")
+    plt.errorbar(true, true - pred, yerr=err_tol, fmt="o", label="Error tolerance")
+    plt.legend()
     plt.xlabel("True")
     plt.ylabel("Residuals")
     plt.savefig(file_name)
@@ -303,7 +305,7 @@ def plot_pca_components_test_set(true, pred, pred_std, title, file_name):
 
 
 def plot_prediction_test(
-    prediction, true, std, title, data_point, file_name, data_covmat
+    prediction, true, std, err_tol, title, data_point, file_name, data_covmat
 ):
 
     # create mask where data_covmat is zero
@@ -341,6 +343,14 @@ def plot_prediction_test(
             fmt="o",
             label="Masked Prediction",
         )
+        ax[0].errorbar(
+            [0],
+            prediction * norm_factor * mask,
+            yerr=err_tol * mask,
+            fmt="o",
+            label="Error tolerance",
+        )
+        
         ax[0].errorbar([0], true * norm_factor, fmt="o", label="True")
 
         # plot masked residuals
@@ -351,6 +361,14 @@ def plot_prediction_test(
             fmt="o",
             label="Masked Residuals",
         )
+        ax[1].errorbar(
+            [0],
+            (true - prediction) * norm_factor * mask,
+            yerr=err_tol * norm_factor * mask,
+            fmt="o",
+            label="Error tolerance",
+        )
+        
 
         # plot masked residuals
         ax[2].errorbar(
@@ -359,6 +377,13 @@ def plot_prediction_test(
             yerr=std / std * mask,
             fmt="o",
             label="Masked Residuals",
+        )
+        ax[2].errorbar(
+            [0],
+            (true - prediction) / std * mask,
+            yerr=err_tol / std * mask,
+            fmt="o",
+            label="Error tolerance",
         )
 
     else:
@@ -375,6 +400,13 @@ def plot_prediction_test(
             alpha=0.5,
             label="1$\sigma$",
         )
+        ax[0].fill_between(
+            range(len(true[0])),
+            (prediction - err_tol) * norm_factor * mask,
+            (prediction + err_tol) * norm_factor * mask,
+            alpha=0.5,
+            label="Error tolerance",
+        )        
         ax[0].plot(range(len(true[0])), true[0] * norm_factor, label="True")
 
         # make residuals
@@ -390,12 +422,20 @@ def plot_prediction_test(
             alpha=0.5,
             label="1$\sigma$",
         )
+        ax[1].fill_between(
+            range(len(true[0])),
+            -err_tol * norm_factor * mask,
+            err_tol * norm_factor * mask,
+            alpha=0.5,
+            label="Error tolerance",
+        )
 
         # make residuals
         ax[2].plot(
             range(len(true[0])), (true[0] - prediction) * mask / std, label="Residuals"
         )
         ax[2].fill_between(range(len(true[0])), -1, 1, alpha=0.5, label="1$\sigma$")
+        ax[2].fill_between(range(len(true[0])), -err_tol/std, err_tol/std, alpha=0.5, label="Error tolerance")
 
     ax[2].set_xlabel("Data index")
     ax[0].set_ylabel("Prediction")

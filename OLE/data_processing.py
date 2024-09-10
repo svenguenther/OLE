@@ -66,8 +66,7 @@ class data_processor(BaseClass):
 
         defaulthyperparameters = {
             # explained variance cutoff is the minimum explained variance which is required for the PCA compression. Once this value is reached, the PCA compression is stopped.
-            'explained_variance_cutoff': 0.999, # OUTDATED TODO: REMOVE
-            "min_variance_per_bin": 1e-3,
+            "min_variance_per_bin": 1e-4,
             # this should also inform the error of the GPs to remain consistent. Or alternatively since we specify error params,
             # those might also set this parameter
             # maximal number of dimensions of the compressed data
@@ -189,10 +188,10 @@ class data_processor(BaseClass):
         eigenvectors = eigenvectors[:, idx].real
 
         # calculate the explained variance
-        explained_variance = eigenvalues / jnp.sum(eigenvalues)
+        self.explained_variance = eigenvalues / jnp.sum(eigenvalues)
 
         # calculate the cumulative explained variance
-        cumulative_explained_variance = jnp.cumsum(explained_variance)
+        self.cumulative_explained_variance = jnp.cumsum(self.explained_variance)
 
         # find the number of components which explain the variance.
         min_variance_per_bin = self.hyperparameters["min_variance_per_bin"]
@@ -202,11 +201,14 @@ class data_processor(BaseClass):
             )
         else:
             min_variance = min_variance_per_bin * self.output_size
+
+        # additionally we need to scale the variance by the number of data points.
+        min_variance = min_variance * len(self.output_data_normalized)
+
         n_components = max(len(eigenvalues[eigenvalues > min_variance]), 1)
+
         if min_variance == 0.0:
             n_components = 1
-        # OLD
-        # n_components = jnp.argmax(cumulative_explained_variance > self.hyperparameters['explained_variance_cutoff']) + 1
 
         # if the number of components is larger than the maximal number of dimensions, set the number of components to the maximal number of dimensions
         if n_components == self.hyperparameters["max_output_dimensions"]:
@@ -230,7 +232,7 @@ class data_processor(BaseClass):
             ):
                 os.makedirs(self.hyperparameters["plotting_directory"] + "/PCA_plots")
             variance_plots(
-                explained_variance,
+                self.explained_variance,
                 "explained variance " + self.quantity_name,
                 "explained variance ",
                 self.hyperparameters["plotting_directory"]
@@ -239,7 +241,7 @@ class data_processor(BaseClass):
                 + ".png",
             )
             variance_plots(
-                1.0 - cumulative_explained_variance,
+                1.0 - self.cumulative_explained_variance,
                 "1 - cumulative variance " + self.quantity_name,
                 "1 - cumulative variance ",
                 self.hyperparameters["plotting_directory"]

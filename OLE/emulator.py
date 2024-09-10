@@ -592,7 +592,7 @@ class Emulator(BaseClass):
 
 
         if self.hyperparameters['error_tolerance'] == 0.:
-            for quantity_name, quantity in self.ini_state['quantities'].items():
+            for quantity_name in self.emulators.keys():
                 self.emulators[quantity_name].disable_error() 
 
         else:
@@ -636,14 +636,16 @@ class Emulator(BaseClass):
 
                 var = self.emulators[quantity_name].data_processor.output_pca_stds**2 * len(self.emulators[quantity_name].data_processor.output_data_emulator)
                 # this is analytical for the variance of the components. since we compare to the total we might drop the len of data
-            
+
                 total_var = jnp.sum(var)
-                variance_tolerance = 1. - self.emulators[quantity_name].data_processor.hyperparameters['explained_variance_cutoff']
+                # variance_tolerance = 1. - self.emulators[quantity_name].data_processor.hyperparameters['explained_variance_cutoff'] # TODO: PDF: Check this please :)
+                variance_tolerance = 1 - self.emulators[quantity_name].data_processor.cumulative_explained_variance[self.emulators[quantity_name].data_processor.output_data_emulator_dim]
 
                 for i in range(self.emulators[quantity_name].num_GPs):
                     relative_variance = var[i]/total_var
                     #error = variance_tolerance / relative_variance * self.hyperparameters['noise_percentage']
-                    error = ((variance_tolerance / relative_variance) ** 2. ) / len(var)
+                    # error = ((variance_tolerance / relative_variance) ** 2. ) / len(var)
+                    error = ((variance_tolerance / relative_variance)  ) / len(var) # TODO: SG: Is that correct? Seems to me ...
                     
                     self.emulators[quantity_name].GPs[i].hyperparameters['error_tolerance'] = error
                     self.debug("Error tolerance for GP %d of quantity %s: %e" % (i, quantity_name, error))

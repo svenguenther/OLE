@@ -250,7 +250,7 @@ def calculate_mean_std_single_sparse_from_inv_Kxx(
     mean = mean_t + jnp.matmul(Sigma_inv_Kxt.T, inducing_values - mx)
 
     # std
-    std = jnp.sqrt(self.prior.kernel.cross_covariance(t,t) - jnp.matmul(Sigma_inv_Kxt.T, Kxt))
+    std = jnp.sqrt(jnp.abs(self.prior.kernel.cross_covariance(t,t) - jnp.matmul(Sigma_inv_Kxt.T, Kxt))) # abs for error prevention
 
 
     #return mean
@@ -313,7 +313,7 @@ def calculate_mean_std_single_from_inv_Kxx(
     mean = mean_t + jnp.matmul(Sigma_inv_Kxt.T, y)
     
     # std
-    std = jnp.sqrt(self.prior.kernel.cross_covariance(t,t) - jnp.matmul(Sigma_inv_Kxt.T, Kxt))
+    std = jnp.sqrt(jnp.abs(self.prior.kernel.cross_covariance(t,t) - jnp.matmul(Sigma_inv_Kxt.T, Kxt)))  # abs for error prevention
 
     return jnp.atleast_1d(mean.squeeze())[0], std.squeeze()
 
