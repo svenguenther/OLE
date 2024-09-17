@@ -96,19 +96,11 @@ class Emulator(BaseClass):
 
             ## TESTING:
 
-            # should we test the performance of the emulator once it is trained? If Flase, the following parameters are not needed
-            'test_emulator': True,
-
             # numer of test samples to determine the quality of the emulator
             'N_quality_samples': 5,
 
             # path to a directory with data covmats to do better normalization. If given, the emulator will search for data covmats in this directoy and if one is found, it will be used for normalization
             'data_covmat_directory': None,
-
-            # here we define the quality threshold for the emulator. If the emulator is below this threshold, it is retrained. We destinguish between a constant, a linear and a quadratic threshold
-            'quality_threshold_constant': 0.1,
-            'quality_threshold_linear': 0.01,
-            'quality_threshold_quadratic': 0.0001,
 
             'error_tolerance' : 1.,
             'sparse_GP_points' : 0.,
@@ -136,6 +128,33 @@ class Emulator(BaseClass):
 
             # print frequency for the emulator
             'status_print_frequency': 50,
+
+
+            # Settings related with the quality criterium
+
+            # here we define the quality threshold for the emulator. If the emulator is below this threshold, it is retrained. We destinguish between a constant, a linear and a quadratic threshold
+            'quality_threshold_constant': 0.1,
+            'quality_threshold_linear': 0.01,
+            'quality_threshold_quadratic': 0.0001,
+
+            # testing_strategy: 
+            # 'test_all', (default) test always all points
+            # 'test_early', test all points until the first 'test_early_points' points were consecutively successful. Stop testing afterwards.
+            # 'test_GP_criterium', use GP to determine which points to test
+            # 'test_none', do not test the emulator
+
+            'testing_strategy': 'test_all',
+
+            'test_early_points': 1000,
+
+
+            # should we test the performance of the emulator once it is trained? If Flase, the following parameters are not needed
+            'test_emulator': True, # OLD and not used anymore
+
+
+
+
+            
         }
 
         # The hyperparameters are a dictionary of the hyperparameters for the different quantities. The keys are the names of the quantities.
@@ -256,8 +275,8 @@ class Emulator(BaseClass):
             self.train()
 
         # rejit_flag. If the emulator is retrained/updated, we set this flag to True. This flag is used to determine whether the emulator is to be rejited.
-        self.rejit_flag_emulator = False
-        self.rejit_flag_sampling = False
+        self.rejit_flag_emulator = True
+        self.rejit_flag_sampling = True
 
         # this counter is used to determine the number of continously successful emulator calls
         self.continuous_successful_calls = 0
@@ -634,10 +653,10 @@ class Emulator(BaseClass):
 
                 # Ali memory bug <3
 
-                var = self.emulators[quantity_name].data_processor.output_pca_stds**2 * len(self.emulators[quantity_name].data_processor.output_data_emulator)
+                var = self.emulators[quantity_name].data_processor.explained_variance #* len(self.emulators[quantity_name].data_processor.output_data_emulator)
                 # this is analytical for the variance of the components. since we compare to the total we might drop the len of data
 
-                total_var = jnp.sum(var)
+                total_var = jnp.sum(self.emulators[quantity_name].data_processor.explained_variance)
                 # variance_tolerance = 1. - self.emulators[quantity_name].data_processor.hyperparameters['explained_variance_cutoff'] # TODO: PDF: Check this please :)
                 variance_tolerance = 1 - self.emulators[quantity_name].data_processor.cumulative_explained_variance[self.emulators[quantity_name].data_processor.output_data_emulator_dim]
 
@@ -646,6 +665,9 @@ class Emulator(BaseClass):
                     #error = variance_tolerance / relative_variance * self.hyperparameters['noise_percentage']
                     # error = ((variance_tolerance / relative_variance) ** 2. ) / len(var)
                     error = ((variance_tolerance / relative_variance)  ) / len(var) # TODO: SG: Is that correct? Seems to me ...
+
+                    # set it to an minimum value of 1e-14
+                    error = max(error, 1e-14) # this ensures some white kernel. Otherwise training might fail for deterministic data, like training H0 out of h etc ...
                     
                     self.emulators[quantity_name].GPs[i].hyperparameters['error_tolerance'] = error
                     self.debug("Error tolerance for GP %d of quantity %s: %e" % (i, quantity_name, error))
@@ -722,7 +744,14 @@ class Emulator(BaseClass):
         # if we return True, the emulator is expected to perform poorly and we need to check the quality criterium
 
         # if we do not require a quality check, we return False
-        if not self.hyperparameters['test_emulator']:
+        if self.hyperparameters['testing_strategy'] == 'test_none':
+            self.debug("Quality check not required. Test emulator is False")
+            self.write_to_log("Quality check not required. Test emulator is False \n")
+            self.continuous_successful_calls += 1
+            return False
+
+        # if we test all calls until the first 'test_early_points' points were consecutively successful. Stop testing afterwards.
+        if (self.hyperparameters['testing_strategy'] == 'test_early') and (self.continuous_successful_calls > self.hyperparameters['test_early_points']):
             self.debug("Quality check not required. Test emulator is False")
             self.write_to_log("Quality check not required. Test emulator is False \n")
             self.continuous_successful_calls += 1

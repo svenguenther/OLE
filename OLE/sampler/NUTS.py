@@ -34,16 +34,23 @@ class NUTSSampler(Sampler):
     def initialize(self, **kwargs):
         super().initialize(**kwargs)
 
-        self.nwalkers = kwargs['sampling_settings']['nwalkers'] if 'nwalkers' in kwargs['sampling_settings'] else 10
+        # read the hyperparameters and add some NUTS specific hyperparameters
+            
+        self.hyperparameters['nwalkers'] = 10 if 'nwalkers' not in self.hyperparameters.keys() else self.hyperparameters['nwalkers']
+        self.nwalkers = self.hyperparameters['nwalkers']
         self.ndim = len(self.parameter_dict)
 
         # read target_acceptanc, M_adapt, delta_max
-        self.target_acceptance = kwargs['sampling_settings']['target_acceptance'] if 'target_acceptance' in kwargs['sampling_settings'] else 0.5
-        self.M_adapt = kwargs['sampling_settings']['M_adapt'] if 'M_adapt' in kwargs['sampling_settings'] else 200
-        self.delta_max = kwargs['sampling_settings']['delta_max'] if 'delta_max' in kwargs['sampling_settings'] else 1000
+        self.hyperparameters['target_acceptance'] = 0.5 if 'target_acceptance' not in self.hyperparameters else self.hyperparameters['target_acceptance']
+        self.target_acceptance = self.hyperparameters['target_acceptance']
+        self.hyperparameters['M_adapt'] = 200 if 'M_adapt' not in self.hyperparameters else self.hyperparameters['M_adapt']
+        self.M_adapt = self.hyperparameters['M_adapt']
+        self.hyperparameters['delta_max'] = 1000 if 'delta_max' not in self.hyperparameters else self.hyperparameters['delta_max']
+        self.delta_max = self.hyperparameters['delta_max']
 
         # minimize nuisance parameters
-        self.minimize_nuisance_parameters = kwargs['sampling_settings']['minimize_nuisance_parameters'] if 'minimize_nuisance_parameters' in kwargs['sampling_settings'] else True
+        self.hyperparameters['minimize_nuisance_parameters'] = True if 'minimize_nuisance_parameters' not in self.hyperparameters else self.hyperparameters['minimize_nuisance_parameters']
+        self.minimize_nuisance_parameters = self.hyperparameters['minimize_nuisance_parameters']
 
         pass
     

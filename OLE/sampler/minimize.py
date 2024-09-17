@@ -80,9 +80,9 @@ class MinimizeSampler(Sampler):
 
             if self.use_gradients:
                 # create differentiable loglike
-                f = jax.jit(self.emulate_total_minusloglike_from_parameters_differentiable)     # this is the differentiable loglike
-                grad_f = jax.jit(jax.grad(self.emulate_total_minusloglike_from_parameters_differentiable))
-                hessian_f = (jax.hessian(self.emulate_total_minusloglike_from_parameters_differentiable))
+                f = jax.jit(self.emulate_total_minusloglike_from_normalized_parameters_differentiable)     # this is the differentiable loglike
+                grad_f = jax.jit(jax.grad(self.emulate_total_minusloglike_from_normalized_parameters_differentiable))
+                hessian_f = (jax.hessian(self.emulate_total_minusloglike_from_normalized_parameters_differentiable))
 
                 self.method = 'TNC'
                 res = self.optimizer(f, 
@@ -94,7 +94,7 @@ class MinimizeSampler(Sampler):
                 self.inv_hessian = self.denormalize_inv_hessematrix( np.linalg.inv(hessian_f(res.x)) )
             
             else:
-                f = jax.jit(self.emulate_total_minusloglike_from_parameters_differentiable)
+                f = jax.jit(self.emulate_total_minusloglike_from_normalized_parameters_differentiable)
 
                 res = self.optimizer(f,
                                     initial_position, method=self.method, bounds=bounds, 

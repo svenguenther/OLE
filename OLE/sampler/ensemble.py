@@ -59,6 +59,10 @@ class EnsembleSampler(Sampler):
         # save the chain and the logprobability
         # first get normalized chains and rescale them
         self.chain = self.sampler.get_chain()
+        
+        # flatten first and second dimensions
+        self.chain = self.chain.reshape((-1, self.ndim))
+
         for i in range(len(self.chain)):
             self.chain[i] = self.retranform_parameters_from_normalized_eigenspace(self.chain[i])
 

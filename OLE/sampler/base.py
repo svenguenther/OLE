@@ -53,6 +53,12 @@ class Sampler(BaseClass):
                     sampling_settings={},
                    **kwargs):
 
+        # Save all the settings
+        self.emulator_settings = emulator_settings
+        self.likelihood_settings = likelihood_settings
+        self.theory_settings = theory_settings
+        self.sampling_settings = sampling_settings
+
         # Store Likelihood and initialize if possible
         self.likelihood = likelihood
         if self.likelihood is not None:
@@ -130,7 +136,8 @@ class Sampler(BaseClass):
             else:
                 self.proposal_means = self.proposal_means.at[i].set(0.5*(self.parameter_dict[key]['prior']['min']+self.parameter_dict[key]['prior']['max']))
 
-        
+        # hessian of the likelihood
+        self.hessian_function = None
 
         # generate the covariance matrix
         self.covmat = self.generate_covmat()
@@ -471,16 +478,13 @@ class Sampler(BaseClass):
             # here we need to test the emulator for its performance
             emulator_sample_states, RNGkey = self.emulator.emulate_samples(state['parameters'], RNGkey=RNGkey,noise=1)
             emulator_sample_loglikes = jnp.array([self.likelihood.loglike_state(_)['loglike'] for _ in emulator_sample_states])
-            print("emulator_sample_loglikes: ", emulator_sample_loglikes)
             # check whether the emulator is good enough
             if not self.emulator.check_quality_criterium(emulator_sample_loglikes, parameters=state['parameters']):
-                print("Emulator not good enough")
                 state = self.theory.compute(state)
                 state = self.likelihood.loglike_state(state)
                 state['loglike'] = state['loglike'] + logprior
                 self.emulator.add_state(state)
             else:
-                print("Emulator good enough")
                 # Add the point to the quality points
                 self.emulator.add_quality_point(state['parameters'])
             
@@ -530,13 +534,11 @@ class Sampler(BaseClass):
             # here we need to test the emulator for its performance
             emulator_sample_states, RNGkey = self.emulator.emulate_samples(state['parameters'],RNGkey=RNGkey , noise=1)
             emulator_sample_loglikes = jnp.array([self.likelihood.loglike_state(_)['loglike'] for _ in emulator_sample_states])
-            print("emulator_sample_loglikes: ", emulator_sample_loglikes)
+
             # check whether the emulator is good enough
             if not self.emulator.check_quality_criterium(emulator_sample_loglikes, parameters=state['parameters']):
-                print("Emulator not good enough")
                 state = self.theory.compute(state)
             else:
-                print("Emulator good enough")
                 # Add the point to the quality points
                 self.emulator.add_quality_point(state['parameters'])
             
@@ -590,10 +592,17 @@ class Sampler(BaseClass):
     def emulate_loglike_from_normalized_parameters_differentiable(self, parameters_norm):
         # this function is similar to the compute_loglike_from_parameters, but it returns the loglike and does not automaticailly add the state to the emulator. Thus it is differentiable.
         # if RNG is not None, we provide the mean estimate, otherwise we sample from the emulator
-        self.start()
 
         # rescale the parameters
         parameters = self.retranform_parameters_from_normalized_eigenspace(parameters_norm)
+
+        return self.emulate_loglike_from_parameters_differentiable(parameters)
+
+    # This function emulates the loglikelihoods for given parameters.
+    def emulate_loglike_from_parameters_differentiable(self, parameters):
+        # this function is similar to the compute_loglike_from_parameters, but it returns the loglike and does not automaticailly add the state to the emulator. Thus it is differentiable.
+        # if RNG is not None, we provide the mean estimate, otherwise we sample from the emulator
+        self.start()
 
         # Run the sampler.
         state = {'parameters': {}, 'quantities': {}, 'loglike': None}
@@ -640,6 +649,25 @@ class Sampler(BaseClass):
         self.increment(self.logger)
         return state['loglike']
 
+    # This function emulates the loglikelihoods for given parameters.
+    def emulate_loglike_without_prior_from_parameters_differentiable(self, parameters):
+        # this function is similar to the compute_loglike_from_parameters, but it returns the loglike and does not automaticailly add the state to the emulator. Thus it is differentiable.
+        # if RNG is not None, we provide the mean estimate, otherwise we sample from the emulator
+        self.start()
+
+        # Run the sampler.
+        state = {'parameters': {}, 'quantities': {}, 'loglike': None}
+
+        # translate the parameters to the state
+        for i, key in enumerate(self.parameter_dict.keys()):
+            state['parameters'][key] = jnp.array([parameters[i]])
+
+        state = self.emulator.emulate_jit(state['parameters'])
+        state = self.likelihood.loglike_state(state)
+        self.debug("loglike after theory: %f for parameters: %s", state['loglike'][0], state['parameters'])
+
+        self.increment(self.logger)
+        return state['loglike']
 
 
     def sample_emulate_loglike_from_normalized_parameters_differentiable(self, parameters, N=1, RNGkey=jax.random.PRNGKey(int(time.time())), noise = 0.):
@@ -684,8 +712,16 @@ class Sampler(BaseClass):
         res = [_.sum() for _ in self.sample_emulate_loglike_from_normalized_parameters_differentiable(parameters, N=N , noise = noise)]
         return res
 
-    def emulate_total_minusloglike_from_parameters_differentiable(self, parameters):
+    def emulate_total_minusloglike_from_normalized_parameters_differentiable(self, parameters):
         res = -self.emulate_loglike_from_normalized_parameters_differentiable(parameters)
+        return res.sum()
+
+    def emulate_total_minusloglike_from_parameters_differentiable(self, parameters):
+        res = -self.emulate_loglike_from_parameters_differentiable(parameters)
+        return res.sum()
+    
+    def emulate_total_minusloglike_without_prior_from_parameters_differentiable(self, parameters):
+        res = -self.emulate_loglike_without_prior_from_parameters_differentiable(parameters)
         return res.sum()
     
     def sample_emulate_total_minusloglike_from_parameters_differentiable(self, parameters):
@@ -699,15 +735,41 @@ class Sampler(BaseClass):
         log_prior = 0.0
         for key, value in self.parameter_dict.items():
 
-            
-            # if mean and std are given, we use a gaussian prior
-            if 'mean' in value['prior'].keys():
-                log_prior += -0.5*(state['parameters'][key][0]-value['prior']['mean'])**2/value['prior']['std']**2 - 0.5*jnp.log(2*jnp.pi*value['prior']['std']**2)
-            # else we sticke with the flat prior
-            else:
+            # check if 'type' is in prior. TODO: SG: remove that. Make type mandatory
+            if 'type' not in value['prior'].keys():
                 log_prior+= jnp.log(1.0/(value['prior']['max']-value['prior']['min']))
+                log_prior -= jnp.heaviside(value['prior']['min'] - state['parameters'][key][0],  1.0) * 99999999999999999999999.  + jnp.heaviside(state['parameters'][key][0] - value['prior']['max'], 1.0) * 99999999999999999999999.
+            else:
+                if value['prior']['type'] == 'uniform':
+                    # if mean and std are given, we use a gaussian prior
+                    log_prior+= jnp.log(1.0/(value['prior']['max']-value['prior']['min']))
+                    log_prior -= jnp.heaviside(value['prior']['min'] - state['parameters'][key][0],  1.0) * 99999999999999999999999.  + jnp.heaviside(state['parameters'][key][0] - value['prior']['max'], 1.0) * 99999999999999999999999.
+            
+                if value['prior']['type'] == 'gaussian':
+                    log_prior += -0.5*(state['parameters'][key][0]-value['prior']['mean'])**2/value['prior']['std']**2 - 0.5*jnp.log(2*jnp.pi*value['prior']['std']**2)
+                    log_prior -= jnp.heaviside(value['prior']['min'] - state['parameters'][key][0],  1.0) * 99999999999999999999999.  + jnp.heaviside(state['parameters'][key][0] - value['prior']['max'], 1.0) * 99999999999999999999999.
+        
+                if value['prior']['type'] == 'jeffreys':
+                # first we need to compute the fisher information matrix. 
+                # If the emulator is not trained yet, we use the estimate from the covmat.
+                    if not self.emulator.trained:
+                        fisher_information = self.covmat
+                    else:
+                        if self.hessian_function is None:
+                            params = jnp.array([state['parameters'][_][0] for _ in state['parameters'].keys()])
+                            self.hessian_function = jax.jit(jax.hessian(self.emulate_total_minusloglike_without_prior_from_parameters_differentiable))
+                            fisher_information = self.hessian_function(params)
+                        else:
+                            params = jnp.array([state['parameters'][_][0] for _ in state['parameters'].keys()])
+                            fisher_information = self.hessian_function(params)
 
-            log_prior -= jnp.heaviside(value['prior']['min'] - state['parameters'][key][0],  1.0) * 99999999999999999999999.  + jnp.heaviside(state['parameters'][key][0] - value['prior']['max'], 1.0) * 99999999999999999999999.
+                    determinant = jnp.linalg.det(fisher_information)
+                    det_min = 0.01
+
+                    # if determinant < det_min:
+                    #     determinant = det_min
+
+                    log_prior = jnp.log(jnp.sqrt(jnp.abs(determinant)))
 
         return log_prior
     

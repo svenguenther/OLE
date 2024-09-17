@@ -68,10 +68,10 @@ class my_likelihood(Likelihood):
 
     def loglike(self, state):
         # Compute the loglikelihood for the given parameters.
-        loglike = -10.*jnp.sum((state['quantities']['y_array']-jnp.ones(3))**2) - 10.*(state['quantities']['y_scalar']-3.0)**2
+        loglike = -10.*jnp.sum((state['quantities']['y_array'])**2) - 10.*(state['quantities']['y_scalar']-0.5)**2 - state['quantities']['y_array'][0]*state['quantities']['y_array'][1]
         return loglike
     
-    #def loglike_gradient(self, state, type): # define a function for each quantity
+    #def loglike_gradient(self, state, type): # define a function for each quantity.
             # Compute the gradient of the loglikelihood for the given parameters.
         
     #    if type == 'y_array':
@@ -92,108 +92,43 @@ class my_likelihood(Likelihood):
 my_theory = my_theory()
 my_likelihood = my_likelihood()
 
-emulator_settings = {
-    # the number of data points in cache before the emulator is to be trained
-    'min_data_points': 100,
-
-
-
-    ## Related to the Gaussian Process Emulator
-
-    # Kernel
-    'kernel': 'RBF',
-
-    # Kernel fitting frequency. After aquiring this many data points, the kernel is refitted.
-    'kernel_fitting_frequency': 10,
-
-    ## Related to the Gaussian Process itself. ToDo: Rework this part
-    'learning_rate': 0.02,
-
-    'noise_percentage': 0.5, 
-
-    'sparse_GP_points': 10,
-    # Number of iterations
-    'num_iters': 400,
-
-
-    ## Related to the Data Cache
-
-    # maximal cache size
-    'cache_size': 1000,
-
-    # name of the cache file
-    'cache_file': './output_sampler_toy_nuts/cache.pkl',
-
-    # load the cache from the cache file
-    'load_cache': True,
-
-    # load inifile from the cache file
-    # 'load_initial_state': True,
-    # 'test_emulator': False, # if True the emulator is tested and potentially retrained with new data
-
-    # delta loglike for what states to be accepted to the cache
-    'delta_loglike': 300.0,
-
-    # flag whether we should store the cache in the cache file
-    'store_cache': False,
-
-    # accuracy parameters for loglike:
-    'quality_threshold_constant': 0.03, 
-    'quality_threshold_linear': 0.2,
-    'quality_threshold_quadratic': 0.1,
-
-    # add acceptable error that is reduced live. For pca it should be linear in the eigenvalues
-
-
-    # related so sampler
-
-    # number of walker
-    'nwalkers': 10,
-
-    # output directory
-    'output_directory': './output_sampler_toy_nuts',
-
-    # force by overwriting previous results
-    'force': True,
-
-    # M adapt
-    'M_adapt': 1000,
-
-
-
-    # debug mode
-    'debug': False,
-
-    # plotting directory
-    'plotting_directory': './plots_sampler_toy_nuts',
-
-    'testset_fraction': 0.1,
-
+likelihood_settings = {}
+sampling_settings = {
+    'output_directory': './toy',
 }
+theory_settings = {}
+emulator_settings = {
+    'logfile': './toy/log.txt',
+    'explained_variance_cutoff': 0.9999,
+    'min_variance_per_bin': 1e-2,
+    'cache_file': './toy/cache.pkl',
+    'dimensionality': 3,
 
+    'test_emulator': True,
+}
 
 # load sampler 
 from OLE.sampler import EnsembleSampler, Sampler, NUTSSampler
-my_sampler = NUTSSampler(debug=False)
+my_sampler = NUTSSampler()
 
 
 # set parameters
-my_parameters = {'x1': {'prior': {'min': 0.0, 'max': 3.0},
-                        'ref': {'mean': 1.2, 'std': 0.1},
+my_parameters = {'x1': {'prior': {'min': 0.0, 'max': 3.0, 'type': 'uniform'},
+                        'ref': {'mean': 0.2, 'std': 0.1},
                         'proposal': 1.0,},
-                    'x2': {'prior': {'min': 0.0, 'max': 3.0},
-                        'ref': {'mean': 1.2, 'std': 0.1},
+                    'x2': {'prior': {'min': 0.0, 'max': 3.0, 'type': 'uniform'},
+                        'ref': {'mean': 0.2, 'std': 0.1},
                         'proposal': 1.0,},
-                    'x3': {'prior': {'min': 0.0, 'max': 3.0},
-                        'ref': {'mean': 1.2, 'std': 0.1},
+                    'x3': {'prior': {'min': 0.0, 'max': 3.0, 'type': 'uniform'},
+                        'ref': {'mean': 0.2, 'std': 0.1},
                         'proposal': 1.0,},
                            } 
 
 # initialize sampler
-my_sampler.initialize(theory=my_theory, likelihood=my_likelihood, parameters=my_parameters, **emulator_settings)
+my_sampler.initialize(theory=my_theory, likelihood=my_likelihood, parameters=my_parameters, emulator_settings=emulator_settings, likelihood_settings=likelihood_settings, theory_settings=theory_settings, sampling_settings=sampling_settings)
 
 # Note the total run steps are   (nsteps * nwalkers * MPI_size)
-n_steps = 10000
+n_steps = 1000
 my_sampler.run_mcmc(n_steps)
 
 chain = my_sampler.chain

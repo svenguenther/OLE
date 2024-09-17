@@ -10,7 +10,6 @@ from beartype.typing import (
     Optional,
 )
 
-
 import cola
 from cola.ops import Dense
 
@@ -22,12 +21,6 @@ from jax.random import (
 from jaxtyping import (
     Float,
     Num,
-)
-
-from gpjax.base import (
-    Module,
-    param_field,
-    static_field,
 )
 
 from gpjax.dataset import Dataset
@@ -249,8 +242,11 @@ def calculate_mean_std_single_sparse_from_inv_Kxx(
     # μt  +  Ktx (Kxx + Io²)⁻¹ (y  -  μx)
     mean = mean_t + jnp.matmul(Sigma_inv_Kxt.T, inducing_values - mx)
 
+    # epsilon to ensure positive definiteness
+    epsilon = 1e-14
+
     # std
-    std = jnp.sqrt(jnp.abs(self.prior.kernel.cross_covariance(t,t) - jnp.matmul(Sigma_inv_Kxt.T, Kxt))) # abs for error prevention
+    std = jnp.sqrt(jnp.abs(self.prior.kernel.cross_covariance(t,t) - jnp.matmul(Sigma_inv_Kxt.T, Kxt)) + epsilon) # abs for error prevention
 
 
     #return mean
@@ -311,9 +307,12 @@ def calculate_mean_std_single_from_inv_Kxx(
 
     # μt  +  Ktx (Kxx + Io²)⁻¹ (y  -  μx)
     mean = mean_t + jnp.matmul(Sigma_inv_Kxt.T, y)
-    
+
+    # epsilon to ensure positive definiteness
+    epsilon = 1e-14
+
     # std
-    std = jnp.sqrt(jnp.abs(self.prior.kernel.cross_covariance(t,t) - jnp.matmul(Sigma_inv_Kxt.T, Kxt)))  # abs for error prevention
+    std = jnp.sqrt(jnp.abs(self.prior.kernel.cross_covariance(t,t) - jnp.matmul(Sigma_inv_Kxt.T, Kxt))+ epsilon)  # abs for error prevention
 
     return jnp.atleast_1d(mean.squeeze())[0], std.squeeze()
 
