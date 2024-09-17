@@ -210,6 +210,11 @@ class data_processor(BaseClass):
         if min_variance == 0.0:
             n_components = 1
 
+        # CF: those 5 lineas above are ptoetnially wronmg and harmfull
+        # 
+        #     
+        self.realtive_importance = eigenvalues / min_variance
+
         # if the number of components is larger than the maximal number of dimensions, set the number of components to the maximal number of dimensions
         if n_components == self.hyperparameters["max_output_dimensions"]:
             self.warning(

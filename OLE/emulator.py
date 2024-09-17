@@ -655,7 +655,7 @@ class Emulator(BaseClass):
 
                 var = self.emulators[quantity_name].data_processor.explained_variance #* len(self.emulators[quantity_name].data_processor.output_data_emulator)
                 # this is analytical for the variance of the components. since we compare to the total we might drop the len of data
-
+                relative_importance = self.emulators[quantity_name].data_processor.relative_importance
                 total_var = jnp.sum(self.emulators[quantity_name].data_processor.explained_variance)
                 # variance_tolerance = 1. - self.emulators[quantity_name].data_processor.hyperparameters['explained_variance_cutoff'] # TODO: PDF: Check this please :)
                 variance_tolerance = 1 - self.emulators[quantity_name].data_processor.cumulative_explained_variance[self.emulators[quantity_name].data_processor.output_data_emulator_dim]
@@ -666,6 +666,8 @@ class Emulator(BaseClass):
                     # error = ((variance_tolerance / relative_variance) ** 2. ) / len(var)
                     error = ((variance_tolerance / relative_variance)  ) / len(var) # TODO: SG: Is that correct? Seems to me ...
 
+                    # experimental new option:
+                    error = 1. / relative_importance[i]
                     # set it to an minimum value of 1e-14
                     error = max(error, 1e-14) # this ensures some white kernel. Otherwise training might fail for deterministic data, like training H0 out of h etc ...
                     
