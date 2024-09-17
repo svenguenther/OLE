@@ -3,7 +3,7 @@ requires = ["flit_core>=3.4"]
 build-backend = "flit_core.buildapi"
 
 [project]
-name = "candl-like"
+name = "OLE"
 authors = [
 {name = "S. Günther"},
 ]
