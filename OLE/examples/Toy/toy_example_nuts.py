@@ -99,8 +99,7 @@ sampling_settings = {
 theory_settings = {}
 emulator_settings = {
     'logfile': './toy/log.txt',
-    'explained_variance_cutoff': 0.9999,
-    'min_variance_per_bin': 1e-2,
+    'min_variance_per_bin': 1e-6,
     'cache_file': './toy/cache.pkl',
     'dimensionality': 3,
 

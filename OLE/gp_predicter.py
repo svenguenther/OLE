@@ -32,7 +32,7 @@ import time
 
 # Path: OLE/gp_predicter.py
 
-from OLE.utils.base import BaseClass
+from OLE.utils.base import BaseClass, constant
 from OLE.data_processing import data_processor
 from OLE.plotting import (
     plain_plot,
@@ -511,17 +511,6 @@ class GP(BaseClass):
 
         pass
 
-    # def __del__(self):
-    #     # remove the GP
-    #     del self.D
-    #     del self.opt_posterior
-    #     self.opt_posterior = None
-    #     self.D = None
-    #     self.input_data = None
-    #     self.output_data = None
-
-    #     gc.collect()
-
     def load_data(self, input_data, output_data):
         # Load the data from the data processor.
         self.recompute_kernel_matrix = True
@@ -584,41 +573,29 @@ class GP(BaseClass):
                 print("sparse GP training requires error_tolerance")
             else:
 
-                kernelWhite = gpx.kernels.White(
-                    variance=self.hyperparameters["error_tolerance"]
-                    * self.hyperparameters["error_boost"]
-                )
+                kernelWhite = gpx.kernels.White()
                 # we reduce the white noise term by a factor to leave room for the unceratinity of the sparese GP. A boost of zero removes the white noise
                 # and applies all error budget to the sparse GP. Close to a value of one the sparse GP cannot converge as all error budget is used by the white noise
                 # a small allocation of white noise may be numerically ideal to smooth out the noise present in the data
-                kernelError = kernelWhite.replace_trainable(variance=False)
-                kernel = gpx.kernels.SumKernel(kernels=[kernelNoiseFree, kernelError])
+                #kernelWhite.variance=constant(self.hyperparameters["error_tolerance"] * self.hyperparameters["error_boost"])
+                kernel = gpx.kernels.SumKernel(kernels=[kernelNoiseFree, kernelWhite])
 
             meanf = gpx.mean_functions.Zero()
+            kernel = gpx.kernels.RBF() + gpx.kernels.White() # TODO here do fix this PDF please :) Wenn man den linear kernel benutzt gibt collaped_elbo einen guten wert und danach nurnoch nan...
             prior = gpx.gps.Prior(mean_function=meanf, kernel=kernel)
-            prior = prior.replace(jitter=1e-20)
 
             lr = (
                 lambda t: self.hyperparameters["learning_rate"] / 3.0
             )  # sparse GP typically require a lower learning rate
 
-            del self.opt_posterior
-            self.opt_posterior = None
-            gc.collect()
-
             # Create the likelihood
-            likelihood = gpx.gps.Gaussian(num_datapoints=self.D.n)
-            likelihood = likelihood.replace_trainable(obs_stddev=False)
             # the target_error defines an error for each point which is nessecary for training a sparse GP
             # ideally we want to set it very small, but this is numerically unstable. Since we know our target
             # accuracy we should make it small compared to that so that the information in the points is still used optimally
             target_error = jnp.sqrt(self.hyperparameters["error_tolerance"]* self.hyperparameters["error_boost"]) / 100.0
-            likelihood = likelihood.replace(obs_stddev=target_error)
+            likelihood = gpx.gps.Gaussian(num_datapoints=self.D.n)#, obs_stddev=target_error)
 
             posterior = prior * likelihood
-            posterior = posterior.replace(jitter=1e-20)
-
-            elbo = gpx.objectives.CollapsedELBO(negative=True)
 
             while not sparse_trained:
                 # cosntruct a sparse GP
@@ -633,15 +610,16 @@ class GP(BaseClass):
                     sparse_trained = True
                     use_nonsparse = True
                     print("falling back to normal GP")
-
                 if not use_nonsparse:
                     q = gpx.variational_families.CollapsedVariationalGaussian(
                         posterior=posterior, inducing_inputs=z
                     )
 
+                    # print(gpx.objectives.collapsed_elbo(posterior, self.D))
+
                     self.opt_posterior, history = gpx.fit(
                         model=q,
-                        objective=elbo,
+                        objective=lambda p, d: -gpx.objectives.collapsed_elbo(p, d),
                         train_data=self.D,
                         optim=ox.adamw(learning_rate=lr),
                         num_iters=self.hyperparameters["num_iters"],
@@ -694,17 +672,15 @@ class GP(BaseClass):
             self.hyperparameters["is_sparse"] = False
 
             if self.hyperparameters["error_tolerance"] > 0.0:
-                kernelWhite = gpx.kernels.White(
-                    variance=self.hyperparameters["error_tolerance"]
-                )
-                kernelError = kernelWhite.replace_trainable(variance=False)
-                kernel = gpx.kernels.SumKernel(kernels=[kernelNoiseFree, kernelError])
+                kernelWhite = gpx.kernels.White()
+                # replace the white noise with a fixed value. It cannot be trained
+                kernelWhite.variance = constant(self.hyperparameters["error_tolerance"])
+                kernel = gpx.kernels.SumKernel(kernels=[kernelNoiseFree, kernelWhite])
             else:
                 kernel = kernelNoiseFree
 
             meanf = gpx.mean_functions.Zero()
             prior = gpx.gps.Prior(mean_function=meanf, kernel=kernel)
-            prior = prior.replace(jitter=1e-20)
 
             lr = lambda t: self.hyperparameters["learning_rate"]
 
@@ -714,29 +690,19 @@ class GP(BaseClass):
 
             # Create the likelihood
             likelihood = gpx.gps.Gaussian(num_datapoints=self.D.n)
-            likelihood = likelihood.replace_trainable(obs_stddev=False)
-            likelihood = likelihood.replace(obs_stddev=1e-10)
 
             posterior = prior * likelihood
-            posterior = posterior.replace(jitter=1e-20)
-
-            negative_mll = gpx.objectives.ConjugateMLL(negative=True)
-            negative_mll(posterior, train_data=self.D)
 
             # fit
             self.opt_posterior, history = gpx.fit(
                 model=posterior,
-                objective=negative_mll,
+                objective=lambda p, d: -gpx.objectives.conjugate_mll(p, d),
                 train_data=self.D,
                 optim=ox.adam(learning_rate=lr),
                 num_iters=self.hyperparameters["num_iters"],
                 safe=True,  # what does this do?
                 key=jax.random.PRNGKey(0),
             )
-
-        # negative_mll._clear_cache()
-        # del negative_mll
-        # negative_mll = None
 
         self._compute_inverse_kernel_matrix()
 
@@ -1057,7 +1023,7 @@ class GP(BaseClass):
             err_tols = err_tols.at[i].set(err_tol)
             self.debug(
                 "Predicted: %f True: %f Error: %f"
-                % (mean, self.test_D.y[i], mean - self.test_D.y[i])
+                % (mean, self.test_D.y[i].sum(), mean - self.test_D.y[i].sum())
             )
 
         # calculate the mean squared error

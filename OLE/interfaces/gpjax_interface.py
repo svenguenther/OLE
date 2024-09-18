@@ -53,7 +53,7 @@ def predict_mean_single(
 
     # Observation noise o²
     #obs_noise = self.likelihood.obs_noise
-    mx = self.prior.mean_function(x)
+    # mx = self.prior.mean_function(x)
 
     # Precompute Gram matrix, Kxx, at training inputs, x
     Kxx = self.prior.kernel.gram(x)
@@ -69,7 +69,6 @@ def predict_mean_single(
         Sigma_masked = jnp.where(mask + mask.T, 0.0, Sigma.to_dense())
         Sigma = cola.PSD(Dense(jnp.where(jnp.diag(jnp.squeeze(mask)), 1 / (2 * jnp.pi), Sigma_masked)))
 
-    mean_t = self.prior.mean_function(t)
     Kxt = self.prior.kernel.cross_covariance(x, t)
 
     # Σ⁻¹ Kxt
@@ -78,7 +77,8 @@ def predict_mean_single(
     Sigma_inv_Kxt = cola.solve(Sigma, Kxt)
 
     # μt  +  Ktx (Kxx + Io²)⁻¹ (y  -  μx)
-    mean = mean_t + jnp.matmul(Sigma_inv_Kxt.T, y - mx)
+    # mean = jnp.matmul(Sigma_inv_Kxt.T, y)
+    mean = jnp.matmul(Sigma_inv_Kxt.T, y - mx)
 
     return jnp.atleast_1d(mean.squeeze())[0]
 
@@ -100,7 +100,7 @@ def predict_mean_single_sparse(
 
     # Observation noise o²
     #obs_noise = self.likelihood.obs_noise
-    mx = self.prior.mean_function(inducing_points).flatten()
+    # mx = self.prior.mean_function(inducing_points).flatten()
 
     # Precompute Gram matrix, Kxx, at training inputs, x
     Kxx = self.prior.kernel.gram(inducing_points)
@@ -110,7 +110,6 @@ def predict_mean_single_sparse(
     Sigma = Kxx #+ cola.ops.I_like(Kxx) * obs_noise
     Sigma = cola.PSD(Sigma)
 
-    mean_t = self.prior.mean_function(t).flatten()
     Kxt = self.prior.kernel.cross_covariance(inducing_points, t)
 
     # Σ⁻¹ Kxt
@@ -118,7 +117,8 @@ def predict_mean_single_sparse(
     Sigma_inv_Kxt = cola.solve(Sigma, Kxt)
 
     # μt  +  Ktx (Kxx + Io²)⁻¹ (y  -  μx)
-    mean = mean_t + jnp.matmul(Sigma_inv_Kxt.T, inducing_values - mx)
+    mean = jnp.matmul(Sigma_inv_Kxt.T, inducing_values)
+    # mean = jnp.matmul(Sigma_inv_Kxt.T, inducing_values - mx)
 
     #return mean
     return jnp.atleast_1d(mean.squeeze())[0]
@@ -197,9 +197,8 @@ def calculate_mean_single_sparse_from_inv_Kxx(
 
     # Observation noise o²
     #obs_noise = self.likelihood.obs_noise
-    mx = self.prior.mean_function(inducing_points).flatten()
+    # mx = self.prior.mean_function(inducing_points).flatten()
 
-    mean_t = self.prior.mean_function(t).flatten()
     Kxt = self.prior.kernel.cross_covariance(inducing_points, t)
 
     # Σ⁻¹ Kxt
@@ -207,7 +206,8 @@ def calculate_mean_single_sparse_from_inv_Kxx(
     Sigma_inv_Kxt = inv_Kxx @ Kxt
 
     # μt  +  Ktx (Kxx + Io²)⁻¹ (y  -  μx)
-    mean = mean_t + jnp.matmul(Sigma_inv_Kxt.T, inducing_values - mx)
+    # mean = jnp.matmul(Sigma_inv_Kxt.T, inducing_values - mx)
+    mean = jnp.matmul(Sigma_inv_Kxt.T, inducing_values)
 
     #return mean
     return jnp.atleast_1d(mean.squeeze())[0]
@@ -230,9 +230,8 @@ def calculate_mean_std_single_sparse_from_inv_Kxx(
 
     # Observation noise o²
     #obs_noise = self.likelihood.obs_noise
-    mx = self.prior.mean_function(inducing_points).flatten()
+    # mx = self.prior.mean_function(inducing_points).flatten()
 
-    mean_t = self.prior.mean_function(t).flatten()
     Kxt = self.prior.kernel.cross_covariance(inducing_points, t)
 
     # Σ⁻¹ Kxt
@@ -240,7 +239,8 @@ def calculate_mean_std_single_sparse_from_inv_Kxx(
     Sigma_inv_Kxt = inv_Kxx @ Kxt
 
     # μt  +  Ktx (Kxx + Io²)⁻¹ (y  -  μx)
-    mean = mean_t + jnp.matmul(Sigma_inv_Kxt.T, inducing_values - mx)
+    # mean = jnp.matmul(Sigma_inv_Kxt.T, inducing_values - mx)
+    mean = jnp.matmul(Sigma_inv_Kxt.T, inducing_values)
 
     # epsilon to ensure positive definiteness
     epsilon = 1e-14
@@ -268,8 +268,6 @@ def calculate_mean_single_from_inv_Kxx(
 
     # Σ = Kxx + Io²
     # Sigma = Kxx + cola.ops.I_like(Kxx) * obs_noise
-    mean_t = self.prior.mean_function(t)
-
     a = time.time()
     Kxt = self.prior.kernel.cross_covariance(x, t)  # this is the slow part
 
@@ -277,7 +275,7 @@ def calculate_mean_single_from_inv_Kxx(
     Sigma_inv_Kxt = inv_Kxx @ Kxt
 
     # μt  +  Ktx (Kxx + Io²)⁻¹ (y  -  μx)
-    mean = mean_t + jnp.matmul(Sigma_inv_Kxt.T, y)
+    mean = jnp.matmul(Sigma_inv_Kxt.T, y)
 
     return jnp.atleast_1d(mean.squeeze())[0]
 
@@ -297,8 +295,6 @@ def calculate_mean_std_single_from_inv_Kxx(
 
     # Σ = Kxx + Io²
     # Sigma = Kxx + cola.ops.I_like(Kxx) * obs_noise
-    mean_t = self.prior.mean_function(t)
-
     a = time.time()
     Kxt = self.prior.kernel.cross_covariance(x, t)  # this is the slow part
 
@@ -306,7 +302,7 @@ def calculate_mean_std_single_from_inv_Kxx(
     Sigma_inv_Kxt = inv_Kxx @ Kxt
 
     # μt  +  Ktx (Kxx + Io²)⁻¹ (y  -  μx)
-    mean = mean_t + jnp.matmul(Sigma_inv_Kxt.T, y)
+    mean = jnp.matmul(Sigma_inv_Kxt.T, y)
 
     # epsilon to ensure positive definiteness
     epsilon = 1e-14

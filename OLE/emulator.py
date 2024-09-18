@@ -665,9 +665,10 @@ class Emulator(BaseClass):
                     #error = variance_tolerance / relative_variance * self.hyperparameters['noise_percentage']
                     # error = ((variance_tolerance / relative_variance) ** 2. ) / len(var)
                     error = ((variance_tolerance / relative_variance)  ) / len(var) # TODO: SG: Is that correct? Seems to me ...
-
+                    
                     # experimental new option:
                     error = 1. / relative_importance[i]
+
                     # set it to an minimum value of 1e-14
                     error = max(error, 1e-14) # this ensures some white kernel. Otherwise training might fail for deterministic data, like training H0 out of h etc ...
                     
@@ -720,14 +721,14 @@ class Emulator(BaseClass):
             # the full criterium 
             if std_loglike > self.hyperparameters['quality_threshold_constant'] + self.hyperparameters['quality_threshold_linear']*delta_loglike + self.hyperparameters['quality_threshold_quadratic']*delta_loglike**2:
                 self.debug("Emulator quality criterium NOT fulfilled")
-                _ = "Quality criterium NOT fulfilled; "+"; ".join([key+ ': ' +str(value) for key, value in parameters.items()]) + " Max loglike: %f, delta loglikes: " % (max_loglike) + " ".join([str(loglike) for loglike in loglikes]) + "\n"
+                _ = "Quality criterium NOT fulfilled; "+"; ".join([key+ ': ' +str(value) for key, value in parameters.items()]) + " Max loglike: %f, delta loglikes: " % (max_loglike.sum()) + " ".join([str(loglike) for loglike in loglikes]) + "\n"
                 if write_log: 
                     self.write_to_log(_)
                 self.quality_check_unsuccessful_counter += 1
                 return False
 
         self.debug("Emulator quality criterium fulfilled")
-        _ = "Quality criterium fulfilled; "+"; ".join([key+ ': ' +str(value) for key, value in parameters.items()]) + " Max loglike: %f, delta loglikes: " % (max_loglike) + " ".join([str(loglike) for loglike in loglikes]) + "\n"
+        _ = "Quality criterium fulfilled; "+"; ".join([key+ ': ' +str(value) for key, value in parameters.items()]) + " Max loglike: %f, delta loglikes: " % (max_loglike.sum()) + " ".join([str(loglike) for loglike in loglikes]) + "\n"
         if write_log: 
             self.write_to_log(_)
         self.continuous_successful_calls += 1

@@ -116,3 +116,6 @@ class BaseClass(Logger, Timer):
 
 
 
+class constant:
+    def __init__(self, value=1):
+        self.value = value

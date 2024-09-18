@@ -135,7 +135,7 @@ class DataCache(BaseClass):
 
         self.debug(
             "Loglikelihood of incoming state: %f, Current bestfit Loglikelihood %f"
-            % (new_loglike, self.max_loglike)
+            % (new_loglike.sum(), self.max_loglike.sum())
         )
 
         # check if the new loglike is larger than the maximum loglike

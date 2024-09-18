@@ -21,13 +21,17 @@ classifiers = [
 requires-python = ">=3.10"
 
 dependencies = [
-"numpy >= 1.23.5",
-"jax >= 0.4.23",
-"jaxlib >= 0.4.23",
-"tqdm >= 4.65.0",
-"gpjax >= 0.8.0",
+"numpy",
+"jax",
+"jaxlib",
+"tqdm",
+"gpjax == 0.9.1",
+"scipy",
+"pytreeclass",
+"jaxtyping",
 "fasteners",
 "emcee",
+"matplotlib",
 ]
 
 [project.optional-dependencies]
@@ -38,6 +42,7 @@ docs = [
 "numpydoc==1.6.0",
 "myst-parser==2.0.0",
 "numpy",
+"matplotlib",
 ]
 
 [tool.flit.module]
