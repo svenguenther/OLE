@@ -13,21 +13,17 @@ import warnings
 
 import numpy as np
 
-
+#####################################
+#  Set the path to MontePython here #
+#####################################
+MP_path = '/home/guenther/software/montepython/montepython_public/montepython'
 
 
 
 # -----------------MAIN-CALL---------------------------------------------
 if __name__ == '__main__':
     # use naive vanilla parser to get the path to montepython
-    import argparse
-    parser = argparse.ArgumentParser()
-    parser.add_argument("-MP_path", help="path to montepython")
-    args, unknown = parser.parse_known_args()        
-    MP_path = args.MP_path
-    print("MontePython path: ", MP_path)
     sys.path.insert(0, MP_path)
-
 
     import io_mp       # all the input/output mechanisms
     from run import run
@@ -152,7 +148,7 @@ if __name__ == '__main__':
             return self.emulated_result
 
         def emulate_MP(self, data):
-            # chek if emulator exists and is trained
+            # check if emulator exists and is trained
             if self.emulator is None:
                 return False
             if not self.emulator.trained:
@@ -209,6 +205,12 @@ if __name__ == '__main__':
                     # Add the point to the quality points
                     self.emulator.add_quality_point(OLE_state['parameters'])
                     return True
+
+            else:
+                # if we do not require a quality check, we can just run the emulator
+                predictions = self.emulator.emulate(OLE_state['parameters'])
+                MP_sample_state = self.OLE_state_to_MP_state(predictions)
+                return True
             
 
 
@@ -250,16 +252,12 @@ if __name__ == '__main__':
             # search for python modules.
             sys.path.insert(1, classy_path)
             try:
-                from classy import Class
+                from classy import Class_OLE
             except ImportError:
                 raise io_mp.MissingLibraryError(
                     "You must have compiled the classy.pyx file. Please go to " +
                     "/path/to/class/python and run the command\n " +
                     "python setup.py build")
-            cosmo = Class()
-        elif data.cosmological_module_name == 'CLASS_OLE':
-            # TODO: Add some error handling here
-            from classy import Class_OLE
             cosmo = Class_OLE()
         else:
             raise io_mp.ConfigurationError(
