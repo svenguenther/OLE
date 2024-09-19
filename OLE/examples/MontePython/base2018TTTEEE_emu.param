@@ -1,6 +1,6 @@
 run OLE MontePython with following command:
 
-python /path/to//OLE/interfaces/montepython_interface.py run -p base2018TTTEEE_emu.param -o ./chains/ -MP_path /path/to/montepython_public/montepython
+python /path/to/OLE/interfaces/montepython_interface.py run -p base2018TTTEEE_emu.param -o ./chains/ -MP_path /path/to/montepython_public/montepython
 
 
 #------Experiments to test (separated with commas)-----
@@ -126,11 +126,8 @@ data.cosmo_arguments['P_k_max_h/Mpc'] = 1.
 
 #------ Mcmc parameters ----
 
-data.N=100000
+data.N=10000
 data.write_step=5
-
-data.cosmological_module_name = 'CLASS_OLE'
-
 
 # Emulator settings
 data.emulator_settings['min_data_points'] = 80
@@ -140,11 +137,9 @@ data.emulator_settings['min_data_points'] = 80
 
 data.emulator_settings['logfile'] = './log.txt'
 
-data.emulator_settings['explained_variance_cutoff'] = 0.999
-data.emulator_settings['min_variance_per_bin'] = 1e-2 #1e-3
+data.emulator_settings['min_variance_per_bin'] = 1e-6 #1e-3
 
-#data.emulator_settings['veto_list'] = ['bb','tp','pp','T_cmb', 'ell','A_s','H0','z_reio','Omega_Lambda','YHe','sigma8','ee','te']
-data.emulator_settings['veto_list'] = ['bb','tp','pp','T_cmb', 'ell','A_s','H0','z_reio','Omega_Lambda','YHe','sigma8']
+data.emulator_settings['veto_list'] = ['bb','tp','pp','T_cmb', 'ell']
 
 data.emulator_settings['num_iters'] = 200
 data.emulator_settings['learning_rate'] = 0.1   
@@ -152,6 +147,3 @@ data.emulator_settings['quality_threshold_constant'] = 0.5
 data.emulator_settings['quality_threshold_linear'] = 0.1
 data.emulator_settings['N_sigma'] = 4.0
 data.emulator_settings['dimensionality'] = 27
-
-
-### source ~/software/cobaya_data/code/planck/clik-main/bin/clik_profile.sh
