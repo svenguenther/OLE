@@ -482,7 +482,13 @@ class GP(BaseClass):
             # Exponential decay learning rate
             "learning_rate": 0.1,
             # Number of iterations
-            "num_iters": 200,
+            "num_iters": 100, # per iteration
+            # Maximal number of iterations
+            "max_num_iters": 1000,
+            # Early stopping criterion
+            "early_stopping": 0.05,
+            # Early stopping averaging window
+            "early_stopping_window": 10,
             # plotting directory
             "plotting_directory": None,
             # testset fraction. If we have a testset, which is not None, then we will use this fraction of the data as a testset
@@ -691,18 +697,42 @@ class GP(BaseClass):
             # Create the likelihood
             likelihood = gpx.gps.Gaussian(num_datapoints=self.D.n)
 
-            posterior = prior * likelihood
+            self.posterior = prior * likelihood
 
             # fit
-            self.opt_posterior, history = gpx.fit(
-                model=posterior,
-                objective=lambda p, d: -gpx.objectives.conjugate_mll(p, d),
-                train_data=self.D,
-                optim=ox.adam(learning_rate=lr),
-                num_iters=self.hyperparameters["num_iters"],
-                safe=True,  # what does this do?
-                key=jax.random.PRNGKey(0),
-            )
+            # here we fit the GP and 
+            converged = False
+            self.history = np.array([])
+            self.optimizer = ox.adam(learning_rate=lr)
+            num_init = self.hyperparameters["num_iters"]
+            while not converged:
+                self.posterior, history = gpx.fit(
+                    model=self.posterior,
+                    objective=lambda p, d: -gpx.objectives.conjugate_mll(p, d),
+                    train_data=self.D,
+                    optim=self.optimizer,
+                    num_iters=num_init,
+                    safe=True,  # what does this do?
+                    key=jax.random.PRNGKey(0),
+                )
+                self.history = np.append(self.history, history)
+
+                # check loss history. Check if the mean loss of the last 10 interations is not decreasing compared to the mean loss of the last 10 iterations before that
+                if len(self.history) > 2*self.hyperparameters["early_stopping_window"]:
+                    mean_loss1 = np.mean(self.history[-self.hyperparameters["early_stopping_window"]:])
+                    mean_loss2 = np.mean(self.history[-2*self.hyperparameters["early_stopping_window"]:-self.hyperparameters["early_stopping_window"]])
+
+                    if mean_loss1 > mean_loss2-self.hyperparameters["early_stopping"]:
+                        converged = True
+
+                if len(self.history) > self.hyperparameters["max_num_iters"]:
+                    # give warning
+                    self.warning("GP training did not converge within max_num_iters")
+                    converged = True
+
+                num_init *= 2
+            
+            self.opt_posterior = self.posterior
 
         self._compute_inverse_kernel_matrix()
 
@@ -718,7 +748,7 @@ class GP(BaseClass):
             ):
                 os.makedirs(self.hyperparameters["plotting_directory"] + "/loss/")
             loss_plot(
-                history,
+                self.history,
                 self._name,
                 self.hyperparameters["plotting_directory"]
                 + "/loss/"

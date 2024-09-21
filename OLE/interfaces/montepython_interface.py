@@ -41,7 +41,6 @@ if __name__ == '__main__':
 
 
 
-
     # HERE WE MODIFY CLASS
     import copy as cp
 
@@ -57,17 +56,47 @@ if __name__ == '__main__':
             def new_method(self, *args, **kwargs):
                 my_attribute = self.current_attribute
 
+                if my_attribute=='compute':
+                    self.attributes_with_relevant_output = {} # reset the attributes with relevant output
+
+                if my_attribute=='set':
+                    self.number_of_compute_calls += 1
+                    for key in self.attribute_couter.keys():
+                        self.attribute_couter[key] = 0
+
                 # if the current attribute is not in the list of attributes with relevant output, we do not want to call the method
                 if self.use_emulated_result and my_attribute in self.emulated_result.keys():
-                    res = cp.deepcopy(self.emulated_result[my_attribute])
+                    if len(self.emulated_result[my_attribute]) > self.attribute_couter[my_attribute]:
+                        res = cp.deepcopy(self.emulated_result[my_attribute][self.attribute_couter[my_attribute]])
+                    else:
+                        res = cp.deepcopy(self.emulated_result[my_attribute][-1])
+                    self.attribute_couter[my_attribute] += 1
+
+                    if self.attribute_couter[my_attribute] == self.attribute_max_couter[my_attribute]:
+                        self.attribute_couter[my_attribute] = 0
+                        # del self.attributes_with_relevant_output[my_attribute]
+                    
                 else:
                     res = self.cosmo.__getattribute__(my_attribute)(*args, **kwargs)
-
+                        
                     if res is not None and type(res) is not bool:
                         # if my_attribute not in self.attributes_with_relevant_output.keys():
-                        self.attributes_with_relevant_output[my_attribute] = cp.deepcopy(res)
+                        if my_attribute in self.attributes_with_relevant_output.keys():
+                            if type(res) != dict:
+                                if not res == self.attributes_with_relevant_output[my_attribute][-1]:
+                                    self.attributes_with_relevant_output[my_attribute].append(cp.deepcopy(res))
+                        else:
+                            self.attributes_with_relevant_output[my_attribute] = [cp.deepcopy(res)]
 
-                return res
+                        if self.number_of_compute_calls==1: # count the total number of calls to each attribute
+                            if my_attribute in self.attribute_max_couter.keys():
+                                self.attribute_max_couter[my_attribute] += 1
+                            else:
+                                self.attribute_max_couter[my_attribute] = 1
+
+                        self.attribute_couter[my_attribute] = 0
+
+                return res  
 
             callable_methods[name] = new_method
 
@@ -78,6 +107,9 @@ if __name__ == '__main__':
             self.state = None
             self.callable_methods = callable_methods
             self.current_attribute = None
+            self.attribute_max_couter = {} # this is a dictonary with the attributes and the number of times they are typically called in a likelihood calculation
+            self.attribute_couter = {} # this is a dictonary with the attributes and the number of times they were called in the current likelihood calculation
+            self.number_of_compute_calls = 0
             self.attributes_with_relevant_output = {} # this is a dictonary with the relevant attributes and their output
             self.use_emulated_result = False
             self.emulated_result = {}
@@ -104,21 +136,20 @@ if __name__ == '__main__':
 
             # go through all MP elements and addthem to the OLE quantities
             for key, value in MP_state.items():
-                if type(value) is dict:
-                    for subkey, subvalue in value.items():
-                        OLE_state['quantities'][subkey] = subvalue
+                if type(value[0]) is dict:
+                    for subkey, subvalue in value[0].items():
+                        OLE_state['quantities'][subkey] = np.array(subvalue)
                 else:
-                    OLE_state['quantities'][key] = value
+                    OLE_state['quantities'][key] = np.array(value)
 
             # we need to check the dimensionality of the quantities. They all have to be 1D arrays. If they are not, we need to covnert them
             for key, value in OLE_state['quantities'].items():
-                if type(value) is np.ndarray:
-                    if len(value.shape) > 1:
-                        OLE_state['quantities'][key] = value.flatten()
+                if len(value.shape) >= 1:
+                    OLE_state['quantities'][key] = value.flatten()
                 else:
                     OLE_state['quantities'][key] = np.array([value])
 
-            # addaparameters from data
+            # add parameters from data
             for key in data.cosmo_arguments.keys():
                 if key in data.parameters.keys():
                     OLE_state['parameters'][key] = np.array([data.cosmo_arguments[key]])
@@ -131,19 +162,16 @@ if __name__ == '__main__':
 
             # we now go through all branches of the emulated result and update the values
             for key, value in self.emulated_result.items():
-                if type(value) is dict:
-                    for subkey, subvalue in value.items():
+                if type(value[0]) is dict:
+                    for subkey, subvalue in value[0].items():
                         if type(subvalue)== float:
-                            self.emulated_result[key][subkey] = cp.deepcopy(np.array(OLE_state['quantities'][subkey]))[0]
+                            self.emulated_result[key][0][subkey] = cp.deepcopy(np.array(OLE_state['quantities'][subkey]))[0]
                         else:
-                            self.emulated_result[key][subkey] = cp.deepcopy(np.array(OLE_state['quantities'][subkey]))
+                            self.emulated_result[key][0][subkey] = cp.deepcopy(np.array(OLE_state['quantities'][subkey]))
                 else:
-                    if type(value)== float:
-                        self.emulated_result[key] = cp.deepcopy(np.array(OLE_state['quantities'][key]))[0]
-                    else:
-                        self.emulated_result[key] = cp.deepcopy(np.array(OLE_state['quantities'][key]))
+                    self.emulated_result[key] = cp.deepcopy(np.array(OLE_state['quantities'][key]))
 
-            self.use_emulated_result = True     
+            self.use_emulated_result = True  
 
             return self.emulated_result
 
