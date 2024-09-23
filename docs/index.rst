@@ -4,6 +4,7 @@
    :caption: OLÉ
 
    Overview <self>
+   general/paradigm
 
 .. toctree::
    :hidden:

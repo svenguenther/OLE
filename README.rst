@@ -17,7 +17,7 @@ It follows combines the idea of emulating computationally expensive codes with t
 
 * A explicit likelihood is available
 
-* The dimensionality of the theory code does not exceed :math:`\mathcal{O}(20)`
+* The dimensionality of the theory code does not exceed about 20
 
 
 
