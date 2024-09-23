@@ -1,5 +1,5 @@
 .. image:: https://github.com/svenguenther/OLE/raw/main/docs/logos/OLE_trans.png
-    :width: 800
+    :width: 400
 
 .. |docsshield| image:: https://img.shields.io/readthedocs/ole
    :target: http://ole.readthedocs.io
@@ -9,21 +9,49 @@ Online Learning Émulator
 
 :Documentation: |docsshield|
 
-The Online Learning Émulator - OLÉ is a framework to efficiently perform statistical analyeses in cases where one can distinguish between a Theory (simulation) code in which observables are computed and likelihood codes that compute a likelihood for a given computed observable. The efficiency comes from emulating the computationally expensive theory codes with 1-O(20) parameters. 
+The Online Learning Émulator - OLÉ is a tool to efficiently accelerate statistical analyses with a focus on Cosmology.
 
-The required training sample for the emulator is gathered during the inference process (online learning) to ensure a coverage of the relevant parameter space but not of unintesting domains. Additionally this emulator provides the user with an uncertainty estimate of the given emulation call. As a consequence we can use an active sampling algorithm that only adds new training points when the accuracy is insufficient.
+It follows combines the idea of emulating computationally expensive codes with the idea of online learning. This is particularly useful when:
 
-This implementation involves both the emulator that can be used independently (also with cobaya interface) and a collection of sampler which includes Ensemble/Minimizer/NUTS - Sampler. The minimizer and NUTS benefit from a differentiable likelihood.
+* The theory code is computationally expensive. In particular, if it is more expensive than the likelihood code
+
+* A explicit likelihood is available
+
+* The dimensionality of the theory code does not exceed :math:`\mathcal{O}(20)`
+
+
+
+Features of OLÉ:
+
+* Easy to use framework
+
+* `JAX <https://jax.readthedocs.io/en/latest/index.html>`_ based implementation
+
+* Implementation of various sampling algorithms like Ensemble, Minimizer, NUTS
+
+* Interfaces with inference tools like `Cobaya <https://github.com/CobayaSampler/cobaya>`_ and `MontePython <https://github.com/brinckmann/montepython_public>`_.
+
 
 Installation
 ------------
 
-To install OLE run::
+To install OLÉ run::
 
     git clone git@github.com:svenguenther/OLE.git
     pip install ./OLE
 
+Documentation
+-------------
+
+The documentation is available at `ReadTheDocs <https://ole.readthedocs.io>`_.
+
+
 Examples
 -------------
 
-There are some test examples in :code:`OLE/examples`. 
+Examples on the different features cam be found in the `example directory <https://github.com/svenguenther/OLE/tree/main/OLE/examples>`_. 
+
+.. image:: https://github.com/svenguenther/OLE/raw/main/docs/logos/TTK_logo.png
+   :alt: RWTH Aachen
+   :target: https://www.particle-theory.rwth-aachen.de/
+   :height: 150px

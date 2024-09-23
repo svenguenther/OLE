@@ -4,37 +4,32 @@ Cobaya Interface
 Here we describe the interface for using Cobaya with OLE. Prerequisites are that you have both Cobaya and OLE installed.
 
 In order to use Cobaya with OLE, OLE provides a Cobaya Interface that can be used to define an OLE and Cobaya compatible Theory model. 
-The likelihood model can be defined in Cobaya. Thus, when building the pipeline it might look like this:
+The likelihood model can be defined in Cobaya. Thus, when building the pipeline it might look like this::
 
-```python
-from OLE.cobaya_interface import cobaya
+    from OLE.cobaya_interface import cobaya
 
-class MyLikelihood(cobaya.Likelihood):
-    def ...
+    class MyLikelihood(cobaya.Likelihood):
+        def ...
 
-class MyTheory(cobaya.Theory):
-    def ...
-
-```
+    class MyTheory(cobaya.Theory):
+        def ...
 
 The yaml file for the pipeline looks very similar to the vanilla cobaya one.
 In fact there are only 2 differences:
 1. The theory block has now the option `emulate`, that can be set to `True` in order to use OLE to emulate the theory.
 2. The theory block has the new option of `emulator_settings`, that can be used to pass the OLE settings to the emulator.
-This might look like this:
+This might look like this::
 
-```yaml
-likelihood:
-  MyLikelihood:
-    ...
-theory:
-    MyTheory:
-        emulate: True
-        emulator_settings:
+    likelihood:
+    MyLikelihood:
         ...
-sampler:
-    ...
-```
+    theory:
+        MyTheory:
+            emulate: True
+            emulator_settings:
+            ...
+    sampler:
+        ...
 
 Otherwise the yaml file is defined as usual in Cobaya. 
 
