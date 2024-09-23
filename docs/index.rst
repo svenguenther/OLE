@@ -14,8 +14,12 @@
 
 .. toctree::
    :hidden:
-   :maxdepth: 6
+   :maxdepth: 2
    :caption: Examples
+
+   examples/quickstart
+   examples/cobaya
+   examples/montepython
 
 .. toctree::
    :hidden:
