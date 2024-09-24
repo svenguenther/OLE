@@ -137,9 +137,9 @@ data.emulator_settings['min_data_points'] = 80
 
 data.emulator_settings['logfile'] = './log.txt'
 
-data.emulator_settings['min_variance_per_bin'] = 1e-6 #1e-3
+data.emulator_settings['min_variance_per_bin'] = 1e-6 #1e-4
 
-data.emulator_settings['veto_list'] = ['bb','tp','pp','T_cmb', 'ell']
+data.emulator_settings['skip_emulation_quantities'] = ['bb','tp','pp','T_cmb', 'ell']
 
 data.emulator_settings['num_iters'] = 200
 data.emulator_settings['learning_rate'] = 0.1   

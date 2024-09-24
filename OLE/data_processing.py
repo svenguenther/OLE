@@ -78,8 +78,6 @@ class data_processor(BaseClass):
             # Load of (observable) covmats
             # If obersavables are not provided, the data is normalized using the means and stds of the data.
             # The observable covmats can be either 1 dimensional and represent the diagonal of the covariance matrix or 2 dimensional and represent the full covariance matrix.
-            # If None is given we compute the covariance matrix from the data.
-            "observable_covmat": None,
             # Normalize by full covariance matrix? If False, we normalize by the diagonal of the covariance matrix.
             # Note that a full covmat normalization is computationally more expensive.
             "normalize_by_full_covmat": False,

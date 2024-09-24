@@ -85,7 +85,7 @@ class Emulator(BaseClass):
 
 
             # veto list of parameters which are not to be emulated.
-            'veto_list': None,
+            'skip_emulation_quantities': None,
 
             # logfile for emulator
             'logfile': None,
@@ -134,7 +134,7 @@ class Emulator(BaseClass):
 
             # here we define the quality threshold for the emulator. If the emulator is below this threshold, it is retrained. We destinguish between a constant, a linear and a quadratic threshold
             'quality_threshold_constant': 0.1,
-            'quality_threshold_linear': 0.01,
+            'quality_threshold_linear': 0.05,
             'quality_threshold_quadratic': 0.0001,
 
             # testing_strategy: 
@@ -146,14 +146,6 @@ class Emulator(BaseClass):
             'testing_strategy': 'test_all',
 
             'test_early_points': 1000,
-
-
-            # should we test the performance of the emulator once it is trained? If Flase, the following parameters are not needed
-            'test_emulator': True, # OLD and not used anymore
-
-
-
-
             
         }
 
@@ -254,8 +246,8 @@ class Emulator(BaseClass):
         for quantity_name, quantity in ini_state['quantities'].items():
 
             # check whether the quantity is in the veto list
-            if self.hyperparameters['veto_list'] is not None:
-                if quantity_name in self.hyperparameters['veto_list']:
+            if self.hyperparameters['skip_emulation_quantities'] is not None:
+                if quantity_name in self.hyperparameters['skip_emulation_quantities']:
                     continue
 
             # write that we create an emulator for this quantity
@@ -647,8 +639,8 @@ class Emulator(BaseClass):
             for quantity_name, quantity in self.ini_state['quantities'].items():
 
                 # check whether the quantity is in the veto list
-                if self.hyperparameters['veto_list'] is not None:
-                    if quantity_name in self.hyperparameters['veto_list']:
+                if self.hyperparameters['skip_emulation_quantities'] is not None:
+                    if quantity_name in self.hyperparameters['skip_emulation_quantities']:
                         continue
 
                 # Ali memory bug <3

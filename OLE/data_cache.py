@@ -58,9 +58,9 @@ class DataCache(BaseClass):
             "load_cache": True,
             # delta loglike is the the maximum allowed difference of the loglike between two states which are stored in the cache.
             # It should prevent the cache from storing states which are outliers.
-            "delta_loglike": 100,
+            "delta_loglike": 50,
             # learn about the actual emulation task to estimate the 'delta_loglike'.
-            "N_sigma": 6,
+            "N_sigma": 4,
             "dimensionality": None,  # if we give the dimensionality, the code estimates 'delta_loglike' to ensure that all data cache points are within N_sigma of the likelihood.
         }
 

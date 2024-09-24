@@ -1053,10 +1053,14 @@ class Sampler(BaseClass):
                     determinant = jnp.linalg.det(fisher_information)
                     det_min = 0.01
 
-                    # if determinant < det_min:
-                    #     determinant = det_min
-
                     log_prior = jnp.log(jnp.sqrt(jnp.abs(determinant)))
+
+                if value['prior']['type'] == 'log-normal':
+                    # Note tested yet! TODO: test this!
+                    self.warning("Log-normal prior not tested yet!")
+                    log_prior += -0.5*(jnp.log(state['parameters'][key][0])-value['prior']['mean'])**2/value['prior']['std']**2 - 0.5*jnp.log(2*jnp.pi*value['prior']['std']**2)
+                    log_prior -= jnp.heaviside(value['prior']['min'] - state['parameters'][key][0],  1.0) * 99999999999999999999999.  + jnp.heaviside(state['parameters'][key][0] - value['prior']['max'], 1.0) * 99999999999999999999999.
+
 
         return log_prior
     

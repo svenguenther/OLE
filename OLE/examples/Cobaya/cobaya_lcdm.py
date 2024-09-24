@@ -106,49 +106,32 @@ info = {
                 'ignore_obsolete': True,
 
                 'emulator_settings': {
-                    'min_data_points': 40,
+                    'min_data_points': 80,
                     'kernel': 'RBF',
                     'output_directory': 'chains_emulator/output',
-                    'force': False,
+                    'min_variance_per_bin': 1e-4,
 
                     # name of the cache file
                     'cache_file': './chains_emulator/cache.pkl',
 
-                    # load the cache from the cache file
-                    'load_cache': True,
-
-                    'debug': False,
-
-                    'quality_points_radius': 0.5,
-
-                    'delta_loglike': 300,
-
                     # accuracy parameters for loglike:
-                    'quality_threshold_constant': 0.1,
+                    'quality_threshold_constant': 0.5,
                     'quality_threshold_linear': 0.1,
-                    'quality_threshold_quadratic': 0.01,  
 
                     # number of quality states to estimate from
-                    'N_quality_samples': 2,
+                    'N_quality_samples': 5,
 
-                    # quality radius for the emulator
-                    'quality_points_radius': 0.0,
+                    # plotting directory
+                    # 'plotting_directory': './chains_emulator/plots',
+                    # 'testset_fraction': 0.1,
 
-                    # the number of PCA components to use is determined by the explained variance. We require a minimum of 99.9% explained variance.
-                    'explained_variance_cutoff': 0.99,
-                    'max_output_dimensions': 10, 
-
-                    #'plotting_directory': './plots',
-
-                    # related to the training
-                    'num_iters': 60,
 
                     'logfile': 'chains_emulator/logfile.txt',
 
                     # veto to predict following quantities. 
                     # The emulator does not know intrinsicially which parameters are expected to be computed since it is build based upon a general cobaya state.
                     # This does include quantities which are in fact not used or not changing during the MCMC. We can manually veto them such that they are not predicted by the emulator.
-                    'veto_list': ['T_cmb', 'bb', 'tp', 'ell']
+                    'skip_emulation_quantities': ['T_cmb', 'bb', 'tp', 'ell']
                 },            
             },
         },
