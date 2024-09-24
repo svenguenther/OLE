@@ -48,7 +48,7 @@ With this we can construct a precision criterium for the emulator.
 It should reflect the demand that the emulator should be precise close to high likelihood regions and less precise further away from high likelihood regions.
 Therefore, we construct a function of allowed emulator error that depends on the likelihood value, the maximum likelihood value and the emulator error:
 
-:math:`$\sigma_{\text{emulator}} = \sigma_{\text{const}} + \sigma_{\text{lin}} \cdot \left(\log \frac{\mathcal{L}_\text{best-fit}}{\mathcal{L}_\text{emulator}}\right)  + \sigma_{\text{quad}} \cdot \left(\log \frac{\mathcal{L}_\text{best-fit}}{\mathcal{L}_\text{emulator}}\right)^2$`
+:math:`\sigma_{\text{emulator}} = \sigma_{\text{const}} + \sigma_{\text{lin}} \cdot \left(\log \frac{\mathcal{L}_\text{best-fit}}{\mathcal{L}_\text{emulator}}\right)  + \sigma_{\text{quad}} \cdot \left(\log \frac{\mathcal{L}_\text{best-fit}}{\mathcal{L}_\text{emulator}}\right)^2`
 
 Both the constant and linear constants can be set in the emulator settings. 
 In particular the linear constant can be interpreted as an acceptable bias in the posterior.

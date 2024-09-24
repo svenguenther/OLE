@@ -90,8 +90,8 @@ class NUTSSampler(Sampler):
         max_loglike = -jnp.inf
         bestfit = None
 
-        self.jit_likelihood_function = jax.jit(self.likelihood_function)
-        self.jit_gradient_likelihood_function = jax.jit(jax.grad(self.likelihood_function))
+        self.jit_logposterior_function = jax.jit(self.logposterior_function)
+        self.jit_gradient_logposterior_function = jax.jit(jax.grad(self.logposterior_function))
 
         if not self.emulator.trained:
             while not self.emulator.trained:
@@ -126,7 +126,6 @@ class NUTSSampler(Sampler):
                                 raise ValueError
 
 
-
                 # if we have a large number of nuisance parameters, this phase can take a lot of time if no covmat is given. 
                 # Here we provide the user with the possibility to minimize the nuisance parameters for each theory step.
                 if (self.minimize_nuisance_parameters) and (len(self.nuisance_parameters)>0):
@@ -145,7 +144,7 @@ class NUTSSampler(Sampler):
                     loglikes = jnp.array([theory_states[i]['loglike'].sum() for i in range(self.nwalkers)])
 
                 else:
-                    loglikes = jnp.array([self.compute_total_loglike_from_normalized_parameters(step[i]) for i in range(self.nwalkers)])
+                    loglikes = jnp.array([self.compute_total_logposterior_from_normalized_parameters(step[i]) for i in range(self.nwalkers)])
 
                 # update bestfit
                 if jnp.max(loglikes) > max_loglike:
@@ -230,10 +229,8 @@ class NUTSSampler(Sampler):
         self.info("Emulator trained - Start NUTS sampler now!")
 
         # create differentiable loglike
-        self.logp_and_grad = jax.jit(jax.value_and_grad(self.emulate_total_loglike_from_parameters_differentiable))     # this is the differentiable loglike
-        self.logp_sample = jax.jit(self.sample_emulate_total_loglike_from_parameters_differentiable)  
-        #self.logp_sample_noiseFree = jax.jit(self.sample_emulate_total_loglike_from_parameters_differentiable_noiseFree)                   # this samples N realizations from the emulator to estimate the uncertainty
-        # self.logp_sample = self.sample_emulate_total_loglike_from_parameters_differentiable                    # this samples N realizations from the emulator to estimate the uncertainty
+        self.logp_and_grad = jax.jit(jax.value_and_grad(self.emulate_total_logposterior_from_normalized_parameters_differentiable))     # this is the differentiable loglike
+        self.logp_sample = jax.jit(self.sample_emulate_total_logposterior_from_normalized_parameters_differentiable)  
 
         self.theta0 = self.transform_parameters_into_normalized_eigenspace(bestfit_shift)
 
@@ -355,10 +352,8 @@ class NUTSSampler(Sampler):
 
                         # update the differential loglikes
                         if rejit_required:
-                            self.logp_and_grad = jax.jit(jax.value_and_grad(self.emulate_total_loglike_from_parameters_differentiable))     # this is the differentiable loglike
-                            self.logp_sample = jax.jit(self.sample_emulate_total_loglike_from_parameters_differentiable)                    # this samples N realizations from the emulator to estimate the uncertainty
-                            #self.logp_sample_noiseFree = jax.jit(self.sample_emulate_total_loglike_from_parameters_differentiable_noiseFree)                    # this samples N realizations from the emulator to estimate the uncertainty
-                            # self.logp_sample = self.sample_emulate_total_loglike_from_parameters_differentiable                    # this samples N realizations from the emulator to estimate the uncertainty
+                            self.logp_and_grad = jax.jit(jax.value_and_grad(self.emulate_total_logposterior_from_normalized_parameters_differentiable))     # this is the differentiable loglike
+                            self.logp_sample = jax.jit(self.sample_emulate_total_logposterior_from_normalized_parameters_differentiable)                    # this samples N realizations from the emulator to estimate the uncertainty
                     else:
                         if self.emulator.hyperparameters['test_noise_levels_counter'] > 0 and self.emulator.hyperparameters['error_tolerance'] != 0.:
                             self.emulator.hyperparameters['test_noise_levels_counter'] -= 1

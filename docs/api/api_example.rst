@@ -1,7 +1,7 @@
 .. _example_api:
 
-Example API Autodoc
+API Autodoc Sampler
 =================================================
 
-.. automodule:: OLE.autodocs_example
+.. automodule:: OLE.sampler.base
    :members:

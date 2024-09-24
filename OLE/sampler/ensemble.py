@@ -38,7 +38,7 @@ class EnsembleSampler(Sampler):
         self.ndim = len(self.parameter_dict)
 
         # initialize the sampler
-        self.sampler = emcee.EnsembleSampler(self.nwalkers, self.ndim, self.compute_total_loglike_from_normalized_parameters)
+        self.sampler = emcee.EnsembleSampler(self.nwalkers, self.ndim, self.compute_total_logposterior_from_normalized_parameters)
 
         pass
     

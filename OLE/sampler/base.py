@@ -31,6 +31,37 @@ import time
 # It can be also used to interact with the emulator also without giving a specific theory oder likelihood instance.
 
 class Sampler(BaseClass):
+    """
+    Base sampler class. It connects the theory, the likelihood, and the emulator. It can be also used to interact with the emulator also without giving a specific theory oder likelihood instance.
+
+    Key features are:
+    - Initialize the sampler with the theory, the likelihood, and the emulator.
+    - Transform/Retransform the parameters into the normalized eigenspace.
+    - Generate the covariance matrix.
+    - Implement priors.
+    - Interacts with the emulator.
+
+
+
+    Attributes
+    --------------
+    theory : Theory
+        The theory instance.
+    likelihood : Likelihood
+        The likelihood instance.
+    parameter_dict : dict
+        A dictionary containing the parameters and their properties such as priors, proposals, etc.
+    emulator : Emulator
+        The emulator instance.
+
+    Methods
+    --------------
+    initialize :
+        Initialises the sampler. It takes the parameters, the likelihood, the theory, the emulator, and the settings as input.
+    update_covmat :
+        Updates the covariance matrix.
+
+    """
 
     theory: Theory
     likelihood: Likelihood
@@ -52,6 +83,34 @@ class Sampler(BaseClass):
                     theory_settings={},
                     sampling_settings={},
                    **kwargs):
+
+        """
+        Initialises the sampler. It takes the parameters, the likelihood, the theory, the emulator, and the settings as input.
+
+        Parameters
+        --------------
+        parameters : dict
+            A dictionary containing the parameters and their properties such as priors, proposals, etc.
+        likelihood : Likelihood
+            The likelihood instance.
+        theory : Theory
+            The theory instance.
+        emulator : Emulator
+            The emulator instance.
+        emulator_settings : dict
+            The settings for the emulator. Will be passed to the emulator when intialized.
+        likelihood_settings : dict
+            The settings for the likelihood. Will be passed to the likelihood when intialized.
+        theory_settings : dict
+            The settings for the theory. Will be passed to the theory when intialized.
+        sampling_settings : dict
+            The settings for the sampler. Will be passed to the sampler.
+        **kwargs : dict
+            Catch all rubbish.
+
+        """
+
+
 
         # Save all the settings
         self.emulator_settings = emulator_settings
@@ -192,6 +251,16 @@ class Sampler(BaseClass):
         pass
 
     def update_covmat(self, covmat):
+        """
+        Updates the parameter covariance matrix and computed eigenvalues and eigenvectors in order to transform the parameters into the normalized eigenspace. 
+        It also checks for negative eigenvalues and nans or infs in the matrix.
+
+        Parameters
+        --------------
+        covmat : ndarray
+            The new covariance matrix.
+
+        """
         # this function updates the covmat
         self.covmat = covmat
 
@@ -229,6 +298,19 @@ class Sampler(BaseClass):
         return 0
 
     def estimate_effective_sample_size(self, chain):
+        """
+        This function estimates the effective sample size of the chain. It is computed for each parameter.
+
+        Parameters
+        --------------
+        chain : ndarray
+            The current status of the chain.
+
+        Returns
+        --------------
+        ndarray :
+            The effective sample size for each parameter.
+        """
         ESS = np.zeros(chain.shape[1])
 
         for i in range(chain.shape[1]):
@@ -240,8 +322,10 @@ class Sampler(BaseClass):
         return ESS
 
     def denormalize_inv_hessematrix(self, matrix):
+        """ 
+        This function denormalizes the inverse hessian matrix according to the eigenspace.
+        """
         # this function denormalizes the matrix
-
         a = jnp.dot(self.eigenvectors,  
                     jnp.dot( 
                         jnp.dot(
@@ -250,15 +334,31 @@ class Sampler(BaseClass):
         return a
 
     def transform_parameters_into_normalized_eigenspace(self, parameters):
+        """ 
+        This function transforms the parameters into the normalized eigenspace.
+        """
         # this function transforms the parameters into the normalized eigenspace
         return jnp.dot( self.inv_eigenvectors, ( parameters - self.proposal_means ))/jnp.sqrt(self.eigenvalues)
     
     def retranform_parameters_from_normalized_eigenspace(self, parameters):
+        """
+        This function transforms the parameters back from the normalized eigenspace.
+        """
         # this function transforms the parameters back from the normalized eigenspace
         return jnp.dot(self.eigenvectors, parameters * jnp.sqrt(self.eigenvalues) ) + self.proposal_means
 
     def generate_covmat(self):
-        # this function generates the covariance matrix either by loading it from a file or by using the proposal lengths. Note that the covmat might miss some entries which are to be filled with the proposal lengths.
+        """
+        This function generates the covariance matrix either by loading it from a file or by using the proposal lengths. 
+        It is called during the initialization of the sampler.
+        Note that the covmat might miss some entries which are to be filled with the proposal lengths.
+
+        Returns
+        --------------
+        ndarray :
+            The covariance matrix.
+        """
+
         
         # first: create diagonal covmat from proposal lengths
         covmat = np.zeros((len(self.parameter_dict), len(self.parameter_dict)))
@@ -289,7 +389,22 @@ class Sampler(BaseClass):
         return covmat
 
     def get_initial_position(self, N=1, normalized=False):
-        # this function returns N initial positions for the sampler. It samples from the 'ref' values of the parameters.
+        """
+        This function returns N initial positions for the sampler according to the parameter informations. 
+        It samples from the 'ref' values of the parameters.
+
+        Parameters
+        --------------
+        N : int
+            The number of initial positions.
+        normalized : bool
+            If True, the parameters are returned in the normalized eigenspace.
+
+        Returns
+        --------------
+        ndarray :
+            The initial positions.
+        """
         positions = []
         for i in range(N):
             position = []
@@ -315,7 +430,11 @@ class Sampler(BaseClass):
             return np.array(positions)
 
     def get_bounds(self, normalized=False):
-        # this function returns the bounds of the parameters
+        """
+        This function returns the bounds of the parameters.
+        It is used for the minimizer.
+        """
+
         bounds = []
         for key, value in self.parameter_dict.items():
             if 'prior' in list(value.keys()):
@@ -339,6 +458,10 @@ class Sampler(BaseClass):
             return bounds
 
     def test_pipeline(self):
+        """
+        This function creates a test state from the given parameters.
+        It is used to test the pipeline when initializing the sampler in order to ensure that the emulator, the theory, and the likelihood are working correctly.
+        """
         # Create a test state from the given parameters.
         state = {'parameters': {}, 'quantities': {}, 'loglike': None, 'loglike_gradient': {}}
 
@@ -369,9 +492,26 @@ class Sampler(BaseClass):
 
 
     def calculate_data_covmat(self, parameters):
-        # This function computes the hessian of the likelihood 
-        # with respect to a certain point in parameter space. This can be understtod as an effective covmat of the data.
-        # The hessian is calculated by jax.hessian
+        """
+        This function computes the hessian of the likelihood with respect to a certain point in parameter space. 
+        This can be interpreded as the data covariance matrix.
+        The hessian is calculated by jax.hessian.
+        Note that this can only be done for differentiable likelihoods.
+        Additionally, it tends to be numerically unstable for large parameter spaces.
+
+        It is particularly useful for the emulator to normalize the data by the data covariance matrix.
+        For example data points with large uncertainties are less important for the emulator training.
+
+        Parameters
+        --------------
+        parameters : ndarray
+            The parameters for which the hessian is calculated.
+
+        Returns
+        --------------
+        dict :
+            The data covariance matrix for each observable.
+        """
 
         # Run the emulator to compute the observables.
         state = self.emulator.emulate(parameters)
@@ -434,10 +574,27 @@ class Sampler(BaseClass):
 
         return data_covmats     
 
-    # This function computes the loglikelihoods for given parameters.
+    # This function computes the logposteriors for given parameters.
     # If possible it uses the emulator to speed up the computation.
     # If the emulator is not trained or the emulator is not good enough, the theory code is used.
-    def compute_loglike_from_normalized_parameters(self, parameters):
+    def compute_logposterior_from_normalized_parameters(self, parameters):
+        """
+        This function computes the logposteriors for given normalized parameters.
+        If possible it uses the emulator to speed up the computation, otherwise the theory code is used.
+
+        It checks the emulator for its performance and decides whether to use the emulator or the theory code.
+        Eventually, the logposterior is computed and returned.
+
+        Parameters
+        --------------
+        parameters : ndarray
+            The parameters for which the logposterior is computed.
+
+        Returns
+        --------------
+        float :
+            The logposterior.
+        """
         self.start()
 
         RNGkey = jax.random.PRNGKey(int(time.clock_gettime_ns(0)))
@@ -509,7 +666,40 @@ class Sampler(BaseClass):
         return state['loglike']
 
 
+    def compute_total_logposterior_from_normalized_parameters(self, parameters):
+        """
+        This function computes the total loglikelihood for given normalized parameters.
+        It sums up the loglikelihoods for each observable.
+        It calls the function compute_logposterior_from_normalized_parameters for each observable.
+
+        Parameters
+        --------------
+        parameters : ndarray
+            The parameters for which the loglikelihood is computed.
+
+        Returns
+        --------------
+        float :
+            The total loglikelihood.
+        """
+        res = self.compute_logposterior_from_normalized_parameters(parameters)
+        return res.sum()
+
     def compute_theory_from_normalized_parameters(self, parameters):
+        """
+        This function computes only the theory (and thus the observational data) for given normalized parameters.
+        It is used in the NUTS sampler to accelerate to initial burn-in phase by minimizing the nuisance parameters for the theory code.
+
+        Parameters
+        --------------
+        parameters : ndarray
+            The normalized parameters for which the theory is computed.
+
+        Returns
+        --------------
+        dict :
+            The state after the theory computation.
+        """
         self.start()
 
         # rescale the parameters
@@ -556,7 +746,23 @@ class Sampler(BaseClass):
         return state
     
     @partial(jax.jit, static_argnums=(0))
-    def likelihood_function(self, parameter_values, local_state):
+    def logposterior_function(self, parameter_values, local_state):
+        """ 
+        This function computes the loglikelihoods for given parameters and a given theory state.
+        It is used in the minimization of the nuisance parameters for the NUTS sampler.
+
+        Parameters
+        --------------
+        parameter_values : ndarray
+            The parameters for which the loglikelihood is computed.
+        local_state : dict
+            The state of the theory code.
+
+        Returns
+        --------------
+        float :
+            The loglikelihood.
+        """
         for i, key in enumerate(self.nuisance_parameters):
             local_state['parameters'][key] = jnp.array([parameter_values[i]])*self.nuisance_stds[i] + self.nuisance_means[i]
         local_state = self.likelihood.loglike_state(local_state)
@@ -567,19 +773,35 @@ class Sampler(BaseClass):
     
 
     def nuisance_minimization(self, state):
+        """
+        This function minimizes the nuisance parameters for a given state. 
+        It uses the minimize function from scipy.optimize to minimize the logposterior.
+        Additionally, it utilizes the gradient of the logposterior to speed up the minimization.
+        It uses the logposterior_function to compute the logposteriors for given parameters and a given theory state.
+
+        Parameters
+        --------------
+        state : dict
+            The state of the theory code.
+
+        Returns
+        --------------
+        dict :
+            The state after the minimization of the nuisance parameters
+        """
         
         local_state = copy.deepcopy(state)
         
         # minimize the nuisance parameters
         x0 = (jnp.array([state['parameters'][key][0] for key in self.nuisance_parameters])-self.nuisance_means)/self.nuisance_stds
 
-        state['loglike'] = -self.jit_likelihood_function(x0, local_state)
+        state['loglike'] = -self.jit_logposterior_function(x0, local_state)
         # check for nan
         if jnp.isnan(state['loglike']):
             self.error("Nuisance minimization: loglike is nan")
             return state
 
-        result = minimize(self.jit_likelihood_function, x0, jac=self.jit_gradient_likelihood_function, method='TNC', args=(local_state), options={'disp': False}, tol=1e-1)
+        result = minimize(self.jit_logposterior_function, x0, jac=self.jit_gradient_logposterior_function, method='TNC', args=(local_state), options={'disp': False}, tol=1e-1)
         self.debug("minimization result: %s", result)
 
         state['loglike'] = jnp.array([float(-result.fun)])
@@ -588,20 +810,42 @@ class Sampler(BaseClass):
 
         return state
 
-    # This function emulates the loglikelihoods for given parameters.
-    def emulate_loglike_from_normalized_parameters_differentiable(self, parameters_norm):
-        # this function is similar to the compute_loglike_from_parameters, but it returns the loglike and does not automaticailly add the state to the emulator. Thus it is differentiable.
-        # if RNG is not None, we provide the mean estimate, otherwise we sample from the emulator
+    def emulate_logposterior_from_normalized_parameters_differentiable(self, parameters_norm):
+        """ 
+        This function emulates the logposteriors for given parameters.
+        It does not automatically add the state to the emulator. Thus it is differentiable.
+
+        Parameters
+        --------------
+        parameters_norm : ndarray
+            The normalized parameters for which the logposterior is computed.
+
+        Returns
+        --------------
+        float :
+            The logposterior.
+        """
 
         # rescale the parameters
         parameters = self.retranform_parameters_from_normalized_eigenspace(parameters_norm)
 
-        return self.emulate_loglike_from_parameters_differentiable(parameters)
+        return self.emulate_logposterior_from_parameters_differentiable(parameters)
 
-    # This function emulates the loglikelihoods for given parameters.
-    def emulate_loglike_from_parameters_differentiable(self, parameters):
-        # this function is similar to the compute_loglike_from_parameters, but it returns the loglike and does not automaticailly add the state to the emulator. Thus it is differentiable.
-        # if RNG is not None, we provide the mean estimate, otherwise we sample from the emulator
+    def emulate_logposterior_from_parameters_differentiable(self, parameters):
+        """ 
+        This function emulates the logposteriors for given parameters.
+        It does not automatically add the state to the emulator. Thus it is differentiable.
+
+        Parameters
+        --------------
+        parameters : ndarray
+            The parameters for which the logposterior is computed.
+
+        Returns
+        --------------
+        float :
+            The logposterior.
+        """
         self.start()
 
         # Run the sampler.
@@ -650,9 +894,21 @@ class Sampler(BaseClass):
         return state['loglike']
 
     # This function emulates the loglikelihoods for given parameters.
-    def emulate_loglike_without_prior_from_parameters_differentiable(self, parameters):
-        # this function is similar to the compute_loglike_from_parameters, but it returns the loglike and does not automaticailly add the state to the emulator. Thus it is differentiable.
-        # if RNG is not None, we provide the mean estimate, otherwise we sample from the emulator
+    def emulate_loglikelihood_from_parameters_differentiable(self, parameters):
+        """
+        This function emulates the loglikelihoods for given parameters. Note that it does not consider the posterior.
+        It does not automatically add the state to the emulator. Thus it is differentiable.
+
+        Parameters
+        --------------
+        parameters : ndarray
+            The parameters for which the loglikelihood is computed.
+
+        Returns
+        --------------
+        float :
+            The loglikelihood.
+        """
         self.start()
 
         # Run the sampler.
@@ -670,9 +926,27 @@ class Sampler(BaseClass):
         return state['loglike']
 
 
-    def sample_emulate_loglike_from_normalized_parameters_differentiable(self, parameters, N=1, RNGkey=jax.random.PRNGKey(int(time.time())), noise = 0.):
-        # this function is similar to the compute_loglike_from_parameters, but it returns the loglike and does not automaticailly add the state to the emulator. Thus it is differentiable.
-        # if RNG is not None, we provide the mean estimate, otherwise we sample from the emulator
+    def sample_emulate_logposterior_from_normalized_parameters_differentiable(self, parameters, N=1, RNGkey=jax.random.PRNGKey(int(time.time())), noise = 0.):
+        """
+        This function samples the logposteriors for given normalized parameters from the emulator in order to test its performance.
+
+        Parameters
+        --------------
+        parameters : ndarray
+            The normalized parameters for which the logposterior is computed.
+        N : int
+            The number of samples.
+        RNGkey : jax.random.PRNGKey
+            The random key for the sampling.
+        noise : float
+            The noise level for the sampling.
+
+        Returns
+        --------------
+        ndarray :
+            The logposteriors for the states.
+        """
+
         self.start()
 
         # rescale the parameters
@@ -698,40 +972,53 @@ class Sampler(BaseClass):
         self.increment(self.logger)
         return loglikes
 
-    def compute_total_loglike_from_normalized_parameters(self, parameters):
-
-        res = self.compute_loglike_from_normalized_parameters(parameters)
+    
+    def emulate_total_logposterior_from_normalized_parameters_differentiable(self, parameters):
+        """
+        This function emulates the total loglikelihood for given normalized parameters.
+        """
+        res = self.emulate_logposterior_from_normalized_parameters_differentiable(parameters)
         return res.sum()
     
-    def emulate_total_loglike_from_parameters_differentiable(self, parameters):
-        res = self.emulate_loglike_from_normalized_parameters_differentiable(parameters)
-        return res.sum()
-    
-    def sample_emulate_total_loglike_from_parameters_differentiable(self, parameters, noise = 0):
+    def sample_emulate_total_logposterior_from_normalized_parameters_differentiable(self, parameters, noise = 0):
+        """
+        This function samples the total loglikelihood for given normalized parameters from the emulator in order to test its performance.
+        """
         N = self.emulator.hyperparameters['N_quality_samples']
-        res = [_.sum() for _ in self.sample_emulate_loglike_from_normalized_parameters_differentiable(parameters, N=N , noise = noise)]
+        res = [_.sum() for _ in self.sample_emulate_logposterior_from_normalized_parameters_differentiable(parameters, N=N , noise = noise)]
         return res
 
-    def emulate_total_minusloglike_from_normalized_parameters_differentiable(self, parameters):
-        res = -self.emulate_loglike_from_normalized_parameters_differentiable(parameters)
-        return res.sum()
-
-    def emulate_total_minusloglike_from_parameters_differentiable(self, parameters):
-        res = -self.emulate_loglike_from_parameters_differentiable(parameters)
-        return res.sum()
-    
-    def emulate_total_minusloglike_without_prior_from_parameters_differentiable(self, parameters):
-        res = -self.emulate_loglike_without_prior_from_parameters_differentiable(parameters)
+    def emulate_total_minuslogposterior_from_normalized_parameters_differentiable(self, parameters):
+        """ 
+        This function emulates the total minus logposterior for given normalized parameters.
+        """
+        res = -self.emulate_logposterior_from_normalized_parameters_differentiable(parameters)
         return res.sum()
     
-    def sample_emulate_total_minusloglike_from_parameters_differentiable(self, parameters):
-        N = self.emulator.hyperparameters['N_quality_samples']
-        res = [-_.sum() for _ in self.sample_emulate_loglike_from_normalized_parameters_differentiable(parameters, N=N)]
-        return res
-
+    def emulate_total_minusloglikelihood_from_parameters_differentiable(self, parameters):
+        """
+        This function emulates the total minus loglikelihood for given parameters.
+        """
+        res = -self.emulate_loglikelihood_from_parameters_differentiable(parameters)
+        return res.sum()
+    
     def compute_logprior(self, state):
-        # To be implemented.
-        # if we have a flat prior:
+        """
+        This function computes the logprior for a given state.
+        It uses the parameter_dict to compute the logprior.
+        If the prior is not defined, it uses a flat prior.
+        Possible priors are: 'uniform', 'gaussian', 'jeffreys', log-normal, etc.
+
+        Parameters
+        --------------
+        state : dict
+            The state for which the logprior is computed.
+
+        Returns
+        --------------
+        float :
+            The logprior.
+        """
         log_prior = 0.0
         for key, value in self.parameter_dict.items():
 
@@ -757,7 +1044,7 @@ class Sampler(BaseClass):
                     else:
                         if self.hessian_function is None:
                             params = jnp.array([state['parameters'][_][0] for _ in state['parameters'].keys()])
-                            self.hessian_function = jax.jit(jax.hessian(self.emulate_total_minusloglike_without_prior_from_parameters_differentiable))
+                            self.hessian_function = jax.jit(jax.hessian(self.emulate_total_minusloglikelihood_from_parameters_differentiable))
                             fisher_information = self.hessian_function(params)
                         else:
                             params = jnp.array([state['parameters'][_][0] for _ in state['parameters'].keys()])
@@ -774,8 +1061,23 @@ class Sampler(BaseClass):
         return log_prior
     
     def compute_logprior_with_border(self, state):
-        # This function computes the logprior. However, when we exceed the borders of the prior, we project the parameters to the border and add a penalty term to the logprior.
-        # if we have a flat prior:
+        """ 
+        This function computes the logprior for a given state.
+        It uses the parameter_dict to compute the logprior.
+        If the prior is not defined, it uses a flat prior.
+        Possible priors are: 'uniform', 'gaussian', 'jeffreys', log-normal, etc.
+        If we exceed the borders of the prior, we project the parameters to the border and add a penalty term to the logprior.
+
+        Parameters
+        --------------
+        state : dict
+            The state for which the logprior is computed.
+
+        Returns
+        --------------
+        float :
+            The logprior.
+        """
         log_prior = 0.0
 
         for key, value in self.parameter_dict.items():
@@ -800,7 +1102,20 @@ class Sampler(BaseClass):
         return log_prior
 
     def stitch_parameters(self, parameters):
-        # this function copies the parameters and if they exceed the borders, they are projected to the border
+        """
+        This function stitches the parameters to the allowed parameter space.
+        If the parameters exceed the borders, they are projected to the border.
+
+        Parameters
+        --------------
+        parameters : dict
+            The parameters for which the logprior is computed.
+
+        Returns
+        --------------
+        dict :
+            The stitched parameters.
+        """
         stitched_parameters = copy.deepcopy(parameters)
         for key, value in self.parameter_dict.items():
             if 'prior' in list(value.keys()):
