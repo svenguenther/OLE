@@ -164,7 +164,7 @@ class Sampler(BaseClass):
             'plotting_directory': None,
 
             # status print frequency
-            'status_print_frequency': 50,
+            'status_print_frequency': 100,
 
         }
 

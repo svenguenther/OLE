@@ -88,7 +88,7 @@ emulator_settings = {
     # 'compute_data_covmat': True,
     'data_covmat_directory': './spt_data_covmats',
 
-    'veto': ['bb'],
+    'skip_emulation_quantities': ['bb'],
 
 }
 
