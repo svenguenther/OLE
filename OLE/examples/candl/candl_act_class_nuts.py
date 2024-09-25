@@ -94,7 +94,7 @@ sampling_settings = {
 
 # load sampler 
 from OLE.sampler import EnsembleSampler, Sampler, NUTSSampler
-my_sampler = NUTSSampler(debug=True)
+my_sampler = NUTSSampler(debug=False)
 # my_sampler = EnsembleSampler()
 
 
