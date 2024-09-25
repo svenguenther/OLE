@@ -185,9 +185,11 @@ info = {
                     #   'covmat': '/home/guenther/software/projects/OLE/OLE/OLE/examples/Cobaya/lcdm.covmat',
                       'drag': False,
                       "measure_speeds": True,
-                      #'oversample_power': 0.4,
+
+                      # YOU NEED TO MANUALY SET BLOCKING WHEN USING CAMB. Otherwise the emulator will not work.
                       'blocking': [ [1, ['ombh2', 'omch2', 'tau', 'H0', 'logA', 'ns']], 
                                     [6, ['A_planck', 'calib_100T', 'calib_217T', 'A_cib_217', 'xi_sz_cib', 'A_sz', 'ksz_norm', 'gal545_A_100', 'gal545_A_143', 'gal545_A_143_217', 'gal545_A_217', 'ps_A_100_100', 'ps_A_143_143', 'ps_A_143_217', 'ps_A_217_217', 'galf_TE_A_100', 'galf_TE_A_100_143', 'galf_TE_A_100_217', 'galf_TE_A_143', 'galf_TE_A_143_217', 'galf_TE_A_217']]],
+                      
                       'proposal_scale': 1.9,
                       'output_every': 1
       
