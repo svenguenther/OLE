@@ -1,6 +1,17 @@
-run OLE MontePython with following command:
+#######################################################
+# Test param file for the OLE - MontePython Interface #
+#######################################################
 
-python /path/to/OLE/interfaces/montepython_interface.py run -p base2018TTTEEE_emu.param -o ./chains/ -MP_path /path/to/montepython_public/montepython
+#
+# Before you can run OLE with MontePython you need to specify the path of your MontePython installation inside /path/to/OLE/interfaces/montepython_interface.py
+#
+
+#
+# Then you can run this MP param files with the ordinary features:
+#
+# python /path/to/OLE/interfaces/montepython_interface.py run -p base2018TTTEEE_emu.param -o ./chains/
+#
+
 
 
 #------Experiments to test (separated with commas)-----
