@@ -40,6 +40,8 @@ To install OLÉ run::
     git clone git@github.com:svenguenther/OLE.git
     pip install ./OLE
 
+If you plan to use OLE with MontePython, you should change the variable ``MP_path`` in ``OLE/interfaces/montepython_interface.py`` to redirect to your ``MontePython/montepython`` directory.
+
 Documentation
 -------------
 

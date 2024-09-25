@@ -16,7 +16,7 @@ import numpy as np
 #####################################
 #  Set the path to MontePython here #
 #####################################
-MP_path = '/home/guenther/software/montepython/montepython_public/montepython'
+MP_path = '/path/to/your/montepython_public/montepython'
 
 
 
