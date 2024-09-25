@@ -46,35 +46,30 @@ emulator_settings = {
 
     # name of the cache file
     'cache_file': './output_clang_act_nuts/cache.pkl',
+    # load the cache from previous runs if possible. If set to false, the cache is overwritten.
+    'load_cache': True,
 
     # accuracy parameters for loglike:
     'quality_threshold_constant': 1.0,
     'quality_threshold_linear': 0.1,
 
     # related so sampler
-    'explained_variance_cutoff': 0.9999,
-    'min_variance_per_bin': 1e-3,
+    'min_variance_per_bin': 1e-4,
 
-    'sparse_GP_points':10,
     # cache criteria
     'dimensionality': 7,
     'N_sigma': 4.0,
 
     # 'plotting_directory': './output_clang_act_nuts/plots_sampler_clang_nuts',
     # 'testset_fraction': 0.1,
-    'logfile': './output_clang_act_nuts/log.txt',
-    'plotting_directory': './output_clang_act_nuts/',
-
-    'learning_rate': 0.1,
-    'num_iters': 300,
-    'kernel_fitting_frequency': 20,
+    'logfile': './output_clang_act_nuts/log',
 
     # 'compute_data_covmat': True,
     'data_covmat_directory': './act_data_covmats',
 
     'debug': False,
 
-    'veto': ['bb'],
+    'skip_emulation_quantities': ['bb'],
 
 }
 
@@ -93,32 +88,38 @@ sampling_settings = {
 
     # M adapt # burn-in of NUTS
     'M_adapt': 200,
+    'minimize_nuisance_parameters': True,
 }
 
 
 # load sampler 
 from OLE.sampler import EnsembleSampler, Sampler, NUTSSampler
-my_sampler = NUTSSampler()
+my_sampler = NUTSSampler(debug=True)
 # my_sampler = EnsembleSampler()
 
 
-my_parameters = {'h': {'prior': {'min': 0.6, 'max': 0.8}, 
+my_parameters = {'h': {'prior': {'min': 0.6, 'max': 0.8, 'type': 'uniform'},
                        'ref': {'mean': 0.68, 'std': 0.01},
                        'proposal': 0.01,},
-                    'n_s': {'prior': {'min': 0.9, 'max': 1.1}, 'ref': {'mean': 0.965, 'std': 0.005},
+                    'n_s': {'prior': {'min': 0.9, 'max': 1.1, 'type': 'uniform'}, 
+                            'ref': {'mean': 0.965, 'std': 0.005},
                             'proposal': 0.01,}, 
-                    'omega_b': {'prior': {'min': 0.02, 'max': 0.024}, 'ref': {'mean': 0.0223, 'std': 0.0003},
+                    'omega_b': {'prior': {'min': 0.02, 'max': 0.024, 'type': 'uniform'}, 
+                                'ref': {'mean': 0.0223, 'std': 0.0003},
                                 'proposal': 0.0002,}, 
-                    'omega_cdm': {'prior': {'min': 0.10, 'max': 0.14}, 'ref': {'mean': 0.120, 'std': 0.002},
-                                  'proposal': 0.002,}, 
-                    'tau_reio': {'prior': {'min': 0.01, 'max': 0.1}, 'ref': {'mean': 0.055, 'std': 0.01},
+                    'omega_cdm': {'prior': {'min': 0.10, 'max': 0.14, 'type': 'uniform'}, 
+                                    'ref': {'mean': 0.120, 'std': 0.002},
+                                    'proposal': 0.002,}, 
+                    'tau_reio': {'prior': {'min': 0.01, 'max': 0.1, 'type': 'uniform'}, 
+                                'ref': {'mean': 0.055, 'std': 0.01},
                                  'proposal': 0.01,},
-                    'logA': {'prior': {'min': 2.8, 'max': 3.3}, 'ref': {'mean': 3.1, 'std': 0.05},
+                    'logA': {'prior': {'min': 2.8, 'max': 3.3, 'type': 'uniform'}, 
+                                'ref': {'mean': 3.1, 'std': 0.05},
                              'proposal': 0.05},
 
                     # ACT_DR4_TTTEEE
                     # Nuisance parameters are laoded automaticially
-                    # 'yp': {'prior': {'min': 0.9, 'max': 1.1}, 'ref': {'mean': 1.0, 'std': 0.0001}, 'proposal': 0.0001},
+                    'yp': {'prior': {'min': 0.9, 'max': 1.1, 'type': 'uniform'}, 'ref': {'mean': 1.0, 'std': 0.0001}, 'proposal': 0.0001},
 }
     
 

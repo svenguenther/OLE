@@ -55,7 +55,7 @@ class DataCache(BaseClass):
             # the cache file is the hdf5 file in which the cache is stored
             "cache_file": "cache.pkl",
             # load the cache from the cache file
-            "load_cache": True,
+            "load_cache": False,
             # delta loglike is the the maximum allowed difference of the loglike between two states which are stored in the cache.
             # It should prevent the cache from storing states which are outliers.
             "delta_loglike": 50,

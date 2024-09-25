@@ -140,8 +140,13 @@ data.cosmo_arguments['P_k_max_h/Mpc'] = 1.
 data.N=10000
 data.write_step=5
 
-# Emulator settings
+#------ Emulator parameters ----
 data.emulator_settings['min_data_points'] = 80
+
+# Cache settings
+data.emulator_settings['load_cache'] = True
+data.emulator_settings['cache_file'] = './cache.pkl'
+
 
 # data.emulator_settings['plotting_directory'] = './plots_spt_clang_nuts'
 # data.emulator_settings['testset_fraction'] = 0.1
@@ -152,8 +157,6 @@ data.emulator_settings['min_variance_per_bin'] = 1e-6 #1e-4
 
 data.emulator_settings['skip_emulation_quantities'] = ['bb','tp','pp','T_cmb', 'ell']
 
-data.emulator_settings['num_iters'] = 200
-data.emulator_settings['learning_rate'] = 0.1   
 data.emulator_settings['quality_threshold_constant'] = 0.5
 data.emulator_settings['quality_threshold_linear'] = 0.1
 data.emulator_settings['N_sigma'] = 4.0

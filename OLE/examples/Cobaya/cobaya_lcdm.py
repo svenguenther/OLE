@@ -107,12 +107,14 @@ info = {
 
                 'emulator_settings': {
                     'min_data_points': 80,
-                    'kernel': 'RBF',
+
                     'output_directory': 'chains_emulator/output',
                     'min_variance_per_bin': 1e-4,
 
                     # name of the cache file
                     'cache_file': './chains_emulator/cache.pkl',
+                    # load the cache from previous runs if possible. If set to false, the cache is overwritten.
+                    'load_cache': True,
 
                     # accuracy parameters for loglike:
                     'quality_threshold_constant': 0.5,
@@ -125,8 +127,7 @@ info = {
                     # 'plotting_directory': './chains_emulator/plots',
                     # 'testset_fraction': 0.1,
 
-
-                    'logfile': 'chains_emulator/logfile.txt',
+                    'logfile': 'chains_emulator/logfile',
 
                     # veto to predict following quantities. 
                     # The emulator does not know intrinsicially which parameters are expected to be computed since it is build based upon a general cobaya state.

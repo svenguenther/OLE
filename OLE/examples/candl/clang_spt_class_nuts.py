@@ -62,14 +62,16 @@ emulator_settings = {
 
     # name of the cache file
     'cache_file': './output_clang_spt_nuts/cache.pkl',
+    # load the cache from previous runs if possible. If set to false, the cache is overwritten.
+    'load_cache': True,
 
     # accuracy parameters for loglike:
     'quality_threshold_constant': 1.0,
     'quality_threshold_linear': 0.1,
 
     # related so sampler
-    'explained_variance_cutoff': 0.9999,
-    'min_variance_per_bin': 1e-3,
+    'min_variance_per_bin': 1e-4,
+
 
     # cache criteria
     'dimensionality': 39,
@@ -82,13 +84,11 @@ emulator_settings = {
     # 'testset_fraction': 0.1,
     'logfile': './output_clang_spt_nuts/log.txt',
 
-    'learning_rate': 0.1,
-    'num_iters': 300,
-
     # 'compute_data_covmat': True,
     'data_covmat_directory': './spt_data_covmats',
 
     'skip_emulation_quantities': ['bb'],
+
 
 }
 
@@ -105,11 +105,7 @@ theory_settings = {
 sampling_settings = {
     # output directory
     'output_directory': './output_clang_spt_nuts',
-
-    'nwalkers':1,
-
-    # M adapt # burn-in of NUTS
-    'M_adapt': 200,
+    'minimize_nuisance_parameters': True,
 }
 
 

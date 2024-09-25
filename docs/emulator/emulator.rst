@@ -22,7 +22,7 @@ These settings are independent of the sampling method.
      - ``cache.pkl``
      - File in which the cache is going to be stored in.
    * - ``load_cache``
-     - ``True``
+     - ``False``
      - If set ``True``, the cache of a previous run is loaded. Note that if the likelihood is changed, this can corrupt your cache leading to bugs! Thus, if you change the theory or likelihood code, always create a new cache or set this flag to ``False``. In this case the old cache file will be overwritten.
    * - ``delta_loglike``
      - ``50.0``
