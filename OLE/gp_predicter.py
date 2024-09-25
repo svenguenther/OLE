@@ -623,7 +623,7 @@ class GP(BaseClass):
 
                     # print(gpx.objectives.collapsed_elbo(posterior, self.D))
 
-                    self.opt_posterior, history = gpx.fit(
+                    self.opt_posterior, self.history = gpx.fit(
                         model=q,
                         objective=lambda p, d: -gpx.objectives.collapsed_elbo(p, d),
                         train_data=self.D,
