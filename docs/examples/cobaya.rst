@@ -45,3 +45,6 @@ Further efficiency can be gained by running the emulator in parrallel via MPI. N
 Since they are not well parrallelized, it is recommended to use many chains but only with 1-2 cores per MPI task. OLE will use a shared cache for all chains in order to be as data efficient as possible.
 
 When using the Cobaya interface with cosmological codes, such as CAMB or CLASS, we require a specific way of importing the interface. You find this in the examples directory of the OLE repository.
+
+**IMPORTANT WHEN USING WITH CAMB:** 
+When using the Cobaya interface with CAMB, you need to make sure that you **MANUALLY** set blocking such that **all** cosmo parameter are in one block!
