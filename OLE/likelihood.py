@@ -18,6 +18,7 @@ class Likelihood(BaseClass):
         return theory_settings
 
     def initialize(self, **kwargs):
+        super().initialize(**kwargs)
         self.hyperparameters = kwargs
         pass
 

@@ -72,6 +72,7 @@ class Emulator(BaseClass):
         pass
 
     def initialize(self, likelihood=None, ini_state=None, **kwargs):
+        super().initialize(**kwargs)
         # default hyperparameters
         defaulthyperparameters = {
             # kernel
@@ -180,7 +181,8 @@ class Emulator(BaseClass):
 
         self.likelihood = likelihood
         if self.likelihood is not None:
-            self.likelihood.initialize(**self.hyperparameters['likelihood_settings'])
+            if not self.likelihood.initialized:
+                self.likelihood.initialize(**self.hyperparameters['likelihood_settings'])
 
         # A state dictionary is a nested dictionary with the following structure:
         # state = {

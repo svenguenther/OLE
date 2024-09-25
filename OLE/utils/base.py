@@ -107,12 +107,18 @@ class Logger:
 
 class BaseClass(Logger, Timer):
     debug_mode: bool
+    initialized: bool
     def __init__(self, name=None, debug= False, **kwargs):
         # init both parent classes
         super().__init__(name)
         super(Logger, self).__init__(name)
         self.set_loglevel(logging.DEBUG if debug else logging.INFO)
         self.debug_mode = debug
+        self.initialized = False
+    
+    def initialize(self, **kwargs):
+        self.initialized = True
+        pass
 
 
 

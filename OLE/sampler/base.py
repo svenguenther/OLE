@@ -110,6 +110,7 @@ class Sampler(BaseClass):
 
         """
 
+        super().initialize(**kwargs)
 
 
         # Save all the settings
@@ -121,8 +122,9 @@ class Sampler(BaseClass):
         # Store Likelihood and initialize if possible
         self.likelihood = likelihood
         if self.likelihood is not None:
-            self.likelihood_settings = likelihood_settings
-            self.likelihood.initialize(**likelihood_settings)
+            if not self.likelihood.initialized:
+                self.likelihood_settings = likelihood_settings
+                self.likelihood.initialize(**likelihood_settings)
 
         # update theory settings by likelihood
         if theory is not None:
@@ -745,7 +747,6 @@ class Sampler(BaseClass):
         self.increment(self.logger)
         return state
     
-    @partial(jax.jit, static_argnums=(0))
     def logposterior_function(self, parameter_values, local_state):
         """ 
         This function computes the loglikelihoods for given parameters and a given theory state.
@@ -771,45 +772,6 @@ class Sampler(BaseClass):
         return -local_state['loglike'][0]
     
     
-
-    def nuisance_minimization(self, state):
-        """
-        This function minimizes the nuisance parameters for a given state. 
-        It uses the minimize function from scipy.optimize to minimize the logposterior.
-        Additionally, it utilizes the gradient of the logposterior to speed up the minimization.
-        It uses the logposterior_function to compute the logposteriors for given parameters and a given theory state.
-
-        Parameters
-        --------------
-        state : dict
-            The state of the theory code.
-
-        Returns
-        --------------
-        dict :
-            The state after the minimization of the nuisance parameters
-        """
-        
-        local_state = copy.deepcopy(state)
-        
-        # minimize the nuisance parameters
-        x0 = (jnp.array([state['parameters'][key][0] for key in self.nuisance_parameters])-self.nuisance_means)/self.nuisance_stds
-
-        state['loglike'] = -self.jit_logposterior_function(x0, local_state)
-        # check for nan
-        if jnp.isnan(state['loglike']):
-            self.error("Nuisance minimization: loglike is nan")
-            return state
-
-        result = minimize(self.jit_logposterior_function, x0, jac=self.jit_gradient_logposterior_function, method='TNC', args=(local_state), options={'disp': False}, tol=1e-1)
-        self.debug("minimization result: %s", result)
-
-        state['loglike'] = jnp.array([float(-result.fun)])
-        for i, key in enumerate(self.nuisance_parameters):
-            state['parameters'][key] = jnp.array([result.x[i]])*self.nuisance_stds[i] + self.nuisance_means[i]
-
-        return state
-
     def emulate_logposterior_from_normalized_parameters_differentiable(self, parameters_norm):
         """ 
         This function emulates the logposteriors for given parameters.
