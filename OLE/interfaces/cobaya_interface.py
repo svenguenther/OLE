@@ -13,11 +13,17 @@ from functools import partial
 import copy
 import gc
 
-# global force_acceptance # OLD 
+global annoying_CAMB_flag_to_skip_CAMB_transfers
+annoying_CAMB_flag_to_skip_CAMB_transfers = False # This extremly ugly flag only exists because CAMB decided to split itself into 2 theory codes...
+
 
 def check_cache_and_compute(self, params_values_dict,
                                 dependency_params=None, want_derived=False, cached=True):
-    
+    global annoying_CAMB_flag_to_skip_CAMB_transfers
+    # This ugly thing appears here because CAMB wants to make you and me and everyone in this world unhappy!
+    for param in params_values_dict.keys():
+        self.theory_params[param] = params_values_dict[param]
+
     """
     Takes a dictionary of parameter values and computes the products needed by the
     likelihood, or uses the cached value if that exists for these parameters.
@@ -26,6 +32,12 @@ def check_cache_and_compute(self, params_values_dict,
 
     params_values_dict can be safely modified and stored.
     """
+    if (self._name == 'camb.transfers') and annoying_CAMB_flag_to_skip_CAMB_transfers:
+        self._current_state = {'params': {}, 'derived': {}}
+        return True
+    
+
+    
     # Try to build emulator from saved cobaya state and cache
         
     # There is a possibility when using the emulator to load an initial state from the cache of the emulator, 
@@ -86,18 +98,12 @@ def check_cache_and_compute(self, params_values_dict,
         for _state in self._states:
             # compare dictionaries elementwise
             same = True
-            try: 
-                if (params_values_dict != _state["params"]):
+            # AHHH DANGEROUS CODE! Only because we have to make this work with CAMB. WHYYY? Hopefully this wont break anything :'(
+            for key, value in params_values_dict.items():
+                if (value != _state["params"][key]):
                     same = False
-            except:
-                for key, value in _state["params"].items():
-                    if (value != params_values_dict[key]).any():
-                        same = False
 
-
-            if same and \
-                    _state["dependency_params"] == dependency_params \
-                    and (not want_derived or _state["derived"] is not None):
+            if same and (_state["derived"] is not None): # Here we dont check for derived because CAMB is a pain. Lets hope for the best
                 state = _state
                 self.log.debug("Re-using computed results")
                 self._states.remove(_state)
@@ -108,7 +114,10 @@ def check_cache_and_compute(self, params_values_dict,
             # try to emulate a state
             self.log.debug("Try emulating new state")
 
-            # go to the emulator state
+            # Uff CAMB! Just WHY?! REALLY?
+            if hasattr(self, '_camb_transfers'):
+                params_values_dict.update(self._camb_transfers.theory_params)
+
             state = {"params": params_values_dict,
                         "dependency_params": dependency_params,
                         "derived": {} if want_derived else None}
@@ -121,9 +130,22 @@ def check_cache_and_compute(self, params_values_dict,
             if successful_emulation:
                 # translate the emulator state back to the cobaya state
                 state = translate_emulator_state_to_cobaya_state(self._current_state, emulator_state)
+                annoying_CAMB_flag_to_skip_CAMB_transfers = True
                 self.log.debug("Emulation successful")
             else:
+                annoying_CAMB_flag_to_skip_CAMB_transfers = False # When using CAMB (not sure why would ever want to do that) we need to reset this flag such that CAMB_transfers is computed
+                # raise error
                 self.log.debug("Emulation not successful")
+
+                if self._name == 'camb':
+                    # delete all keys which are not in the theory_params
+                    new_params_values_dict = copy.deepcopy(params_values_dict)
+                    for key in params_values_dict.keys():
+                        if key not in self._camb_transfers.theory_params.keys():
+                            del new_params_values_dict[key]
+
+                    # EXTREME UGLY CAMB HACK. I am so sorry for this. I hope you can forgive me :'(
+                    self._camb_transfers.check_cache_and_compute(new_params_values_dict, dependency_params, want_derived, cached) 
 
         if not successful_emulation:
             self.log.debug("Computing new state")
@@ -188,15 +210,27 @@ def check_cache_and_compute(self, params_values_dict,
         state["params"][key] = float(value)
 
     # make this state the current one
-    _ = copy.deepcopy(state)
+    try: # we have to have this meey ugly try except block because CAMB cannot be deepcopyied since its some weird FORTAN thing @.@
+        _ = copy.deepcopy(state)
+    except:
+        _ = state
+
     self._states.appendleft(_)
     self._current_state = state
+
+    # if self._name == 'camb':
+    #     print('self._states')
+    #     print(self._states)
 
     # if we want to use the emulator here, we need to initialize it here
     if self.emulate:
         if self.emulator is None:
             # import the emulator
             from OLE.emulator import Emulator
+
+            # here we need to make an ugly CAMB specific hack ...
+            if hasattr(self, '_camb_transfers'):
+                state['params'].update(self._camb_transfers.theory_params) 
 
             # translate the cobaya state to the emulator state
             emulator_state = translate_cobaya_state_to_emulator_state(state)
@@ -214,9 +248,9 @@ def check_cache_and_compute(self, params_values_dict,
             self.emulator = Emulator(**self.emulator_settings)
             self.emulator.initialize(ini_state = self.initial_emulator_state, **self.emulator_settings)
 
+
     stop = time.time()
     self.log.debug("Time for check_cache_and_compute: %f", stop-start)
-
     return True
 
 
@@ -320,6 +354,7 @@ Theory.emulate = False
 Theory.emulator = None
 Theory.skip_theory_state_from_emulator = None
 Theory.emulator_settings = {}
+Theory.theory_params = {}
 Theory.initial_cobaya_state = None
 
 # Theory flag
@@ -361,7 +396,10 @@ def translate_cobaya_state_to_emulator_state(state):
                     for key3, value3 in value2.items():
                         emulator_state['quantities'][key3] = jnp.array([value3])
                 else:
-                    emulator_state['quantities'][key2] = jnp.array([value2])
+                    if type(value2) not in [int, float]:
+                        emulator_state['quantities'][key2] = jnp.array([value2.flatten()])
+                    else:
+                        emulator_state['quantities'][key2] = jnp.array([value2])
         else:
             if len(value) > 1:
                 emulator_state['quantities'][key] = jnp.array([value])
@@ -373,7 +411,6 @@ def translate_cobaya_state_to_emulator_state(state):
     for key, value in emulator_state['parameters'].items():
         if len(value.shape) > 1:
             emulator_state['parameters'][key] = jnp.array(value[0])
-
 
     return emulator_state
 
@@ -397,59 +434,26 @@ def translate_emulator_state_to_cobaya_state(old_cobaya_state, emulator_state):
                         if key3 not in emulator_state['quantities'].keys():
                             continue
 
-                        old_cobaya_state[key][key2][key3] = np.array(emulator_state['quantities'][key3])
+                        if type(value3) not in [int, float]:
+                            old_cobaya_state[key][key2][key3] = np.array(emulator_state['quantities'][key3].reshape(value3.shape))
+                        else:
+
+                            old_cobaya_state[key][key2][key3] = np.array(emulator_state['quantities'][key3])
                 else:
                     # if the key is not in the emulator state, we can skip it
                     if key2 not in emulator_state['quantities'].keys():
                         continue
-
-                    old_cobaya_state[key][key2] = np.array(emulator_state['quantities'][key2])
+                    if type(value2) not in [int, float]:
+                        old_cobaya_state[key][key2] = np.array(emulator_state['quantities'][key2].reshape(value2.shape))
+                    else:
+                        old_cobaya_state[key][key2] = np.array(emulator_state['quantities'][key2])
         else:
 
             # if the key is not in the emulator state, we can skip it
             if key not in emulator_state['quantities'].keys():
                 continue
-
+            
             old_cobaya_state[key] = np.array(emulator_state['quantities'][key])
 
 
-    import sys 
-    # sys.exit()
-
     return old_cobaya_state
-
-
-
-from cobaya.model import LogPosterior
-
-
-# REMOVED OLD CONCEPT OF FORCING ACCEPTANCE
-'''
-#
-# Here we need to modify the MCMC 
-#
-
-def metropolis_accept(self, logp_trial, logp_current):
-    global force_acceptance
-    """
-    Symmetric-proposal Metropolis-Hastings test.
-
-    Returns
-    -------
-    ``True`` or ``False``.
-    """
-    if logp_trial == -np.inf:
-        return False
-    if force_acceptance:
-        force_acceptance = False
-        return True
-    if logp_trial > logp_current:
-        return True
-    posterior_ratio = (logp_current - logp_trial) / self.temperature
-    return self._rng.standard_exponential() > posterior_ratio
-
-
-from cobaya.samplers.mcmc import MCMC
-
-MCMC.metropolis_accept = metropolis_accept
-'''
