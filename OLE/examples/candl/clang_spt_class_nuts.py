@@ -87,8 +87,6 @@ emulator_settings = {
     # 'compute_data_covmat': True,
     'data_covmat_directory': './spt_data_covmats',
 
-    'skip_emulation_quantities': ['bb'],
-
 
 }
 
@@ -100,6 +98,10 @@ likelihood_settings = {
 
 theory_settings = {
     # here we could add some class settings
+    'parameters': ['h', 'n_s', 'omega_b', 'omega_cdm', 'tau_reio', 'logA'],
+
+    # input parameters of the theory
+    'class_settings': {'output':'tCl,pCl,lCl', 'lensing':'yes', 'N_ur':3.048, 'output_verbose':1},
 }
 
 sampling_settings = {

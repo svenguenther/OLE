@@ -209,7 +209,7 @@ class Sampler(BaseClass):
 
         # we can now transform the parameters into the (normalized) eigenspace
 
-        # remove the parameters from the test state which are not in self.theory.requirements
+        # remove the parameters from the test state which are not in self.theory.requried_parameters
 
         # the likelihood will be initialized once again in the emulator. As a consequence we need to provide the emulator settings with the likelihood settings
         emulator_settings['likelihood_settings'] = likelihood_settings
@@ -227,17 +227,17 @@ class Sampler(BaseClass):
                 if not emulator_settings['load_initial_state']:
                     test_state = self.test_pipeline()
 
-            # here we check the requirements of the theory code. If they are specified, we initialize the emulator with the requirements
+            # here we check the requried_parameters of the theory code. If they are specified, we initialize the emulator with the requried_parameters
             # otherwise the emulator is inificalized with all parameters which could also include likelihood parameters!
-            if len(self.theory.requirements) > 0:
-                self.emulator.initialize(self.likelihood, test_state, input_parameters=self.theory.requirements, **emulator_settings)
+            if len(self.theory.requried_parameters()) > 0:
+                self.emulator.initialize(self.likelihood, test_state, input_parameters=self.theory.requried_parameters(), **emulator_settings)
             else:
                 self.emulator.initialize(self.likelihood, test_state, **emulator_settings)
 
 
         self.nuisance_parameters = list(self.parameter_dict.keys())
-        #remove keys which are in self.theory.requirements
-        for key in self.theory.requirements:
+        #remove keys which are in self.theory.requried_parameters
+        for key in self.theory.requried_parameters():
             if key in self.nuisance_parameters:
                 self.nuisance_parameters.remove(key)
 

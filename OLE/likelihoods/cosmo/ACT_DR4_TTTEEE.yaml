@@ -1,8 +1,10 @@
-yp:
-    prior:
-        min: 0.9
-        max: 1.1
-    ref:
-        mean: 1
-        std: 0.0001
-    proposal: 0.0001
+parameters:
+    yp:
+        prior:
+            min: 0.9
+            max: 1.1
+            type: uniform
+        ref:
+            mean: 1
+            std: 0.0001
+        proposal: 0.0001

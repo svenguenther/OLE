@@ -182,7 +182,7 @@ class Emulator(BaseClass):
         self.likelihood = likelihood
         if self.likelihood is not None:
             if not self.likelihood.initialized:
-                self.likelihood.initialize(**self.hyperparameters['likelihood_settings'])
+                self.likelihood.initialize(**self.hyperparameters['likelihood_settings']) # usually the likelihood should have been initialized before the emulator
 
         # A state dictionary is a nested dictionary with the following structure:
         # state = {

@@ -38,11 +38,11 @@ class candl_likelihood(Likelihood):
         if kwargs["candl_dataset"] == 'candl.data.ACT_DR4_TTTEEE':
             # load yaml from 'ACT_DR4_TTTEEE.yaml' and convert to python dict
             with open(os.path.dirname(__file__) + '/ACT_DR4_TTTEEE.yaml', 'r') as file:
-                self.nuisance_sample_dict = yaml.safe_load(file)
+                self.nuisance_sample_dict = yaml.safe_load(file)['parameters']
         elif kwargs["candl_dataset"] == 'candl.data.SPT3G_2018_TTTEEE':
             # load yaml from 'SPT3G_2018_TTTEEE.yaml' and convert to python dict
             with open(os.path.dirname(__file__) + '/SPT3G_2018_TTTEEE.yaml', 'r') as file:
-                self.nuisance_sample_dict = yaml.safe_load(file)
+                self.nuisance_sample_dict = yaml.safe_load(file)['parameters']
         else:
             # no other dataset has been implemented so far
             self.nuisance_sample_dict = {}
@@ -51,10 +51,23 @@ class candl_likelihood(Likelihood):
     
     # this function can be used to update the theory settings
     def update_theory_settings(self, theory_settings):
-        if 'l_max_scalars' not in theory_settings:
-            theory_settings['l_max_scalars'] = self.candl_like.ell_max
+
+        # check if class_settings are given in the input
+        if 'class_settings' not in theory_settings:
+            theory_settings['class_settings'] = {}
+
+        # Update l_max_scalars to be the maximum of the current value and the value from the data set
+        if 'l_max_scalars' not in theory_settings['class_settings']:
+            theory_settings['class_settings']['l_max_scalars'] = self.candl_like.ell_max
         else:
-            theory_settings['l_max_scalars'] = max(self.candl_like.ell_max, theory_settings['l_max_scalars'])
+            theory_settings['class_settings']['l_max_scalars'] = max(self.candl_like.ell_max, theory_settings['class_settings']['l_max_scalars'])
+
+        # Add requirements for the theory
+        if 'requirements' not in theory_settings:
+            theory_settings['requirements'] = {'tt': None, 'ee': None, 'te': None}
+        else:
+            theory_settings['requirements'].update({'tt': None, 'ee': None, 'te': None})
+        
         return theory_settings
 
     # @partial(jax.jit, static_argnums=(0,))

@@ -8,50 +8,62 @@ class CLASS(Theory):
     def initialize(self, **kwargs):
         super().initialize(**kwargs)   
 
-        # input parameters of the theory
-        self.requirements = ['h', 'n_s', 'omega_b', 'omega_cdm', 'tau_reio', 'logA']
-
+        # Initialize the CLASS code
         self.cosmo = classy.Class()
 
-        self.class_settings = {'output':'tCl,pCl,lCl,mPk',
-                        'lensing':'yes',
-                        #'l_max_scalars':3200, #  for SPT3G_2018_TTTEEE
-                        # 'l_max_scalars':7925, #  for ACT
+        # look if class_settings are given in the input
+        if 'class_settings' in kwargs:
+            self.class_settings = kwargs['class_settings']
+        else:
+            raise ValueError('class_settings not given in the theory input')
 
-                        'N_ur':3.048,
-                        'output_verbose':1,
-                        }
         
         # update the class settings with the hyperparameters
-        self.class_settings.update(self.hyperparameters)
+        self.class_settings
 
         return 
+    
+    def translate_CLASS_parameters(self, parameters):
+        # Translate the parameters to the CLASS format
+        class_parameters = {}
+
+        # go through the parameters
+        for key, value in parameters.items():
+            
+            # only add the required parameters
+            if key in self.requried_parameters():
+                
+                # add here the translation
+                if key == 'logA':
+                    class_parameters['A_s'] = 1e-10*np.exp(value)
+                else:
+                    class_parameters[key] = value
+
+        return class_parameters
     
 
     def compute(self, state):
         # Compute the observable for the given parameters.
         class_input = self.class_settings.copy()
-        class_input['A_s'] = 1e-10*np.exp(state['parameters']['logA'][0])
-        class_input['h'] = state['parameters']['h'][0]
-        class_input['n_s'] = state['parameters']['n_s'][0]
-        class_input['omega_b'] = state['parameters']['omega_b'][0]
-        class_input['omega_cdm'] = state['parameters']['omega_cdm'][0]
-        class_input['tau_reio'] = state['parameters']['tau_reio'][0]
 
-        if state['parameters']['tau_reio'][0] < 0.01:
-            class_input['tau_reio'] = 0.01
+        # set parameters
+        class_parameters = self.translate_CLASS_parameters(state['parameters'])
+        for key in class_parameters.keys():
+            class_input[key] = class_parameters[key][0]
 
+        # set CLASS parameters
         self.cosmo.set(class_input)
+
+        # compute CLASS
         self.cosmo.compute()
 
-        cls = self.cosmo.lensed_cl(self.class_settings['l_max_scalars'])
-        
-        T_cmb = 2.7255
+        T_cmb = self.cosmo.T_cmb()
 
-        state['quantities']['tt'] = cls['tt'] * (T_cmb*1e6)**2
-        state['quantities']['ee'] = cls['ee'] * (T_cmb*1e6)**2
-        state['quantities']['te'] = cls['te'] * (T_cmb*1e6)**2
-        state['quantities']['bb'] = cls['bb'] * (T_cmb*1e6)**2
+        # check for cls
+        for key in ['tt', 'ee', 'te', 'bb']:
+            if key in self.requirements.keys():
+                cls = self.cosmo.lensed_cl(self.class_settings['l_max_scalars'])
+                state['quantities'][key] = cls[key]
 
 
         return state
