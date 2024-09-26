@@ -183,4 +183,7 @@ Debugging. Very recommended when investigating a new problem:
      - If set (for example ``0.1``) a certain fraction of the training samples will not be used for training but for testing the performance of the emulator. Additional plots will be created in the ``plotting_directory``
    * - ``logfile``
      - ``None``
-     - If set to a text file, the emulator writes a log.
+     - If set to a text file, the emulator writes a log.   
+   * - ``debug``
+     - ``False``
+     - If set to ``True`` the emulator will print out a lot of debugging information. This is very helpful when investigating a new problem.

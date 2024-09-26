@@ -31,7 +31,9 @@ General Sampler Settings:
    * - ``status_print_frequency``
      - ``100``
      - Frequency with which the status updates are printed.
-
+   * - ``debug``
+     - ``False``
+     - If set to ``True`` the sampler will print out a lot of debugging information. This is very helpful when investigating a new problem.
 
 Evaluate sampler (computes likelihood for a given parameter set):
 
