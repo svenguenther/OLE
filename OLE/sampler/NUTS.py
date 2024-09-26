@@ -8,6 +8,7 @@ from OLE.emulator import Emulator
 from OLE.utils.mpi import *
 from OLE.sampler.base import Sampler
 from OLE.sampler.minimize import MinimizeSampler
+from scipy.optimize import minimize
 
 from functools import partial
 from typing import Tuple
@@ -21,6 +22,8 @@ import random
 import numpy as np
 
 import jax.random as random
+
+import copy
 
 import time 
 
