@@ -117,6 +117,8 @@ class NUTSSampler(Sampler):
         # Initialize the position of the walkers.
         pos = jnp.zeros((self.nwalkers, self.ndim))
 
+        self.write_to_log("Starting NUTS \n")
+
         import time 
 
         initial_seed = int(time.time()+get_mpi_rank())
@@ -131,10 +133,15 @@ class NUTSSampler(Sampler):
         max_loglike = -jnp.inf
         bestfit = None
 
-        self.jit_logposterior_function = jax.jit(self.logposterior_function)
-        self.jit_gradient_logposterior_function = jax.jit(jax.grad(self.logposterior_function))
+        if not self.debug_mode:
+            self.jit_logposterior_function = jax.jit(self.logposterior_function)
+            self.jit_gradient_logposterior_function = jax.jit(jax.grad(self.logposterior_function))
+        else:
+            self.jit_logposterior_function = self.logposterior_function
+            self.jit_gradient_logposterior_function = jax.grad(self.logposterior_function)
 
         if not self.emulator.trained:
+            self.write_to_log("NUTS: Initial Metropolis-Hastings \n")
             while not self.emulator.trained:
                 # We perform vanilla MH sampling for one step
                 # The covmat is the identity matrix
@@ -200,6 +207,7 @@ class NUTSSampler(Sampler):
                         current_loglikes = current_loglikes.at[i].set(loglikes[i])
                     else:
                         RNG, subkey = jax.random.split(RNG)
+                        # Metroplis-Hastings acceptance
                         if jnp.log(jax.random.uniform(subkey)) < loglikes[i]-current_loglikes[i]:
                             pos = pos.at[i].set(step[i])
                             current_loglikes = current_loglikes.at[i].set(loglikes[i])
@@ -220,7 +228,8 @@ class NUTSSampler(Sampler):
                             likelihood_settings=self.likelihood_settings,
                             theory_settings=self.theory_settings,
                             emulator_settings=self.emulator.hyperparameters,
-                            sampling_settings=minimizer_params,)
+                            sampling_settings=minimizer_params,
+                            **self.kwargs)
         minimizer.minimize()
 
         bestfit = minimizer.bestfit
@@ -269,6 +278,8 @@ class NUTSSampler(Sampler):
 
         self.info("Emulator trained - Start NUTS sampler now!")
 
+        self.write_to_log("NUTS: Find stepsize \n")
+
         # create differentiable loglike
         self.logp_and_grad = jax.jit(jax.value_and_grad(self.emulate_total_logposterior_from_normalized_parameters_differentiable))     # this is the differentiable loglike
         self.logp_sample = jax.jit(self.sample_emulate_total_logposterior_from_normalized_parameters_differentiable)  
@@ -277,6 +288,18 @@ class NUTSSampler(Sampler):
 
         # we search a reasonable epsilon (step size)
         self.info("Searching for a reasonable step sizes")
+
+        # If we are not in debug mode, we jit the functions
+        if not self.debug_mode:
+            self._leapfrog = jax.jit(self._leapfrog)
+            self._init_build_tree = jax.jit(self._init_build_tree)
+            self._update_build_tree = jax.jit(self._update_build_tree)
+            self._trajectory_iteration_update = jax.jit(self._trajectory_iteration_update)
+            self._adapt = jax.jit(self._adapt)
+            self._draw_direction = jax.jit(self._draw_direction)
+            self._init_iteration = jax.jit(self._init_iteration)
+            self._draw_theta = jax.jit(self._draw_theta)
+
         RNG, eps = self._findReasonableEpsilon(self.theta0, RNG)
         self.info("Found reasonable step sizes: %f", eps)
 
@@ -290,14 +313,18 @@ class NUTSSampler(Sampler):
 
         # puntjes
         thetas = np.zeros((self.M_adapt + nsteps + 1, self.ndim))
-        logps = np.zeros(self.M_adapt + nsteps + 1)
 
         thetas[0] = self.transform_parameters_into_normalized_eigenspace(bestfit_shift)
         testing_flag = True
 
+        self.write_to_log("NUTS: Start Warm-up \n")
+
         # run the warmup
         for i in range(self.M_adapt + nsteps):
             # Initialize momentum and pick a slice, record the initial log joint probability
+
+            if i == self.M_adapt-1:
+                self.write_to_log("NUTS: Start Sampling \n")
 
             valid_point_flag = False # we need to check whether the point is inside the prior
             while not valid_point_flag:
@@ -459,10 +486,15 @@ class NUTSSampler(Sampler):
 
         logp, gradlogp = self.logp_and_grad(theta)
 
+        if self.debug_mode:
+            theta_untransformed = self.retranform_parameters_from_normalized_eigenspace(theta)
+            _ = "Logposterior: "+ str(logp) + ' at ' + " ".join([self.parameter_names[i] + ": " + str(theta_untransformed[i]) for i in range(len(theta_untransformed))]) + "\n"
+            self.write_to_log(_)
+
         if jnp.isnan(logp):
             raise ValueError("log probability of initial value is NaN.")
-        # if jnp.any(jnp.isnan(gradlogp)):
-        #     raise ValueError("Gradient of log probability of initial value is NaN.")
+        if jnp.any(jnp.isnan(gradlogp)):
+            raise ValueError("Gradient of log probability of initial value is NaN.")
 
         theta_f, r_f, logp, gradlogp = self._leapfrog(theta, r, eps)
 
@@ -470,9 +502,16 @@ class NUTSSampler(Sampler):
         while jnp.isnan(logp) or jnp.any(jnp.isnan(gradlogp)):
             eps /= 2
             theta_f, r_f, logp, gradlogp = self._leapfrog(theta, r, eps)
+            
         
         # Then decide in which direction to move
         logp0, _ = self.logp_and_grad(theta)
+
+        if self.debug_mode:
+            theta_untransformed = self.retranform_parameters_from_normalized_eigenspace(theta)
+            _ = "Logposterior: "+ str(logp0) + ' at ' + " ".join([self.parameter_names[i] + ": " + str(theta_untransformed[i]) for i in range(len(theta_untransformed))]) + "\n"
+            self.write_to_log(_)
+
         logjoint0 = logp0 - .5 * jnp.dot(r, r)
         logjoint = logp - .5 * jnp.dot(r_f, r_f)
         a = 2 * (logjoint - logjoint0 > jnp.log(.5)) - 1
@@ -480,9 +519,11 @@ class NUTSSampler(Sampler):
         while a * (logp - .5 * jnp.dot(r_f, r_f) - logjoint0) > a * jnp.log(.5):
             eps *= 2.**a
             theta_f, r_f, logp, _ = self._leapfrog(theta, r, eps)
+
+
         return key, eps
 
-    @partial(jax.jit, static_argnums=0)
+    # @partial(jax.jit, static_argnums=0)
     def _leapfrog(self, theta: ndarray, r: ndarray, eps: float) -> Tuple[ndarray, ndarray, float, ndarray]:
         """Perform a leapfrog step.
         
@@ -508,13 +549,25 @@ class NUTSSampler(Sampler):
             at the new position.
         """
         logp, gradlogp = self.logp_and_grad(theta)
+
+        if self.debug_mode:
+            theta_untransformed = self.retranform_parameters_from_normalized_eigenspace(theta)
+            _ = "Logposterior: "+ str(logp) + ' at ' + " ".join([self.parameter_names[i] + ": " + str(theta_untransformed[i]) for i in range(len(theta_untransformed))]) + "\n"
+            self.write_to_log(_)
+        
         r = r + .5 * eps * gradlogp
         theta = theta + eps * r
         logp, gradlogp = self.logp_and_grad(theta)
+
+        if self.debug_mode:
+            theta_untransformed = self.retranform_parameters_from_normalized_eigenspace(theta)
+            _ = "Logposterior: "+ str(logp) + ' at ' + " ".join([self.parameter_names[i] + ": " + str(theta_untransformed[i]) for i in range(len(theta_untransformed))]) + "\n"
+            self.write_to_log(_)
+            
         r = r + .5 * eps * gradlogp
         return theta, r, logp, gradlogp
 
-    @partial(jax.jit, static_argnums=0)
+    # @partial(jax.jit, static_argnums=0)
     def _init_iteration(self, theta: ndarray, key: ndarray) -> Tuple[ndarray, ndarray, float, float, float]:
         """Initialize the sampling iteration
 
@@ -539,18 +592,24 @@ class NUTSSampler(Sampler):
         key, *subkeys = random.split(key, 3)
         r = random.normal(subkeys[0], shape=self.theta0.shape)
         logprob, _ = self.logp_and_grad(theta)
+
+        if self.debug_mode:
+            theta_untransformed = self.retranform_parameters_from_normalized_eigenspace(theta)
+            _ = "Logposterior: "+ str(logprob) + ' at ' + " ".join([self.parameter_names[i] + ": " + str(theta_untransformed[i]) for i in range(len(theta_untransformed))]) + "\n"
+            self.write_to_log(_)
+        
         logjoint = logprob - .5 * jnp.dot(r, r)
         u = random.uniform(subkeys[1]) * jnp.exp(logjoint)
         return key, r, u, logjoint, logprob
 
-    @partial(jax.jit, static_argnums=0)
+    # @partial(jax.jit, static_argnums=0)
     def _draw_direction(self, key: ndarray) -> Tuple[ndarray, int]:
         """Draw a random direction (-1 or 1)"""
         key, subkey = random.split(key)
         v = 2 * random.bernoulli(subkey) - 1
         return key, v
 
-    @partial(jax.jit, static_argnums=0)
+    # @partial(jax.jit, static_argnums=0)
     def _trajectory_iteration_update(self, theta: ndarray, n: int, s: int, j: int, 
                                      theta_m: ndarray, r_m: ndarray, theta_p: ndarray, r_p: ndarray, 
                                      theta_f: ndarray, n_f: int, s_f: int, key: int) -> Tuple[ndarray, ndarray, int, int, int]:
@@ -607,7 +666,7 @@ class NUTSSampler(Sampler):
         j += 1
         return key, theta, n, s, j
 
-    @partial(jax.jit, static_argnums=0)
+    # @partial(jax.jit, static_argnums=0)
     def _draw_theta(self, operand: Tuple[ndarray, ndarray, ndarray, int, int]) -> Tuple[ndarray, ndarray]:
         """Replace the last sample with the new one with probability n_f / n.
         
@@ -627,7 +686,7 @@ class NUTSSampler(Sampler):
         return lax.cond(random.uniform(subkey) < lax.min(1., n_f.astype(float) / n),
                lambda op: (op[0], op[2]), lambda op: op[:2], (key, theta, theta_f, n, n_f))
 
-    @partial(jax.jit, static_argnums=0)
+    # @partial(jax.jit, static_argnums=0)
     def _adapt(self, mu: float, eps_bar: float, H_bar: float, t_0: float, 
                kappa: float, gamma: float, alpha: float, n_alpha: int, m: int) -> Tuple[float, float, float]:
         """Update the step size according to the dual averaging scheme.
@@ -736,7 +795,7 @@ class NUTSSampler(Sampler):
                 key, theta_f, n_f, s_f, alpha_f, n_alpha_f = self._update_build_tree(theta_m, r_m, theta_p, r_p, theta_f, n_f, s_f, alpha_f, n_alpha_f, theta_ff, n_ff, s_ff, alpha_ff, n_alpha_ff, key)
             return key, theta_m, r_m, theta_p, r_p, theta_f, n_f, s_f, alpha_f, n_alpha_f
 
-    @partial(jax.jit, static_argnums=0)
+    # @partial(jax.jit, static_argnums=0)
     def _init_build_tree(self, theta : ndarray, r : ndarray, u : float, v : int, j : int, 
                          eps : float, logjoint0 : float, key : ndarray) -> Tuple[ndarray, 
                          ndarray, ndarray, ndarray, ndarray, ndarray, int, int, float, int]:
@@ -758,7 +817,7 @@ class NUTSSampler(Sampler):
         n_alpha_f = 1
         return key, theta, r, theta, r, theta, n_f, s_f, alpha_f, n_alpha_f
 
-    @partial(jax.jit, static_argnums=0)
+    # @partial(jax.jit, static_argnums=0)
     def _update_build_tree(self, theta_m: ndarray, r_m: ndarray, theta_p: ndarray, r_p: ndarray, 
                            theta_f: ndarray, n_f: int, s_f: int, alpha_f: float, n_alpha_f: int, 
                            theta_ff: ndarray, n_ff: int, s_ff: int, alpha_ff: float, n_alpha_ff: int, 

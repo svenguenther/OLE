@@ -112,6 +112,8 @@ class Sampler(BaseClass):
 
         super().initialize(**kwargs)
 
+        # store kwargs
+        self.kwargs = kwargs
 
         # Save all the settings
         self.emulator_settings = emulator_settings
@@ -167,6 +169,9 @@ class Sampler(BaseClass):
 
             # status print frequency
             'status_print_frequency': 100,
+
+            # logfile
+            'logfile': None,
 
         }
 
@@ -249,6 +254,8 @@ class Sampler(BaseClass):
             for i, key in enumerate(self.nuisance_parameters):
                 self.nuisance_means = self.nuisance_means.at[i].set(self.parameter_dict[key]['ref']['mean'])
                 self.nuisance_stds = self.nuisance_stds.at[i].set(self.parameter_dict[key]['ref']['std'])
+
+        self.parameter_names = list(self.parameter_dict.keys())
 
         pass
 
@@ -665,6 +672,11 @@ class Sampler(BaseClass):
             self.debug("Emulator trained")
 
         self.increment(self.logger)
+
+        if type(state['loglike'][0]) != jax._src.interpreters.ad.JVPTracer:
+            _ = "Logposterior: "+ str(state['loglike'][0]) + ' at ' + " ".join([str(key) + ": " + str(value[0]) for key, value in state['parameters'].items()]) + "\n"
+            self.write_to_log(_)
+
         return state['loglike']
 
 
@@ -744,7 +756,7 @@ class Sampler(BaseClass):
             self.emulator.train()
             self.debug("Emulator trained")
 
-        self.increment(self.logger)
+        self.increment(self.logger)        
         return state
     
     def logposterior_function(self, parameter_values, local_state):
@@ -769,6 +781,11 @@ class Sampler(BaseClass):
         local_state = self.likelihood.loglike_state(local_state)
         logprior = self.compute_logprior(local_state)
         local_state['loglike'] = local_state['loglike'] + logprior
+
+        if type(local_state['loglike'][0]) != jax._src.interpreters.ad.JVPTracer:
+            _ = "Logposterior: "+ str(local_state['loglike'][0]) + ' at ' + " ".join([str(key) + ": " + str(value[0]) for key, value in local_state['parameters'].items()]) + "\n"
+            self.write_to_log(_)
+        
         return -local_state['loglike'][0]
     
     
@@ -853,6 +870,11 @@ class Sampler(BaseClass):
         parameters = self.transform_parameters_into_normalized_eigenspace(parameters)
 
         self.increment(self.logger)
+        
+        if type(state['loglike'][0]) != jax._src.interpreters.ad.JVPTracer:
+            _ = "Logposterior: "+ str(state['loglike'][0]) + ' at ' + " ".join([str(key) + ": " + str(value[0]) for key, value in state['parameters'].items()]) + "\n"
+            self.write_to_log(_)
+
         return state['loglike']
 
     # This function emulates the loglikelihoods for given parameters.
@@ -885,6 +907,11 @@ class Sampler(BaseClass):
         self.debug("loglike after theory: %f for parameters: %s", state['loglike'][0], state['parameters'])
 
         self.increment(self.logger)
+
+        if type(state['loglike'][0]) != jax._src.interpreters.ad.JVPTracer:
+            _ = "Logposterior: "+ str(state['loglike'][0]) + ' at ' + " ".join([str(key) + ": " + str(value[0]) for key, value in state['parameters'].items()]) + "\n"
+            self.write_to_log(_)
+        
         return state['loglike']
 
 
@@ -932,6 +959,12 @@ class Sampler(BaseClass):
         loglikes = [self.likelihood.loglike_state(_)['loglike'] + logprior for _ in states]
 
         self.increment(self.logger)
+
+        # Currently not working. TODO: SG: Fix that
+        # if type(states[0]['loglike'][0]) != jax._src.interpreters.ad.JVPTracer:
+        #     _ = "Sampled Logposterior: " + " ".join(str([_[0] for _ in loglikes])) + ' at ' + " ".join([str(key) + ": " + str(value[0]) for key, value in states[0]['parameters'].items()]) + "\n"
+        #     self.write_to_log(_)
+        
         return loglikes
 
     
@@ -1087,6 +1120,23 @@ class Sampler(BaseClass):
             if 'prior' in list(value.keys()):
                 stitched_parameters[key] = jnp.minimum(jnp.maximum(parameters[key], value['prior']['min']), value['prior']['max'])
         return stitched_parameters
+    
+
+    def write_to_log(self, message):
+        # write the message to the logfile
+        if self.hyperparameters['logfile'] is None:
+            return
+        
+        file_name = self.hyperparameters['logfile']+'_'+str(get_mpi_rank())+'.log'
+        # check if file/directory exists, otherwise create it
+        if not os.path.exists(os.path.dirname(file_name)):
+            os.makedirs(os.path.dirname(file_name))
+        with open(file_name, 'a') as logfile:
+            # add timestamp to message
+            message = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()) + " " + message
+            logfile.write(message)
+
+        pass
 
     
     def sample(self):

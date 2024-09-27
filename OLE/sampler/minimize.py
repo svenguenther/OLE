@@ -70,6 +70,8 @@ class MinimizeSampler(Sampler):
         def minimize(self):
             # Run the sampler.
 
+            self.write_to_log("Starting minimization \n")
+
             # get the initial guess
             initial_position = self.get_initial_position(N=1, normalized=True)[0]
             initial_position1 = self.get_initial_position(N=1, normalized=False)[0]
@@ -80,8 +82,13 @@ class MinimizeSampler(Sampler):
 
             if self.use_gradients:
                 # create differentiable loglike
-                f = jax.jit(self.emulate_total_minuslogposterior_from_normalized_parameters_differentiable)     # this is the differentiable loglike
-                grad_f = jax.jit(jax.grad(self.emulate_total_minuslogposterior_from_normalized_parameters_differentiable))
+                if not self.debug_mode:
+                    f = jax.jit(self.emulate_total_minuslogposterior_from_normalized_parameters_differentiable)
+                    grad_f = jax.jit(jax.grad(self.emulate_total_minuslogposterior_from_normalized_parameters_differentiable))
+                else:
+                    f = self.emulate_total_minuslogposterior_from_normalized_parameters_differentiable
+                    grad_f = jax.grad(self.emulate_total_minuslogposterior_from_normalized_parameters_differentiable)
+
                 hessian_f = (jax.hessian(self.emulate_total_minuslogposterior_from_normalized_parameters_differentiable))
 
                 self.method = 'TNC'
@@ -103,7 +110,7 @@ class MinimizeSampler(Sampler):
                     self.inv_hessian = self.denormalize_inv_hessematrix( res.hess_inv.todense() )
                 except:
                     self.inv_hessian = None
-                
+
             self.res = res
             self.bestfit = self.retranform_parameters_from_normalized_eigenspace(res.x)
             self.max_loglike = res.fun

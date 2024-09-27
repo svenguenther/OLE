@@ -118,6 +118,10 @@ class BaseClass(Logger, Timer):
     
     def initialize(self, **kwargs):
         self.initialized = True
+        if 'debug' in kwargs:
+            self.debug_mode = kwargs['debug']
+            self.set_loglevel(logging.DEBUG if self.debug_mode else logging.INFO)
+
         pass
 
 

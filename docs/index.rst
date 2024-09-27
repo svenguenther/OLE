@@ -9,10 +9,18 @@
 .. toctree::
    :hidden:
    :maxdepth: 2
+   :caption: Samplers
+
+   sampler/NUTS
+   sampler/minimizer
+
+.. toctree::
+   :hidden:
+   :maxdepth: 2
    :caption: Settings
 
    emulator/emulator
-   sampler/sampler
+   sampler/sampler_settings
 
 .. toctree::
    :hidden:

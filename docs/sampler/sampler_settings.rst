@@ -33,7 +33,10 @@ General Sampler Settings:
      - Frequency with which the status updates are printed.
    * - ``debug``
      - ``False``
-     - If set to ``True`` the sampler will print out a lot of debugging information. This is very helpful when investigating a new problem.
+     - If set to ``True`` the sampler will print out a lot of debugging information. This is very helpful when investigating a new problem. Can slow done the code by a magnitude.
+   * - ``logfile``
+     - ``None``
+     - If set to a path. It will monitor all calls to the likelihood and write them to the file. This is useful for debugging. Some of the output can be only obtained when having debug set ti True. Note that when using this option the code will be slower by a magnitude.
 
 Evaluate sampler (computes likelihood for a given parameter set):
 
