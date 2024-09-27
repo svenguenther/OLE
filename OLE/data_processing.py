@@ -14,6 +14,7 @@ import gc
 import copy
 
 import scipy as sp
+import sklearn.decomposition as skd
 
 from OLE.plotting import (
     data_plot_raw,
@@ -169,21 +170,21 @@ class data_processor(BaseClass):
         # The PCA is performed on the output data. The output data is compressed to the dimensionality of the input data.
         # The compressed data is handed to the emulator.
 
-        # calculate the PCA of the output data
-        data_cov = jnp.dot(self.output_data_normalized.T, self.output_data_normalized)
-
         n_eigenvalues = min(
             self.hyperparameters["max_output_dimensions"], self.output_size
         )
 
-        eigenvalues, eigenvectors = sp.sparse.linalg.eigsh(
-            np.array(data_cov), n_eigenvalues
-        )  # the eigenvectors are normalized. Thus,
+        # use PCA of Scipy to calculate the eigenvectors and eigenvalues
+        pca = skd.PCA(n_components=n_eigenvalues)
+        pca.fit(self.output_data_normalized)
+        eigenvalues = pca.explained_variance_
+        eigenvectors = pca.components_
 
-        # sort the eigenvalues and eigenvectors
-        idx = eigenvalues.argsort()[::-1]
-        eigenvalues = eigenvalues[idx].real
-        eigenvectors = eigenvectors[:, idx].real
+        eigenvalues = eigenvalues * (self.output_data_normalized.shape[0]-1)
+
+        eigenvectors = jnp.array(eigenvectors.T)
+        eigenvalues = jnp.array(eigenvalues)
+
 
         # calculate the explained variance
         self.explained_variance = eigenvalues / jnp.sum(eigenvalues)

@@ -43,6 +43,7 @@ docs = [
 "myst-parser==2.0.0",
 "numpy",
 "matplotlib",
+"scikit-learn",
 ]
 
 [tool.flit.module]
