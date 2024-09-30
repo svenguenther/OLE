@@ -15,6 +15,10 @@ class Likelihood(BaseClass):
 
     def update_theory_settings(self, theory_settings):
         # this function can be used to update the theory settings
+        # check if it already has a sub direcory for requirements
+        if 'requirements' not in theory_settings:
+            theory_settings['requirements'] = {}
+
         return theory_settings
 
     def initialize(self, **kwargs):
@@ -30,7 +34,7 @@ class Likelihood(BaseClass):
 
     def loglike_state(self, state):
         # Compute the loglikelihood for the given parameters.
-        state["loglike"] = self.loglike(state)
+        state["loglike"][self._name] = self.loglike(state)
 
         return state
 

@@ -96,16 +96,16 @@ class NUTSSampler(Sampler):
         # minimize the nuisance parameters
         x0 = (jnp.array([state['parameters'][key][0] for key in self.nuisance_parameters])-self.nuisance_means)/self.nuisance_stds
 
-        state['loglike'] = -self.jit_logposterior_function(x0, local_state)
+        state['total_loglike'] = -self.jit_logposterior_function(x0, local_state)
         # check for nan
-        if jnp.isnan(state['loglike']):
-            self.error("Nuisance minimization: loglike is nan")
+        if jnp.isnan(state['total_loglike']):
+            self.error("Nuisance minimization: total_loglike is nan")
             return state
 
         result = minimize(self.jit_logposterior_function, x0, jac=self.jit_gradient_logposterior_function, method='TNC', args=(local_state), options={'disp': False}, tol=1e-1)
         self.debug("minimization result: %s", result)
 
-        state['loglike'] = jnp.array([float(-result.fun)])
+        state['total_loglike'] = jnp.array(float(-result.fun))
         for i, key in enumerate(self.nuisance_parameters):
             state['parameters'][key] = jnp.array([result.x[i]])*self.nuisance_stds[i] + self.nuisance_means[i]
 
@@ -157,7 +157,7 @@ class NUTSSampler(Sampler):
                         step_untransformed = self.retranform_parameters_from_normalized_eigenspace(step[i] )
 
                         # Run the sampler.
-                        state_test = {'parameters': {}, 'quantities': {}, 'loglike': None} 
+                        state_test = {'parameters': {}, 'quantities': {}, 'loglike': {}, 'total_loglike': None} 
                         # translate the parameters to the state
                         for j, key in enumerate(self.parameter_dict.keys()):
                             state_test['parameters'][key] = jnp.array([step_untransformed[j]])
@@ -189,7 +189,7 @@ class NUTSSampler(Sampler):
                             self.emulator.train()
                             self.debug("Emulator trained")
 
-                    loglikes = jnp.array([theory_states[i]['loglike'].sum() for i in range(self.nwalkers)])
+                    loglikes = jnp.array([theory_states[i]['total_loglike'] for i in range(self.nwalkers)])
 
                 else:
                     loglikes = jnp.array([self.compute_total_logposterior_from_normalized_parameters(step[i]) for i in range(self.nwalkers)])
@@ -223,9 +223,9 @@ class NUTSSampler(Sampler):
 
         minimizer.initialize(parameters=self.parameter_dict, 
                             theory=self.theory, 
-                            likelihood=self.likelihood, 
+                            likelihood_collection=self.likelihood_collection, 
                             emulator=self.emulator, 
-                            likelihood_settings=self.likelihood_settings,
+                            likelihood_collection_settings=self.likelihood_collection_settings,
                             theory_settings=self.theory_settings,
                             emulator_settings=self.emulator.hyperparameters,
                             sampling_settings=minimizer_params,
@@ -262,7 +262,7 @@ class NUTSSampler(Sampler):
         # Run the sampler.
         if self.hyperparameters['compute_data_covmat']:
             # compute the data covariance matrix
-            bestfit_state = {'parameters': {}, 'quantities': {}, 'loglike': None}
+            bestfit_state = {'parameters': {}, 'quantities': {}, 'loglike': {}, 'total_loglike': None}
 
             # translate the parameters to the state
             for i, key in enumerate(self.parameter_dict.keys()):
@@ -378,7 +378,7 @@ class NUTSSampler(Sampler):
             # note that the runtime of testing is about the same as the runtime of the emulator for one round 
             if testing_flag:
                 # if the emulator is not good enough, we need to run the theory code and add the state to the emulator
-                state = {'parameters': {}, 'quantities': {}, 'loglike': None}
+                state = {'parameters': {}, 'quantities': {}, 'loglike': {}, 'total_loglike': None}
 
                 theta_untransformed = self.retranform_parameters_from_normalized_eigenspace(thetas[i+1])
 
@@ -409,10 +409,11 @@ class NUTSSampler(Sampler):
                         
                         
                         state = self.theory.compute(state)
-                        state = self.likelihood.loglike_state(state)
+                        for key in self.likelihood_collection.keys():
+                            state = self.likelihood_collection[key].loglike_state(state)
                         logprior = self.compute_logprior(state)
                         
-                        state['loglike'] = state['loglike'] + logprior
+                        state['total_loglike'] = jnp.array(list(state['loglike'].values())).sum() + logprior
                         
                         a,rejit_required = self.emulator.add_state(state)
 

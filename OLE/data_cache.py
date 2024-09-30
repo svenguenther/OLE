@@ -35,7 +35,8 @@ import jax.numpy as jnp
 #         "quantity2": [element1, element2, ...],
 #         ...
 #     },
-#     "loglike": 123, (or None if not available)
+#     "loglike": {'likelihood1': 0.0, 'likelihood2': 0.0, ...}
+#     "total_loglike": 0.0
 # }
 
 
@@ -104,7 +105,7 @@ class DataCache(BaseClass):
         if self.hyperparameters["load_cache"]:
             if os.path.exists(self.hyperparameters["cache_file"]):
                 self.load_cache()
-                self.max_loglike = max(self.get_loglikes())
+                self.max_loglike = self.get_max_loglike()
         else:
             # delete old cache file
             try:
@@ -125,8 +126,10 @@ class DataCache(BaseClass):
 
         # check if delta loglike is exceeded
         # returns True if the state is added to the cache, False otherwise
-        new_loglike = new_state["loglike"]
-        self.max_loglike = max(self.get_loglikes())
+        new_loglike = new_state["total_loglike"]
+
+        self.max_loglike = self.get_max_loglike()
+
 
         # check if new loglike is nan
         if jnp.isnan(new_loglike):
@@ -134,8 +137,8 @@ class DataCache(BaseClass):
             return False
 
         self.debug(
-            "Loglikelihood of incoming state: %f, Current bestfit Loglikelihood %f"
-            % (new_loglike.sum(), self.max_loglike.sum())
+            "Loglikelihood of incoming state: %f, Current bestfit Loglikelihood %s"
+            % (new_loglike.sum(), self.max_loglike)
         )
 
         # check if the new loglike is larger than the maximum loglike
@@ -147,8 +150,8 @@ class DataCache(BaseClass):
         for state in self.states:
             if state["parameters"] == new_state["parameters"]:
                 # update the loglike if the new loglike is larger
-                if new_loglike > state["loglike"]:
-                    state["loglike"] = new_loglike
+                if new_loglike > state["total_loglike"]:
+                    state["total_loglike"] = new_loglike
                     self.debug("updated loglike in cache")
                 self.debug("state already in cache")
                 return False
@@ -159,7 +162,7 @@ class DataCache(BaseClass):
             min_loglike = min(self.get_loglikes())
             if new_loglike > min_loglike:
                 for i, state in enumerate(self.states):
-                    if state["loglike"] == min_loglike:
+                    if state["total_loglike"] == min_loglike:
                         self.states.pop(i)  #
                         break
 
@@ -191,8 +194,20 @@ class DataCache(BaseClass):
         return [state["quantities"][quantity] for state in self.states]
 
     def get_loglikes(self):
-        # returns all loglikes
-        return [state["loglike"] for state in self.states]
+        # returns all loglikes     
+        return jnp.array([state["total_loglike"] for state in self.states])
+    
+    def get_max_loglike(self):
+
+        loglikes = self.get_loglikes()
+
+        if len(loglikes) == 0:
+            max_loglike = -jnp.inf
+        else:
+            max_loglike = jnp.max(loglikes)
+
+        return max_loglike
+
 
     def store_cache(self):
         # store the cache in the hdf5 file
@@ -220,19 +235,19 @@ class DataCache(BaseClass):
 
             # here we need to remove states if the cache is full
             if len(old) > self.hyperparameters["cache_size"]:
-                min_loglike = min([state["loglike"] for state in old])
+                min_loglike = min([state["total_loglike"] for state in old])
                 for i, state in enumerate(old):
-                    if state["loglike"] == min_loglike:
+                    if state["total_loglike"] == min_loglike:
                         old.pop(i)
                         break
 
             # remove states whose loglike is to far away from the maximum loglike
-            max_loglike = max([state["loglike"] for state in old])
+            max_loglike = max([state["total_loglike"] for state in old])
 
             valid_indices = []
             for i, state in enumerate(old):
                 if not (
-                    abs(state["loglike"][0] - max_loglike)
+                    abs(state["total_loglike"] - max_loglike)
                     > self.hyperparameters["delta_loglike"]
                 ):
                     # remove index from mask
@@ -246,7 +261,7 @@ class DataCache(BaseClass):
 
             self.states = old
 
-            self.max_loglike = max(self.get_loglikes())
+            self.max_loglike = self.get_max_loglike()
 
     def load_cache(self):
         # load the cache from the hdf5 file

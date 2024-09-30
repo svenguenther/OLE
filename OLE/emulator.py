@@ -49,8 +49,8 @@ class Emulator(BaseClass):
     # list of input parameters
     input_parameters: list
 
-    # likelihood calculation
-    likelihood: Likelihood
+    # likelihood collection calculation
+    likelihood_collection: dict
 
     def __init__(self, data_cache = None, **kwargs):
         super().__init__("Emulator", **kwargs)
@@ -71,7 +71,7 @@ class Emulator(BaseClass):
 
         pass
 
-    def initialize(self, likelihood=None, ini_state=None, **kwargs):
+    def initialize(self, likelihood_collection=None, ini_state=None, **kwargs):
         super().initialize(**kwargs)
         # default hyperparameters
         defaulthyperparameters = {
@@ -122,7 +122,7 @@ class Emulator(BaseClass):
             'dimensionality': None, # if we give the dimensionality, the code estimates where we need to be accruate in the quality criterium (inside of N_sigma). Thus, we can estimate the quality_threshold_quadratic, in a way, that it becomes dominant over the linear at this point!
 
             # a dictionary for the likelihood settings
-            'likelihood_settings': {},
+            'likelihood_collection_settings': {},
 
             # this setting is a flag whether to jit the emulator
             'jit': True,
@@ -179,10 +179,11 @@ class Emulator(BaseClass):
         else:
             self.input_parameters = list(ini_state['parameters'].keys())
 
-        self.likelihood = likelihood
-        if self.likelihood is not None:
-            if not self.likelihood.initialized:
-                self.likelihood.initialize(**self.hyperparameters['likelihood_settings']) # usually the likelihood should have been initialized before the emulator
+        self.likelihood_collection = likelihood_collection
+        if self.likelihood_collection is not None:
+            for likelihood_name, likelihood in self.likelihood_collection.items():
+                if not likelihood.initialized:
+                    likelihood.initialize(**self.hyperparameters['likelihood_collection_settings'][likelihood_name])
 
         # A state dictionary is a nested dictionary with the following structure:
         # state = {
@@ -196,7 +197,8 @@ class Emulator(BaseClass):
         #         "quantity2": [element1, element2, ...],
         #         ...
         #     },
-        #     "loglike": 123, (or None if not available)
+        #     "loglike": {'name_of_experiment': 123, 'name_of_experiment2': 456},
+        #     "total_loglike": 123456,
         # }
             
         # remove the parameters which are not in the input_parameters list
@@ -304,14 +306,14 @@ class Emulator(BaseClass):
 
         if state_added:
             # write to log that the state was added
-            _ = "State added to emulator: " + "; ".join([key+ ': ' +str(value) for key, value in new_state['parameters'].items()]) + " at loglike: " + str(new_state['loglike']) + " max. loglike: " + str(self.data_cache.max_loglike) + "\n"
+            _ = "State added to emulator: " + "; ".join([key+ ': ' +str(value) for key, value in new_state['parameters'].items()]) + " at loglike: " + str(new_state['total_loglike']) + " max. loglike: " + str(self.data_cache.max_loglike) + "\n"
             self.write_to_log(_)
             # write to log the current size of the data cache
             _ = "Current data cache size: %d\n" % len(self.data_cache.states)
             self.write_to_log(_)
         else:
             # write to log that the state was not added
-            _ = "State not added to emulator: " + "; ".join([key+ ': ' +str(value) for key, value in new_state['parameters'].items()]) + " at loglike: " + str(new_state['loglike']) + " max. loglike: " + str(self.data_cache.max_loglike) + "\n"
+            _ = "State not added to emulator: " + "; ".join([key+ ': ' +str(value) for key, value in new_state['parameters'].items()]) + " at loglike: " + str(new_state['total_loglike']) + " max. loglike: " + str(self.data_cache.max_loglike) + "\n"
             self.write_to_log(_)
             # write to log the current size of the data cache
             _ = "Current data cache size: %d\n" % len(self.data_cache.states)
@@ -342,6 +344,8 @@ class Emulator(BaseClass):
         # Update the emulator. This means that the emulator is retrained.
         # Load the data from the cache.
         self.debug("Loading data from cache")
+        # del self.jitted_emulation_function
+        # del self.jitted_sampling_function
         self.data_cache.load_cache()
 
         self.write_to_log("Update emulator\n")
@@ -362,14 +366,7 @@ class Emulator(BaseClass):
             emulator.data_processor.normalize_training_data()
             emulator.data_processor.compress_training_data()
 
-            emulator.update()
-
-            del input_data_raw
-            del output_data_raw
-
-            del input_data_raw_jax
-            del output_data_raw_jax
-            
+            emulator.update()            
             
         self.trained = True
         self.rejit_flag_emulator = True
@@ -439,7 +436,7 @@ class Emulator(BaseClass):
             parameters = jnp.array(self.data_cache.get_parameters())
 
             for i in range(len(parameters[0])):
-                plot_loglikes(loglikes[:,0], parameters[:,i], self.input_parameters[i], self.hyperparameters['plotting_directory']+'/loglike_'+str(i)+'.png')
+                plot_loglikes(loglikes[:], parameters[:,i], self.input_parameters[i], self.hyperparameters['plotting_directory']+'/loglike_'+str(i)+'.png')
         pass
 
     def set_data_covmats(self, data_covmats):
@@ -458,6 +455,11 @@ class Emulator(BaseClass):
         # if we jit the emulator, we use the jit version of the emulator
         if self.hyperparameters['jit'] and (self.continuous_successful_calls > self.hyperparameters['jit_threshold']):
             if self.rejit_flag_emulator: # if the emulator was updated/retrained, we rejit the emulator
+                # if there is a old jitted function, we delete it
+                if hasattr(self, 'jitted_emulation_function'):
+                    del self.jitted_emulation_function
+                    # clear memory
+                    jax.clear_backends()
                 self.jitted_emulation_function = jax.jit(self.emulate_jit)
                 output_state_emulator = self.jitted_emulation_function(parameters)
                 self.rejit_flag_emulator = False
@@ -479,7 +481,7 @@ class Emulator(BaseClass):
 
     def emulate_jit(self, parameters):
         # Prepare output state
-        output_state = {'quantities':{}} #self.ini_state.copy() # TODO Talk with christian about thish here
+        output_state = {'parameters': {}, 'quantities':{}, 'loglike': {}, 'total_loglike': None} 
         output_state['parameters'] = parameters
 
         # Emulate the quantities for the given parameters.
@@ -492,7 +494,7 @@ class Emulator(BaseClass):
 
     def emulate_nojit(self, parameters):
         # Prepare output state
-        output_state = {'quantities':{}}
+        output_state = {'parameters': {}, 'quantities':{}, 'loglike': {}, 'total_loglike': None} 
         output_state['parameters'] = parameters
 
         # Emulate the quantities for the given parameters.
@@ -533,6 +535,8 @@ class Emulator(BaseClass):
                     "quantity2": [element1, element2, ...],
                     ...
                 }
+                "loglike": {'name_of_experiment': 123, 'name_of_experiment2': 456},
+                "total_loglike": 123456,
             }
         jax.random.PRNGKey
             The updated random number generator key.
@@ -545,6 +549,12 @@ class Emulator(BaseClass):
         # use jit or no jit version of the function
         if self.hyperparameters['jit'] and (self.continuous_successful_calls > self.hyperparameters['jit_threshold']):
             if self.rejit_flag_sampling: # if the emulator was updated/retrained, we rejit the emulator
+
+                if hasattr(self, 'jitted_sampling_function'):
+                    del self.jitted_sampling_function
+                    # clear memory
+                    jax.clear_backends()
+
                 self.jitted_sampling_function = jax.jit(self.emulate_samples_jit)
                 output_states_emulator, RNGkey = self.jitted_sampling_function(parameters, RNGkey,noise)
                 self.rejit_flag_sampling = False
@@ -563,7 +573,7 @@ class Emulator(BaseClass):
     # @partial(jax.jit, static_argnums=0)
     def emulate_samples_jit(self, parameters, RNGkey, noise = 0):
         # Prepare list of N output states
-        state = {'parameters': {}, 'quantities': {}}
+        state = {'parameters': {}, 'quantities':{}, 'loglike': {}, 'total_loglike': None} 
         state['parameters'] = parameters
         output_states = [deepcopy(state) for i in range(self.hyperparameters['N_quality_samples'])]
 
@@ -580,7 +590,7 @@ class Emulator(BaseClass):
 
     def emulate_samples_nojit(self, parameters, RNGkey, noise = 0):
         # Prepare list of N output states
-        state = {'parameters': {}, 'quantities': {}}
+        state = {'parameters': {}, 'quantities':{}, 'loglike': {}, 'total_loglike': None} 
         state['parameters'] = parameters
         output_states = [deepcopy(state) for i in range(self.hyperparameters['N_quality_samples'])]
 
@@ -670,7 +680,6 @@ class Emulator(BaseClass):
                     self.debug("Error tolerance for GP %d of quantity %s: %e" % (i, quantity_name, error))
 
     
-
     def check_quality_criterium(self, loglikes, parameters, reference_loglike = None, write_log = True):
         # check whether the emulator is good enough to be used
         # if the emulator is not yet trained, we return False
@@ -734,7 +743,6 @@ class Emulator(BaseClass):
         self.quality_check_successful_counter += 1
         return True
     
-
     def require_quality_check(self, parameters):
         # check whether the emulator is expected to perform well for the given parameters.
         # if we return False, the emulator is expected to perform well and we do not need to check the quality criterium

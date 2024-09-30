@@ -13,6 +13,8 @@ import time
 import logging
 from .mpi import *
 
+c_km_s = 299792.458
+
 class Timer:
     def __init__(self, name = None):
         self.n = 0

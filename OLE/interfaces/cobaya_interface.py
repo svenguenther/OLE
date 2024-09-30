@@ -189,7 +189,7 @@ def check_cache_and_compute(self, params_values_dict,
                 self.skip_theory_state_from_emulator = state
                 likelihoods = list(self.provider.model._loglikes_input_params(self.provider.params, cached=False, return_derived = False))
 
-                emulator_state['loglike'] = np.array([sum(likelihoods)])
+                emulator_state['total_loglike'] = np.array([sum(likelihoods)])
 
                 # import sys
                 # sys.exit()
@@ -240,7 +240,7 @@ def check_cache_and_compute(self, params_values_dict,
 
             likelihoods = list(self.provider.model._loglikes_input_params(self.provider.params, cached=False, return_derived = False))
 
-            emulator_state['loglike'] = np.array([sum(likelihoods)])
+            emulator_state['total_loglike'] = np.array(sum(likelihoods))
 
             self.initial_emulator_state = copy.deepcopy(emulator_state)
 
@@ -374,7 +374,7 @@ def translate_cobaya_state_to_emulator_state(state):
     emulator_state = {}
     emulator_state['parameters'] = {}
     emulator_state['quantities'] = {}
-    emulator_state['loglike'] = None
+    emulator_state['total_loglike'] = None
 
     # try to read the parameters and quantities from the cobaya state
     #try:

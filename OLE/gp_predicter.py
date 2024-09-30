@@ -482,7 +482,7 @@ class GP(BaseClass):
             # Exponential decay learning rate
             "learning_rate": 0.1,
             # Number of iterations
-            "num_iters": 100, # per iteration
+            "num_iters": 200, # per iteration
             # Maximal number of iterations
             "max_num_iters": 2000,
             # Early stopping criterion
@@ -788,6 +788,7 @@ class GP(BaseClass):
         # compute the inverse kernel matrix
         if not self.hyperparameters["is_sparse"]:
             
+            del self.inv_Kxx
             inv_Kxx = self.opt_posterior.compute_inv_Kxx(self.D)
             self.inv_Kxx = inv_Kxx
 

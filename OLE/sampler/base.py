@@ -47,12 +47,18 @@ class Sampler(BaseClass):
     --------------
     theory : Theory
         The theory instance.
-    likelihood : Likelihood
+    likelihood_collection : Dictionary of all used likelihoods. Has form of {name: likelihood_instance, name2: likelihood_instance2,...}
         The likelihood instance.
-    parameter_dict : dict
-        A dictionary containing the parameters and their properties such as priors, proposals, etc.
     emulator : Emulator
         The emulator instance.
+    emulator_settings : dict
+        The settings for the emulator. Will be passed to the emulator when intialized.
+    likelihood_collection_settings : dict
+        The settings for the likelihood. Will be passed to the likelihood when intialized. has the form of {name: likelihood_settings, name2: likelihood_settings2,...}
+    theory_settings : dict
+        The settings for the theory. Will be passed to the theory when intialized.
+    sampling_settings : dict
+        The settings for the sampler. Will be passed to the sampler.
 
     Methods
     --------------
@@ -64,8 +70,11 @@ class Sampler(BaseClass):
     """
 
     theory: Theory
-    likelihood: Likelihood
-    parameter_dict: dict
+    likelihood: dict
+    emulator_settings: dict
+    likelihood_collection_settings: dict
+    theory_settings: dict
+    sampling_settings: dict
 
     emulator: Emulator
 
@@ -75,11 +84,11 @@ class Sampler(BaseClass):
     
     def initialize(self, 
                    parameters, 
-                   likelihood=None, 
+                   likelihood_collection=None, 
                    theory=None,
                    emulator=None, 
                    emulator_settings={},
-                   likelihood_settings={},
+                   likelihood_collection_settings={},
                     theory_settings={},
                     sampling_settings={},
                    **kwargs):
@@ -91,7 +100,7 @@ class Sampler(BaseClass):
         --------------
         parameters : dict
             A dictionary containing the parameters and their properties such as priors, proposals, etc.
-        likelihood : Likelihood
+        likelihood_collection : dictionary of Likelihoods
             The likelihood instance.
         theory : Theory
             The theory instance.
@@ -117,20 +126,21 @@ class Sampler(BaseClass):
 
         # Save all the settings
         self.emulator_settings = emulator_settings
-        self.likelihood_settings = likelihood_settings
+        self.likelihood_collection_settings = likelihood_collection_settings
         self.theory_settings = theory_settings
         self.sampling_settings = sampling_settings
 
         # Store Likelihood and initialize if possible
-        self.likelihood = likelihood
-        if self.likelihood is not None:
-            if not self.likelihood.initialized:
-                self.likelihood_settings = likelihood_settings
-                self.likelihood.initialize(**likelihood_settings)
+        self.likelihood_collection = likelihood_collection
+        if self.likelihood_collection is not None:
+            for key in self.likelihood_collection.keys():
+                if not self.likelihood_collection[key].initialized:
+                    self.likelihood_collection[key].initialize(**self.likelihood_collection_settings[key])
 
         # update theory settings by likelihood
         if theory is not None:
-            theory_settings = self.likelihood.update_theory_settings(theory_settings)
+            for key in self.likelihood_collection.keys():
+                theory_settings = self.likelihood_collection[key].update_theory_settings(theory_settings)
 
         # Store Theory and initialize if possible
         self.theory = theory
@@ -143,9 +153,11 @@ class Sampler(BaseClass):
         if emulator is not None:
             self.emulator = emulator
 
-        # load default parameter dictionary from likelihood
-        if self.likelihood is not None:
-            self.parameter_dict = self.likelihood.nuisance_sample_dict
+        # load default parameter dictionary from likelihood collection
+        if self.likelihood_collection is not None:
+            self.parameter_dict = {}
+            for key in self.likelihood_collection.keys():
+                self.parameter_dict.update(self.likelihood_collection[key].nuisance_sample_dict)
 
         # Update on parameters if given
         if parameters is not None:
@@ -217,7 +229,7 @@ class Sampler(BaseClass):
         # remove the parameters from the test state which are not in self.theory.requried_parameters
 
         # the likelihood will be initialized once again in the emulator. As a consequence we need to provide the emulator settings with the likelihood settings
-        emulator_settings['likelihood_settings'] = likelihood_settings
+        emulator_settings['likelihood_collection_settings'] = self.likelihood_collection_settings
 
         # if emulator was not loaded, we need to create one here:
         if self.emulator is None:
@@ -235,9 +247,9 @@ class Sampler(BaseClass):
             # here we check the requried_parameters of the theory code. If they are specified, we initialize the emulator with the requried_parameters
             # otherwise the emulator is inificalized with all parameters which could also include likelihood parameters!
             if len(self.theory.requried_parameters()) > 0:
-                self.emulator.initialize(self.likelihood, test_state, input_parameters=self.theory.requried_parameters(), **emulator_settings)
+                self.emulator.initialize(self.likelihood_collection, test_state, input_parameters=self.theory.requried_parameters(), **emulator_settings)
             else:
-                self.emulator.initialize(self.likelihood, test_state, **emulator_settings)
+                self.emulator.initialize(self.likelihood_collection, test_state, **emulator_settings)
 
 
         self.nuisance_parameters = list(self.parameter_dict.keys())
@@ -472,7 +484,7 @@ class Sampler(BaseClass):
         It is used to test the pipeline when initializing the sampler in order to ensure that the emulator, the theory, and the likelihood are working correctly.
         """
         # Create a test state from the given parameters.
-        state = {'parameters': {}, 'quantities': {}, 'loglike': None, 'loglike_gradient': {}}
+        state = {'parameters': {}, 'quantities': {}, 'loglike': {}, 'total_loglike': None}
 
         RNG = jax.random.PRNGKey(int(time.time())+get_mpi_rank())
 
@@ -492,7 +504,13 @@ class Sampler(BaseClass):
         state = self.theory.compute(state)
 
         # compute the loglikelihood
-        state = self.likelihood.loglike_state(state)
+        for key in self.likelihood_collection.keys():
+            state = self.likelihood_collection[key].loglike_state(state)
+
+        # compute the total loglike
+        logprior = self.compute_logprior(state)
+        state['total_loglike'] = jnp.array(list(state['loglike'].values())).sum() + logprior
+            
 
         self.debug("Test pipeline:")
         self.debug(state)
@@ -616,7 +634,7 @@ class Sampler(BaseClass):
             self.info("Current sampler call: %d", self.n)
 
         # Run the sampler.
-        state = {'parameters': {}, 'quantities': {}, 'loglike': None}
+        state = {'parameters': {}, 'quantities': {}, 'loglike': {}, 'total_loglike': None}
 
         # translate the parameters to the state
         for i, key in enumerate(self.parameter_dict.keys()):
@@ -635,20 +653,21 @@ class Sampler(BaseClass):
             state = self.theory.compute(state)
             self.debug("state after theory: %s for parameters: %s", state['quantities'], state['parameters'])
             
-            state = self.likelihood.loglike_state(state)
-            self.debug("loglike after theory: %f for parameters: %s", state['loglike'][0], state['parameters'])
+            for likelihood in self.likelihood_collection.keys():
+                state = self.likelihood_collection[likelihood].loglike_state(state)
+            self.debug("loglikes after theory: %s for parameters: %s", state['loglike'], state['parameters'])
 
-            state['loglike'] = state['loglike'] + logprior
+            state['total_loglike'] = jnp.array(list(state['loglike'].values())).sum() + logprior
             self.emulator.add_state(state)
         else:
             # here we need to test the emulator for its performance
             emulator_sample_states, RNGkey = self.emulator.emulate_samples(state['parameters'], RNGkey=RNGkey,noise=1)
-            emulator_sample_loglikes = jnp.array([self.likelihood.loglike_state(_)['loglike'] for _ in emulator_sample_states])
+            emulator_sample_loglikes = jnp.array([self.likelihood.loglike_state(_)['total_loglike'] for _ in emulator_sample_states])
             # check whether the emulator is good enough
             if not self.emulator.check_quality_criterium(emulator_sample_loglikes, parameters=state['parameters']):
                 state = self.theory.compute(state)
                 state = self.likelihood.loglike_state(state)
-                state['loglike'] = state['loglike'] + logprior
+                state['total_loglike'] = jnp.array(list(state['loglike'].values())).sum() + logprior
                 self.emulator.add_state(state)
             else:
                 # Add the point to the quality points
@@ -658,10 +677,11 @@ class Sampler(BaseClass):
                 state = self.emulator.emulate(state['parameters'])
                 self.debug("state after emulator: %s for parameters: %s", state['quantities'], state['parameters'])
 
-                state = self.likelihood.loglike_state(state)
-                self.debug("loglike after theory: %f for parameters: %s", state['loglike'][0], state['parameters'])
+                for likelihood in self.likelihood_collection.keys():
+                    state = self.likelihood_collection[likelihood].loglike_state(state)
+                self.debug("loglike after theory: %s for parameters: %s", state['loglike'], state['parameters'])
 
-                state['loglike'] = state['loglike'] + logprior
+                state['total_loglike'] = jnp.array(list(state['loglike'].values())).sum() + logprior
                 self.debug("emulator prediction: %s", state['quantities'])
 
 
@@ -673,11 +693,11 @@ class Sampler(BaseClass):
 
         self.increment(self.logger)
 
-        if type(state['loglike'][0]) != jax._src.interpreters.ad.JVPTracer:
-            _ = "Logposterior: "+ str(state['loglike'][0]) + ' at ' + " ".join([str(key) + ": " + str(value[0]) for key, value in state['parameters'].items()]) + "\n"
+        if type(state['total_loglike']) != jax._src.interpreters.ad.JVPTracer:
+            _ = "Logposterior: "+ str(state['total_loglike']) + ' at ' + " ".join([str(key) + ": " + str(value[0]) for key, value in state['parameters'].items()]) + "\n"
             self.write_to_log(_)
 
-        return state['loglike']
+        return state['total_loglike']
 
 
     def compute_total_logposterior_from_normalized_parameters(self, parameters):
@@ -720,7 +740,7 @@ class Sampler(BaseClass):
         parameters = self.retranform_parameters_from_normalized_eigenspace(parameters)
 
         # Run the sampler.
-        state = {'parameters': {}, 'quantities': {}, 'loglike': None}
+        state = {'parameters': {}, 'quantities': {}, 'loglike': {}, 'total_loglike': None}
 
         # translate the parameters to the state
         for i, key in enumerate(self.parameter_dict.keys()):
@@ -737,7 +757,12 @@ class Sampler(BaseClass):
         else:
             # here we need to test the emulator for its performance
             emulator_sample_states, RNGkey = self.emulator.emulate_samples(state['parameters'],RNGkey=RNGkey , noise=1)
-            emulator_sample_loglikes = jnp.array([self.likelihood.loglike_state(_)['loglike'] for _ in emulator_sample_states])
+
+            emulator_sample_loglikes = jnp.zeros(len(emulator_sample_states))
+            for i, emulator_sample_state in enumerate(emulator_sample_states):
+                for likelihood in self.likelihood_collection.keys():
+                    emulator_sample_state = self.likelihood_collection[likelihood].loglike_state(emulator_sample_state)
+                emulator_sample_loglikes.at[i].set(jnp.array(list(emulator_sample_state['loglike'].values())).sum())
 
             # check whether the emulator is good enough
             if not self.emulator.check_quality_criterium(emulator_sample_loglikes, parameters=state['parameters']):
@@ -778,15 +803,18 @@ class Sampler(BaseClass):
         """
         for i, key in enumerate(self.nuisance_parameters):
             local_state['parameters'][key] = jnp.array([parameter_values[i]])*self.nuisance_stds[i] + self.nuisance_means[i]
-        local_state = self.likelihood.loglike_state(local_state)
-        logprior = self.compute_logprior(local_state)
-        local_state['loglike'] = local_state['loglike'] + logprior
+        
+        for key in self.likelihood_collection.keys():
+            local_state = self.likelihood_collection[key].loglike_state(local_state)
 
-        if type(local_state['loglike'][0]) != jax._src.interpreters.ad.JVPTracer:
-            _ = "Logposterior: "+ str(local_state['loglike'][0]) + ' at ' + " ".join([str(key) + ": " + str(value[0]) for key, value in local_state['parameters'].items()]) + "\n"
+        logprior = self.compute_logprior(local_state)
+        local_state['total_loglike'] = jnp.array(list(local_state['loglike'].values())).sum() + logprior
+
+        if type(local_state['total_loglike']) != jax._src.interpreters.ad.JVPTracer:
+            _ = "Logposterior: "+ str(local_state['loglike']) + ' at ' + " ".join([str(key) + ": " + str(value[0]) for key, value in local_state['parameters'].items()]) + "\n"
             self.write_to_log(_)
         
-        return -local_state['loglike'][0]
+        return -local_state['total_loglike'].sum()
     
     
     def emulate_logposterior_from_normalized_parameters_differentiable(self, parameters_norm):
@@ -828,7 +856,7 @@ class Sampler(BaseClass):
         self.start()
 
         # Run the sampler.
-        state = {'parameters': {}, 'quantities': {}, 'loglike': None}
+        state = {'parameters': {}, 'quantities': {}, 'loglike': {}, 'total_loglike': None}
 
         # translate the parameters to the state
         for i, key in enumerate(self.parameter_dict.keys()):
@@ -844,38 +872,40 @@ class Sampler(BaseClass):
             state = self.emulator.emulate_jit(state['parameters'])
             self.debug("state after emulator: %s for parameters: %s", state['quantities'], state['parameters'])
 
-            state = self.likelihood.loglike_state(state)
-            self.debug("loglike after theory: %f for parameters: %s", state['loglike'][0], state['parameters'])
+            for likelihood in self.likelihood_collection.keys():
+                state = self.likelihood_collection[likelihood].loglike_state(state)
+            self.debug("loglike after theory: %s for parameters: %s", state['loglike'], state['parameters'])
 
-            state['loglike'] = state['loglike'] + logprior
+            state['total_loglike'] = jnp.array(list(state['loglike'].values())).sum() + logprior
             self.debug("emulator prediction: %s", state['quantities'])
-            return state['loglike']
+            return state['total_loglike']
         
         def full_logprior(state):
-            state['loglike'] = self.compute_logprior_with_border(state)
+            logprior = self.compute_logprior_with_border(state)
 
             # stitch parameters to the allowed parameter space
             stitched_parameters = self.stitch_parameters(state['parameters'])
 
             # compute the observables
             state = self.emulator.emulate_jit(stitched_parameters)
-            state = self.likelihood.loglike_state(state)
+            for likelihood in self.likelihood_collection.keys():
+                state = self.likelihood_collection[likelihood].loglike_state(state)
 
-            state['loglike'] = state['loglike'] + logprior
+            state['total_loglike'] = jnp.array(list(state['loglike'].values())).sum() + logprior
 
-            return state['loglike']
+            return state['total_loglike']
         
-        state['loglike'] = lax.cond(logprior < -1e20, full_logprior, full_loglike, state)
+        state['total_loglike'] = lax.cond(logprior < -1e20, full_logprior, full_loglike, state)
 
         parameters = self.transform_parameters_into_normalized_eigenspace(parameters)
 
         self.increment(self.logger)
         
-        if type(state['loglike'][0]) != jax._src.interpreters.ad.JVPTracer:
-            _ = "Logposterior: "+ str(state['loglike'][0]) + ' at ' + " ".join([str(key) + ": " + str(value[0]) for key, value in state['parameters'].items()]) + "\n"
+        if type(state['total_loglike']) != jax._src.interpreters.ad.JVPTracer:
+            _ = "Logposterior: "+ str(state['total_loglike']) + ' at ' + " ".join([str(key) + ": " + str(value[0]) for key, value in state['parameters'].items()]) + "\n"
             self.write_to_log(_)
 
-        return state['loglike']
+        return state['total_loglike']
 
     # This function emulates the loglikelihoods for given parameters.
     def emulate_loglikelihood_from_parameters_differentiable(self, parameters):
@@ -896,23 +926,25 @@ class Sampler(BaseClass):
         self.start()
 
         # Run the sampler.
-        state = {'parameters': {}, 'quantities': {}, 'loglike': None}
+        state = {'parameters': {}, 'quantities': {}, 'loglike': {}, 'total_loglike': None}
 
         # translate the parameters to the state
         for i, key in enumerate(self.parameter_dict.keys()):
             state['parameters'][key] = jnp.array([parameters[i]])
 
         state = self.emulator.emulate_jit(state['parameters'])
-        state = self.likelihood.loglike_state(state)
-        self.debug("loglike after theory: %f for parameters: %s", state['loglike'][0], state['parameters'])
+        for likelihood in self.likelihood_collection.keys():
+            state = self.likelihood_collection[likelihood].loglike_state(state)
+        state['total_loglike'] = jnp.array(list(state['loglike'].values())).sum()
+        self.debug("loglike after theory: %f for parameters: %s", state['total_loglike'], state['parameters'])
 
         self.increment(self.logger)
 
-        if type(state['loglike'][0]) != jax._src.interpreters.ad.JVPTracer:
-            _ = "Logposterior: "+ str(state['loglike'][0]) + ' at ' + " ".join([str(key) + ": " + str(value[0]) for key, value in state['parameters'].items()]) + "\n"
+        if type(state['total_loglike']) != jax._src.interpreters.ad.JVPTracer:
+            _ = "Logposterior: "+ str(state['total_loglike']) + ' at ' + " ".join([str(key) + ": " + str(value[0]) for key, value in state['parameters'].items()]) + "\n"
             self.write_to_log(_)
         
-        return state['loglike']
+        return state['total_loglike']
 
 
     def sample_emulate_logposterior_from_normalized_parameters_differentiable(self, parameters, N=1, RNGkey=jax.random.PRNGKey(int(time.time())), noise = 0.):
@@ -942,7 +974,7 @@ class Sampler(BaseClass):
         parameters = self.retranform_parameters_from_normalized_eigenspace(parameters)
 
         # Run the sampler.
-        state = {'parameters': {}, 'quantities': {}, 'loglike': None}
+        state = {'parameters': {}, 'quantities': {}, 'loglike': {}, 'total_loglike': None}
 
         # translate the parameters to the state
         for i, key in enumerate(self.parameter_dict.keys()):
@@ -956,7 +988,13 @@ class Sampler(BaseClass):
 
         states, RNGkey = self.emulator.emulate_samples_jit(state['parameters'], RNGkey, noise = noise)
 
-        loglikes = [self.likelihood.loglike_state(_)['loglike'] + logprior for _ in states]
+        loglikes = jnp.zeros(N)
+        for i in range(N):
+            state = states[i]
+            for likelihood in self.likelihood_collection.keys():
+                state = self.likelihood_collection[likelihood].loglike_state(state)
+            state['total_loglike'] = jnp.array(list(state['loglike'].values())).sum() + logprior
+            loglikes = loglikes.at[i].set(state['total_loglike'])
 
         self.increment(self.logger)
 
@@ -973,7 +1011,7 @@ class Sampler(BaseClass):
         This function emulates the total loglikelihood for given normalized parameters.
         """
         res = self.emulate_logposterior_from_normalized_parameters_differentiable(parameters)
-        return res.sum()
+        return res
     
     def sample_emulate_total_logposterior_from_normalized_parameters_differentiable(self, parameters, noise = 0):
         """

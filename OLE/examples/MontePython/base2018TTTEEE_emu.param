@@ -145,7 +145,7 @@ data.emulator_settings['min_data_points'] = 80
 
 # Cache settings
 data.emulator_settings['load_cache'] = True
-data.emulator_settings['cache_file'] = './cache.pkl'
+data.emulator_settings['cache_file'] = './chains/cache.pkl'
 
 
 # data.emulator_settings['plotting_directory'] = './plots_spt_clang_nuts'

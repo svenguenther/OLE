@@ -1,8 +1,10 @@
 # this is a theory implementation of CLASS, a Boltzmann code for cosmological perturbations. The theory is initialized with a set of parameters, and the compute method is used to compute the observable for the given parameters. The likelihood is then used to compare the theoretical predictions with the observed data.
 
 from OLE.theory import Theory
+from OLE.utils.base import c_km_s
 import classy
 import numpy as np
+import jax.numpy as jnp
 
 class CLASS(Theory):
     def initialize(self, **kwargs):
@@ -65,6 +67,25 @@ class CLASS(Theory):
                 cls = self.cosmo.lensed_cl(self.class_settings['l_max_scalars'])
                 state['quantities'][key] = cls[key]
 
+        # check for bao and other quantities
+        if 'bao' in self.requirements.keys():
+            # go through all BAO likelihoods
+            for bao in self.requirements['bao']:
+                bao_name = list(bao.keys())[0]
+                bao_data = []
+
+                for key, z, rs_fid in bao[bao_name]:
+                    if key == 'DM_over_rs':
+                        bao_data.append((1+z)*self.cosmo.angular_distance(z)*rs_fid/self.cosmo.rs_drag())
+                    elif key == 'bao_Hz_rs':
+                        bao_data.append(self.cosmo.Hubble(z)*c_km_s*self.cosmo.rs_drag()/rs_fid)
+                    else:
+                        raise ValueError('BAO key not recognized:', key)
+
+                state['quantities'][bao_name] = jnp.array(bao_data)
+
+
+            
 
         return state
 

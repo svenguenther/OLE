@@ -20,13 +20,6 @@
 
 
 
-
-
-
-
-
-
-
 from jax import config
 # config.update("jax_debug_nans", True)
 
@@ -34,19 +27,22 @@ import time
 
 from OLE.theories.CLASS import CLASS
 from OLE.likelihoods.cosmo.candl import candl_likelihood
+from OLE.likelihoods.cosmo.bao.sdss_dr12_consensus_bao import sdss_dr12_consensus_bao
 
 # Init theory and likelihood
 my_theory = CLASS()
-my_likelihood = candl_likelihood()
-my_likelihood_collection = {'candl': my_likelihood}
+
+my_candl = candl_likelihood()
+my_bao = sdss_dr12_consensus_bao()
+my_likelihood_collection = {'candl': my_candl, 'bao': my_bao}
 
 
 emulator_settings = {
     # the number of data points in cache before the emulator is to be trained
-    'min_data_points': 80,
+    'min_data_points': 30,
 
     # name of the cache file
-    'cache_file': './output_clang_act_nuts/cache.pkl',
+    'cache_file': './output_clang_act_bao_nuts/cache.pkl',
     # load the cache from previous runs if possible. If set to false, the cache is overwritten.
     'load_cache': True,
 
@@ -62,9 +58,9 @@ emulator_settings = {
     'dimensionality': 7,
     'N_sigma': 4.0,
 
-    # 'plotting_directory': './output_clang_act_nuts/plots_sampler_clang_nuts',
+    # 'plotting_directory': './output_clang_act_bao_nuts/plots_sampler_clang_nuts',
     # 'testset_fraction': 0.1,
-    'logfile': './output_clang_act_nuts/log',
+    'logfile': './output_clang_act_bao_nuts/log',
 
     # 'compute_data_covmat': True,
     'data_covmat_directory': './act_data_covmats',
@@ -77,7 +73,8 @@ likelihood_settings = {
     'candl_dataset': 'candl.data.ACT_DR4_TTTEEE',
     'clear_priors': False,
 }
-my_likelihood_collection_settings = {'candl': likelihood_settings}
+
+my_likelihood_collection_settings = {'candl': likelihood_settings, 'bao': {}}
 
 theory_settings = {
     # here we could add some class settings
@@ -89,15 +86,13 @@ theory_settings = {
 
 sampling_settings = {
     # output directory
-    'output_directory': './output_clang_act_nuts',
+    'output_directory': './output_clang_act_bao_nuts',
 
     # M adapt # burn-in of NUTS
     'M_adapt': 200,
     'minimize_nuisance_parameters': True,
-
-    'logfile': './output_clang_act_nuts/log_sampler',
-
-    # 'covmat': './covmat_candl.covmat',
+    # 'covmat': './fisher.covmat',
+    # 'logfile': './output_clang_act_bao_nuts/log_sampler',
 
 }
 
@@ -131,7 +126,7 @@ my_parameters = {'h': {'prior': {'min': 0.6, 'max': 0.8, 'type': 'uniform'},
                     # Nuisance parameters are laoded automaticially
                     'yp': {'prior': {'min': 0.9, 'max': 1.1, 'type': 'uniform'}, 'ref': {'mean': 1.0, 'std': 0.0001}, 'proposal': 0.0001},
 }
-
+    
 
 start = time.time()
 

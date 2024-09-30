@@ -16,13 +16,16 @@ import numpy as np
 #####################################
 #  Set the path to MontePython here #
 #####################################
-MP_path = '/path/to/your/montepython_public/montepython'
-
+MP_path = '/home/user/path/to/your/montepython_public/montepython'
 
 
 # -----------------MAIN-CALL---------------------------------------------
 if __name__ == '__main__':
     # use naive vanilla parser to get the path to montepython
+
+    # check that you accutally DID change the path to montepython
+    if MP_path == '/path/to/your/montepython_public/montepython':
+        raise ValueError("Please change the path to your montepython version in the /OLE/interfaces/montepython_interface.py file")
     sys.path.insert(0, MP_path)
 
     import io_mp       # all the input/output mechanisms
@@ -130,7 +133,7 @@ if __name__ == '__main__':
         def MP_state_to_OLE_state(self, data, MP_state):
             OLE_state = {'parameters': {},
                         'quantities': {},
-                        'loglike': None}
+                        'total_loglike': None}
 
             self.state = cp.deepcopy(MP_state)
 
@@ -185,7 +188,7 @@ if __name__ == '__main__':
             # we start to create an OLE state
             OLE_state = {'parameters': {},
                             'quantities': {},
-                            'loglike': None}
+                            'total_loglike': None}
 
             # fill parameters from data
             for key in data.cosmo_arguments.keys():
@@ -311,7 +314,7 @@ if __name__ == '__main__':
 
         Returns
         -------
-        loglike : float
+        total_loglike : float
             The log of the likelihood (:math:`\\frac{-\chi^2}2`) computed from the
             sum of the likelihoods of the experiments specified in the input
             parameter file.
@@ -489,7 +492,7 @@ if __name__ == '__main__':
                     initial_state['parameters'][key] = np.array([data.cosmo_arguments[key]])
 
             # get initial output
-            initial_state['loglike'] = np.array([loglike])
+            initial_state['total_loglike'] = np.array(loglike)
             
             from OLE.emulator import Emulator
             cosmo.emulator = Emulator(**data.emulator_settings)
@@ -499,7 +502,7 @@ if __name__ == '__main__':
         if emulation_success is not None:
             if not emulation_success:
                 emulator_state = cosmo.MP_state_to_OLE_state(data, cosmo.attributes_with_relevant_output)
-                emulator_state['loglike'] = np.array([loglike])
+                emulator_state['total_loglike'] = np.array(loglike)
                 added_flag = cosmo.emulator.add_state(emulator_state)
 
         # if the emulator is not trained, train it, if enough states are available

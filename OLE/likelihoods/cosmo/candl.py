@@ -51,6 +51,7 @@ class candl_likelihood(Likelihood):
     
     # this function can be used to update the theory settings
     def update_theory_settings(self, theory_settings):
+        super().update_theory_settings(theory_settings)
 
         # check if class_settings are given in the input
         if 'class_settings' not in theory_settings:
@@ -63,10 +64,7 @@ class candl_likelihood(Likelihood):
             theory_settings['class_settings']['l_max_scalars'] = max(self.candl_like.ell_max, theory_settings['class_settings']['l_max_scalars'])
 
         # Add requirements for the theory
-        if 'requirements' not in theory_settings:
-            theory_settings['requirements'] = {'tt': None, 'ee': None, 'te': None}
-        else:
-            theory_settings['requirements'].update({'tt': None, 'ee': None, 'te': None})
+        theory_settings['requirements'].update({'tt': None, 'ee': None, 'te': None})
         
         return theory_settings
 

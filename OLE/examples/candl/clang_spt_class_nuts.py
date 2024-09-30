@@ -54,6 +54,7 @@ from OLE.likelihoods.cosmo.candl import candl_likelihood
 # Init theory and likelihood
 my_theory = CLASS()
 my_likelihood = candl_likelihood()
+my_likelihood_collection = {'candl': my_likelihood}
 
 
 emulator_settings = {
@@ -95,6 +96,7 @@ likelihood_settings = {
     'candl_dataset': 'candl.data.SPT3G_2018_TTTEEE',
     'clear_priors': False,
 }
+my_likelihood_collection_settings = {'candl': my_likelihood}
 
 theory_settings = {
     # here we could add some class settings
@@ -108,6 +110,8 @@ sampling_settings = {
     # output directory
     'output_directory': './output_clang_spt_nuts',
     'minimize_nuisance_parameters': True,
+
+    # 'covmat': './covmat_candl.covmat',
 }
 
 
@@ -140,17 +144,14 @@ my_parameters = {'h': {'prior': {'min': 0.60, 'max': 0.80},
 
 }
 
-covmat_path = None#'./covmat_candl.txt'
-
 
 start = time.time()
 
 my_sampler.initialize(theory=my_theory, 
-                      likelihood=my_likelihood, 
+                      likelihood_collection=my_likelihood_collection, 
                       parameters=my_parameters, 
-                      covmat = covmat_path, 
                       emulator_settings = emulator_settings,
-                      likelihood_settings = likelihood_settings,
+                      likelihood_collection_settings = my_likelihood_collection_settings,
                       theory_settings = theory_settings,
                       sampling_settings = sampling_settings,)
 
