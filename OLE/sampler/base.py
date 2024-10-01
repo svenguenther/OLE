@@ -554,7 +554,11 @@ class Sampler(BaseClass):
             def hessian_observable(x):
                 local_state = copy.deepcopy(state)
                 local_state['quantities'][observable] = x
-                return -self.likelihood.loglike(local_state)[0]
+                ll = 0.0
+                for likelihood in self.likelihood_collection.keys():
+                    ll += self.likelihood_collection[likelihood].loglike_state(local_state)['loglike'][observable]
+
+                return -ll
 
             # compute hessian of observables
             observable_hessian = jnp.asarray(jax.hessian(hessian_observable)(observable_values))
@@ -662,11 +666,17 @@ class Sampler(BaseClass):
         else:
             # here we need to test the emulator for its performance
             emulator_sample_states, RNGkey = self.emulator.emulate_samples(state['parameters'], RNGkey=RNGkey,noise=1)
-            emulator_sample_loglikes = jnp.array([self.likelihood.loglike_state(_)['total_loglike'] for _ in emulator_sample_states])
+            emulator_sample_loglikes = jnp.zeros(len(emulator_sample_states))
+            for i, emulator_sample_state in enumerate(emulator_sample_states):
+                for likelihood in self.likelihood_collection.keys():
+                    emulator_sample_state = self.likelihood_collection[likelihood].loglike_state(emulator_sample_state)
+                emulator_sample_loglikes.at[i].set(jnp.array(list(emulator_sample_state['loglike'].values())).sum())
+
             # check whether the emulator is good enough
             if not self.emulator.check_quality_criterium(emulator_sample_loglikes, parameters=state['parameters']):
                 state = self.theory.compute(state)
-                state = self.likelihood.loglike_state(state)
+                for likelihood in self.likelihood_collection.keys():
+                    state = self.likelihood_collection[likelihood].loglike_state(state)
                 state['total_loglike'] = jnp.array(list(state['loglike'].values())).sum() + logprior
                 self.emulator.add_state(state)
             else:
