@@ -11,14 +11,17 @@ class Likelihood(BaseClass):
         self.input_keys = []
         self.nuisance_sample_dict = {}
         self.hyperparameters = {}
+        self.requirements = {}
         super().__init__(name, **kwargs)
 
     def update_theory_settings(self, theory_settings):
         # this function can be used to update the theory settings
         # check if it already has a sub direcory for requirements
         if 'requirements' not in theory_settings:
-            theory_settings['requirements'] = {}
-
+            theory_settings['requirements'] = self.requirements
+        else:
+            theory_settings['requirements'].update(self.requirements)
+        
         return theory_settings
 
     def initialize(self, **kwargs):

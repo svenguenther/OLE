@@ -50,7 +50,7 @@ class my_theory(Theory):
 
         # parameters x1,x2,x3
         # observables y_array, y_scalar
-        self.requirements = ['x1', 'x2', 'x3']
+        self.parameters = ['x1', 'x2', 'x3']
 
         state['quantities']['y_array'] = jnp.array([0.3*jnp.sin(2.*state['parameters']['x1'][0])+state['parameters']['x1'][0], 0.5*state['parameters']['x3'][0]+state['parameters']['x2'][0], state['parameters']['x3'][0]])
         state['quantities']['y_scalar'] = jnp.array([jnp.sum(state['quantities']['y_array'])])
@@ -60,39 +60,24 @@ class my_theory(Theory):
 class my_likelihood(Likelihood):
 
     def initialize(self, **kwargs):
-        super().initialize(**kwargs)   
+        super().initialize(**kwargs)  
 
-        # input parameters of the theory
-        self.requirements = ['y_array', 'y_scalar']
-
+        self.requirements = {'y_array': None, 'y_scalar': None} 
+    
 
     def loglike(self, state):
         # Compute the loglikelihood for the given parameters.
         loglike = -10.*jnp.sum((state['quantities']['y_array'])**2) - 10.*(state['quantities']['y_scalar']-0.5)**2 - state['quantities']['y_array'][0]*state['quantities']['y_array'][1]
         return loglike
     
-    #def loglike_gradient(self, state, type): # define a function for each quantity.
-            # Compute the gradient of the loglikelihood for the given parameters.
-        
-    #    if type == 'y_array':
-    #        return [
-    #            -20.*(state['quantities']['y_array']-jnp.ones(3))[0],
-    #            -20.*(state['quantities']['y_array']-jnp.ones(3))[1],
-    #            -20.*(state['quantities']['y_array']-jnp.ones(3))[2]
-    #            ]
-    #    elif type == 'y_scalar':
-    #        return [
-    #            -20.*(state['quantities']['y_scalar']-3.0)
-    #            ]
-          
-    #    return []
 
 
 # init theory and likelihood
 my_theory = my_theory()
-my_likelihood = my_likelihood()
+my_likelihood_collection = {'toy':my_likelihood()}
 
-likelihood_settings = {}
+
+my_likelihood_collection_settings = {'toy': {}}
 sampling_settings = {
     'output_directory': './toy',
 }
@@ -124,7 +109,13 @@ my_parameters = {'x1': {'prior': {'min': 0.0, 'max': 3.0, 'type': 'uniform'},
                            } 
 
 # initialize sampler
-my_sampler.initialize(theory=my_theory, likelihood=my_likelihood, parameters=my_parameters, emulator_settings=emulator_settings, likelihood_settings=likelihood_settings, theory_settings=theory_settings, sampling_settings=sampling_settings)
+my_sampler.initialize(theory=my_theory, 
+                      likelihood_collection=my_likelihood_collection, 
+                      parameters=my_parameters, 
+                      emulator_settings=emulator_settings, 
+                      likelihood_collection_settings=my_likelihood_collection_settings, 
+                      theory_settings=theory_settings, 
+                      sampling_settings=sampling_settings)
 
 # Note the total run steps are   (nsteps * nwalkers * MPI_size)
 n_steps = 1000

@@ -33,7 +33,7 @@ class CLASS(Theory):
         for key, value in parameters.items():
             
             # only add the required parameters
-            if key in self.requried_parameters():
+            if key in self.required_parameters():
                 
                 # add here the translation
                 if key == 'logA':

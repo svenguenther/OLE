@@ -33,7 +33,7 @@ class Theory(BaseClass):
 
         return state
     
-    def requried_parameters(self):
+    def required_parameters(self):
         # Compute the observable for the given parameters.
 
         return self.parameters
