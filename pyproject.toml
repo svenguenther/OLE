@@ -32,6 +32,7 @@ dependencies = [
 "fasteners",
 "emcee",
 "matplotlib",
+"scikit-learn",
 ]
 
 [project.optional-dependencies]
@@ -42,8 +43,7 @@ docs = [
 "numpydoc==1.6.0",
 "myst-parser==2.0.0",
 "numpy",
-"matplotlib",
-"scikit-learn",
+"matplotlib"
 ]
 
 [tool.flit.module]
