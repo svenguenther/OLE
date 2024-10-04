@@ -66,6 +66,11 @@ class CAMB(Theory):
         for key, value in settings.items():
             if key == 'l_max_scalars':
                 camb_settings['max_l'] = value+100
+                camb_settings['lmax'] = value+100
+            
+        camb_settings['nonlinear'] = 5
+        camb_settings['lens_potential_accuracy'] = 5
+
         return camb_settings
 
     def compute(self, state):
