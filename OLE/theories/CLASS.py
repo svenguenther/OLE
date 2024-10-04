@@ -13,15 +13,16 @@ class CLASS(Theory):
         # Initialize the CLASS code
         self.cosmo = classy.Class()
 
-        # look if class_settings are given in the input
-        if 'class_settings' in kwargs:
-            self.class_settings = kwargs['class_settings']
+        # look if cosmo_settings are given in the input
+        if 'cosmo_settings' in kwargs:
+            self.cosmo_settings = kwargs['cosmo_settings']
         else:
-            raise ValueError('class_settings not given in the theory input')
+            raise ValueError('cosmo_settings not given in the theory input')
 
         
-        # update the class settings with the hyperparameters
-        self.class_settings
+        # update the class settings with default halofit
+        if ('non linear' not in self.cosmo_settings.keys()) and ('non_linear' not in self.cosmo_settings.keys()):
+            self.cosmo_settings.update({'non linear': 'halofit'})
 
         return 
     
@@ -46,7 +47,7 @@ class CLASS(Theory):
 
     def compute(self, state):
         # Compute the observable for the given parameters.
-        class_input = self.class_settings.copy()
+        class_input = self.cosmo_settings.copy()
 
         # set parameters
         class_parameters = self.translate_CLASS_parameters(state['parameters'])
@@ -64,8 +65,8 @@ class CLASS(Theory):
         # check for cls
         for key in ['tt', 'ee', 'te', 'bb']:
             if key in self.requirements.keys():
-                cls = self.cosmo.lensed_cl(self.class_settings['l_max_scalars'])
-                state['quantities'][key] = cls[key]
+                cls = self.cosmo.lensed_cl(self.cosmo_settings['l_max_scalars'])
+                state['quantities'][key] = cls[key]*T_cmb**2
 
         # check for bao and other quantities
         if 'bao' in self.requirements.keys():

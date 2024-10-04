@@ -32,7 +32,7 @@ class candl_likelihood(Likelihood):
         self.input_keys = list(np.unique(self.candl_like.required_nuisance_parameters + self.candl_like.required_prior_parameters))
 
         # Grab spectrum conversion helper
-        self.cl2dl = self.candl_like.ells * (self.candl_like.ells + 1) / (2.0 * jnp.pi) * (2.7255e6)**2
+        self.cl2dl = self.candl_like.ells * (self.candl_like.ells + 1) / (2.0 * jnp.pi) * (1e6)**2
 
         # Grab nuisance parameters.
         if kwargs["candl_dataset"] == 'candl.data.ACT_DR4_TTTEEE':
@@ -53,15 +53,15 @@ class candl_likelihood(Likelihood):
     def update_theory_settings(self, theory_settings):
         super().update_theory_settings(theory_settings)
 
-        # check if class_settings are given in the input
-        if 'class_settings' not in theory_settings:
-            theory_settings['class_settings'] = {}
+        # check if cosmo_settings are given in the input
+        if 'cosmo_settings' not in theory_settings:
+            theory_settings['cosmo_settings'] = {}
 
         # Update l_max_scalars to be the maximum of the current value and the value from the data set
-        if 'l_max_scalars' not in theory_settings['class_settings']:
-            theory_settings['class_settings']['l_max_scalars'] = self.candl_like.ell_max
+        if 'l_max_scalars' not in theory_settings['cosmo_settings']:
+            theory_settings['cosmo_settings']['l_max_scalars'] = self.candl_like.ell_max
         else:
-            theory_settings['class_settings']['l_max_scalars'] = max(self.candl_like.ell_max, theory_settings['class_settings']['l_max_scalars'])
+            theory_settings['cosmo_settings']['l_max_scalars'] = max(self.candl_like.ell_max, theory_settings['cosmo_settings']['l_max_scalars'])
 
         # Add requirements for the theory
         theory_settings['requirements'].update({'tt': None, 'ee': None, 'te': None})
@@ -75,7 +75,10 @@ class candl_likelihood(Likelihood):
         # Grab calculated spectra, convert to Dl
         Dl = {'ell': self.candl_like.ells}
         for spec_type in self.candl_like.unique_spec_types:
+            if spec_type == 'TT':
+                print(state['quantities'][spec_type.lower()][2:])
             Dl[spec_type] = state['quantities'][spec_type.lower()][2:] * self.cl2dl 
+
 
 
         # Shuffle into parameters, spectra into dictionary, convert tau naming conventions
