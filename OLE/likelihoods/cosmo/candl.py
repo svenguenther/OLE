@@ -65,7 +65,15 @@ class candl_likelihood(Likelihood):
 
         # Add requirements for the theory
         theory_settings['requirements'].update({'tt': None, 'ee': None, 'te': None})
+
+        # check if output is already set
+        if 'output' not in theory_settings['cosmo_settings']:
+            theory_settings['cosmo_settings']['output'] = 'tCl, pCl, lCl'
         
+        # check if lensing is required
+        if 'lensing' not in theory_settings['cosmo_settings']:
+            theory_settings['cosmo_settings']['lensing'] = 'yes'
+            
         return theory_settings
 
     # @partial(jax.jit, static_argnums=(0,))

@@ -71,7 +71,7 @@ emulator_settings = {
     'quality_threshold_linear': 0.1,
 
     # related so sampler
-    'min_variance_per_bin': 1e-4,
+    'min_variance_per_bin': 1e-6,
 
 
     # cache criteria
@@ -103,7 +103,7 @@ theory_settings = {
     'parameters': ['h', 'n_s', 'omega_b', 'omega_cdm', 'tau_reio', 'logA'],
 
     # input parameters of the theory
-    'class_settings': {'output':'tCl,pCl,lCl', 'lensing':'yes', 'N_ur':3.048, 'output_verbose':1},
+    'cosmo_settings': {}, # could add additional parameters for the theory
 }
 
 sampling_settings = {

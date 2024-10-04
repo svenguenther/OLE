@@ -32,11 +32,12 @@ from jax import config
 
 import time
 
-from OLE.theories.CLASS import CLASS
+from OLE.theories import CLASS, CAMB
 from OLE.likelihoods.cosmo.candl import candl_likelihood
 
 # Init theory and likelihood
 my_theory = CLASS()
+# my_theory = CAMB()
 my_likelihood = candl_likelihood()
 my_likelihood_collection = {'candl': my_likelihood}
 
@@ -55,7 +56,7 @@ emulator_settings = {
     'quality_threshold_linear': 0.1,
 
     # related so sampler
-    'min_variance_per_bin': 1e-4,
+    'min_variance_per_bin': 1e-6,
     'num_iters': 300,
 
     # cache criteria
@@ -84,7 +85,7 @@ theory_settings = {
     'parameters': ['h', 'n_s', 'omega_b', 'omega_cdm', 'tau_reio', 'logA'],
 
     # input parameters of the theory
-    'class_settings': {'output':'tCl,pCl,lCl', 'lensing':'yes', 'N_ur':3.048, 'output_verbose':1},
+    # 'cosmo_settings': {}, # some parameters for the theory
 }
 
 sampling_settings = {
@@ -95,9 +96,9 @@ sampling_settings = {
     'M_adapt': 200,
     'minimize_nuisance_parameters': True,
 
-    'logfile': './output_clang_act_nuts/log_sampler',
+    # 'logfile': './output_clang_act_nuts/log_sampler',
 
-    # 'covmat': './covmat_candl.covmat',
+    # 'covmat': './fisher.covmat',
 
 }
 
