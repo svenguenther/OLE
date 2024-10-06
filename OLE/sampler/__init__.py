@@ -7,3 +7,4 @@ from .ensemble import EnsembleSampler
 from .minimize import MinimizeSampler
 from .evaluate import EvaluateSampler
 from .base import Sampler
+from .profile_likelihood import ProfileLikelihoodSampler

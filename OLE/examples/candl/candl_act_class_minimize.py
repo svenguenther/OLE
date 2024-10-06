@@ -1,53 +1,22 @@
-# This example script is a NUTS sampler using the OLE emulator for doing parameter estiamtion using the candl likelihood.
-
-# The script has the following structure:
-
-# 1. Define a theory which computes Cls. It has 2 functions: initialize and compute.
-#    The initialize function sets the requirements of the theory.
-#    The compute function computes the observables for the given parameters. The input is a dictionary with the parameters and the output is a dictionary with the observables.
-#    It has the attributes 'requirements' which states the parameters it requires to compute the observables.
-# 2. Define a likelihood. It has 2 functions: initialize and loglike.
-#    The initialize function sets the requirements of the likelihood.
-#    The loglike function computes the loglikelihood for the given parameters.
-#    We use the candl likelihood. Be aware that it can give nan values for some parameters. In this case, we set the loglike to -1e100. This is not diffbar. TODO: Fix that
-# 3. Define the settings for the emulator.
-# 4. Define the sampler. It has 2 functions: initialize and run_mcmc.
-#    The initialize function sets the theory, likelihood, parameters and emulator settings.
-#    The run_mcmc function runs the mcmc. It has the number of steps as input.
-# 5. Define the parameters. It is a dictionary with the parameters and their priors.
-# 6. Run the mcmc.
-
-
-
-
-
-
-
-
-
-
-
-from jax import config
-# config.update("jax_debug_nans", True)
+# example Minimize script
 
 import time
 
 from OLE.theories import CLASS, CAMB
 from OLE.likelihoods.cosmo.candl import candl_likelihood
 
-# Init theory and likelihood
+
 my_theory = CLASS()
 # my_theory = CAMB()
 my_likelihood = candl_likelihood()
 my_likelihood_collection = {'candl': my_likelihood}
-
 
 emulator_settings = {
     # the number of data points in cache before the emulator is to be trained
     'min_data_points': 80,
 
     # name of the cache file
-    'cache_file': './output_clang_act_nuts/cache.pkl',
+    'cache_file': './candl_act_minimize/cache.pkl',
     # load the cache from previous runs if possible. If set to false, the cache is overwritten.
     'load_cache': True,
 
@@ -65,13 +34,10 @@ emulator_settings = {
 
     # 'plotting_directory': './output_clang_act_nuts/plots_sampler_clang_nuts',
     # 'testset_fraction': 0.1,
-    'logfile': './output_clang_act_nuts/log',
+    'logfile': './candl_act_minimize/log',
 
     # 'compute_data_covmat': True,
     'data_covmat_directory': './act_data_covmats',
-
-    # 'jit': False,
-
 }
 
 likelihood_settings = {
@@ -88,24 +54,34 @@ theory_settings = {
     # 'cosmo_settings': {}, # some parameters for the theory
 }
 
-sampling_settings = {
+sampling_settings_NUTS = {
     # output directory
-    'output_directory': './output_clang_act_nuts',
+    'output_directory': './candl_act_minimize',
+}
 
-    # M adapt # burn-in of NUTS
-    'M_adapt': 200,
-    'minimize_nuisance_parameters': True,
+sampling_settings_minimize = {
+    # output directory
+    'output_directory': './candl_act_minimize',
+
+    'use_emulator': True,    
+    'logposterior': True,
+    'use_gradients': True,
+    'method': 'TNC',# scipy optimization method: 'L-BFGS-B', 'TNC', 'SLSQP', 'trust-constr', 'trust-ncg', 'trust-exact', 'trust-krylov'
+    'n_restarts': 5,
 }
 
 
 # load sampler 
-from OLE.sampler import EnsembleSampler, Sampler, NUTSSampler
-my_sampler = NUTSSampler()
+from OLE.sampler import EnsembleSampler, Sampler, NUTSSampler, MinimizeSampler
+my_sampler_NUTS = NUTSSampler()
+my_sampler_minimizer = MinimizeSampler()
 
 
 my_parameters = {'h': {'prior': {'min': 0.6, 'max': 0.8, 'type': 'uniform'},
                        'ref': {'mean': 0.68, 'std': 0.01},
-                       'proposal': 0.01,},
+                       'proposal': 0.01,
+                    #    'value': 0.68
+                       },
                     'n_s': {'prior': {'min': 0.9, 'max': 1.1, 'type': 'uniform'}, 
                             'ref': {'mean': 0.965, 'std': 0.005},
                             'proposal': 0.01,}, 
@@ -129,19 +105,43 @@ my_parameters = {'h': {'prior': {'min': 0.6, 'max': 0.8, 'type': 'uniform'},
 
 start = time.time()
 
-my_sampler.initialize(theory=my_theory, 
+# run NUTS jsut to get some samples and train the emulator
+my_sampler_NUTS.initialize(theory=my_theory,
+                        likelihood_collection=my_likelihood_collection, 
+                        parameters=my_parameters, 
+                        emulator_settings = emulator_settings,
+                        likelihood_collection_settings = my_likelihood_collection_settings,
+                        theory_settings = theory_settings,
+                        sampling_settings = sampling_settings_NUTS,
+                        #   debug = True
+                        )
+
+my_sampler_NUTS.run_mcmc(nsteps = 10)
+
+
+
+# now minimize
+my_sampler_minimizer.initialize(theory=my_theory, 
                       likelihood_collection=my_likelihood_collection, 
                       parameters=my_parameters, 
                       emulator_settings = emulator_settings,
                       likelihood_collection_settings = my_likelihood_collection_settings,
                       theory_settings = theory_settings,
-                      sampling_settings = sampling_settings,
+                      sampling_settings = sampling_settings_minimize,
+                      emulator = my_sampler_NUTS.emulator,
                     #   debug = True
                       )
-
-# Note the total run steps are   (nsteps * nwalkers * MPI_size)
-n_steps = 1000
-my_sampler.run_mcmc(n_steps)
+my_sampler_minimizer.minimize()
 
 end = time.time()
 print("Time elapsed: ", end - start)
+
+# chains = np.array(my_sampler.chain)
+
+# # do corner
+# import corner
+# import matplotlib.pyplot as plt
+
+# fig = corner.corner(chains.reshape(-1, chains.shape[-1]), labels=[r"$h$", r"$n_s$", r"$\omega_b$", r"$\omega_{cdm}$", r"$\tau_{reio}$", r"$A_{planck}$", r"$\log(10^{10} A_s)$"])
+# plt.savefig('corner.png')
+# plt.show()

@@ -161,7 +161,21 @@ class Sampler(BaseClass):
 
         # Update on parameters if given
         if parameters is not None:
-            self.parameter_dict.update(parameters)   
+            self.parameter_dict.update(parameters) 
+
+        # we gonna split all parameters into constant and varying parameters. Together they will be in the parameter_dict_full
+        self.parameter_dict_full = copy.deepcopy(self.parameter_dict)
+
+        # move the constant parameters that have the attribute 'value' to self.parameter_dict_constant
+        self.parameter_dict_constant = {}
+        for key in list(self.parameter_dict.keys()):
+            if 'value' in list(self.parameter_dict[key].keys()):
+                self.parameter_dict_constant[key] = self.parameter_dict[key]
+                # self.parameter_dict.pop(key)
+
+        # remove the parameters from self.parameter_dict
+        for key in self.parameter_dict_constant.keys():
+            self.parameter_dict.pop(key)
 
         defaulthyperparameters = {
             # output directory for the chain
@@ -184,6 +198,12 @@ class Sampler(BaseClass):
 
             # logfile
             'logfile': None,
+
+            # flag to use the emulator for the likelihood
+            'use_emulator': True,
+
+            # n_restart for the minimizer
+            'n_restarts': 1,
 
         }
 
@@ -232,7 +252,7 @@ class Sampler(BaseClass):
         emulator_settings['likelihood_collection_settings'] = self.likelihood_collection_settings
 
         # if emulator was not loaded, we need to create one here:
-        if self.emulator is None:
+        if self.emulator is None and self.hyperparameters['use_emulator']:
             # initialize the emulator
             self.emulator = Emulator(**emulator_settings)
 
@@ -267,7 +287,7 @@ class Sampler(BaseClass):
                 self.nuisance_means = self.nuisance_means.at[i].set(self.parameter_dict[key]['ref']['mean'])
                 self.nuisance_stds = self.nuisance_stds.at[i].set(self.parameter_dict[key]['ref']['std'])
 
-        self.parameter_names = list(self.parameter_dict.keys())
+        self.parameter_names = list(self.parameter_dict_full.keys())
 
         pass
 
@@ -430,7 +450,9 @@ class Sampler(BaseClass):
         for i in range(N):
             position = []
             for key, value in self.parameter_dict.items():
-                if 'ref' in list(value.keys()):
+                if 'value' in list(value.keys()):
+                    position.append(value['value'])
+                elif 'ref' in list(value.keys()):
                     # create candidate from normal distribution with mean and std from the 'ref' values but ensure that it is within the prior
                     while True:
                         candidate = value['ref']['mean'] + value['ref']['std']*np.random.normal()
@@ -489,10 +511,10 @@ class Sampler(BaseClass):
         RNG = jax.random.PRNGKey(int(time.time())+get_mpi_rank())
 
         # translate the parameters to the state
-        for key, value in self.parameter_dict.items():
+        for key, value in self.parameter_dict_full.items():
             RNG, subkey = jax.random.split(RNG)
-            if type(value) is list:
-                state['parameters'][key] = jnp.array(value)
+            if 'value' in list(value.keys()):
+                state['parameters'][key] = jnp.array([self.parameter_dict[key]['value']])
             elif 'ref' in list(value.keys()):
                 state['parameters'][key] = jnp.array([self.parameter_dict[key]['ref']['mean'] + self.parameter_dict[key]['ref']['std']*jax.random.normal(subkey)])
             elif 'prior' in list(value.keys()):
@@ -644,6 +666,11 @@ class Sampler(BaseClass):
         for i, key in enumerate(self.parameter_dict.keys()):
             state['parameters'][key] = jnp.array([parameters[i]])
 
+        # add constant parameters to the state
+        for key in self.parameter_dict_constant.keys():
+            if 'value' in list(self.parameter_dict_constant[key].keys()):
+                state['parameters'][key] = jnp.array([self.parameter_dict_constant[key]['value']])
+
         self.debug("Calculating loglike for parameters: %s", state['parameters'])
 
         # compute logprior
@@ -651,7 +678,7 @@ class Sampler(BaseClass):
         self.debug("logprior: %f for parameters: %s", logprior, state['parameters'])
 
         # compute the observables. First check whether emulator is already trained
-        if not self.emulator.trained:
+        if (not self.hyperparameters['use_emulator']) or (not self.emulator.trained):
 
             self.debug("emulator not trained yet -> use theory code")
             state = self.theory.compute(state)
@@ -662,7 +689,8 @@ class Sampler(BaseClass):
             self.debug("loglikes after theory: %s for parameters: %s", state['loglike'], state['parameters'])
 
             state['total_loglike'] = jnp.array(list(state['loglike'].values())).sum() + logprior
-            self.emulator.add_state(state)
+            if self.use_emulator:
+                self.emulator.add_state(state)
         else:
             # here we need to test the emulator for its performance
             emulator_sample_states, RNGkey = self.emulator.emulate_samples(state['parameters'], RNGkey=RNGkey,noise=1)
@@ -696,10 +724,11 @@ class Sampler(BaseClass):
 
 
         # if we have a minimal number of states in the cache, we can train the emulator
-        if (len(self.emulator.data_cache.states) >= self.emulator.hyperparameters['min_data_points']) and not self.emulator.trained:
-            self.debug("Training emulator")
-            self.emulator.train()
-            self.debug("Emulator trained")
+        if self.hyperparameters['use_emulator']:
+            if (len(self.emulator.data_cache.states) >= self.emulator.hyperparameters['min_data_points']) and not self.emulator.trained:
+                self.debug("Training emulator")
+                self.emulator.train()
+                self.debug("Emulator trained")
 
         self.increment(self.logger)
 
@@ -872,6 +901,11 @@ class Sampler(BaseClass):
         for i, key in enumerate(self.parameter_dict.keys()):
             state['parameters'][key] = jnp.array([parameters[i]])
 
+        # add constant parameters to the state
+        for key in self.parameter_dict_constant.keys():
+            if 'value' in list(self.parameter_dict_constant[key].keys()):
+                state['parameters'][key] = jnp.array([self.parameter_dict_constant[key]['value']])
+
         # compute logprior
         logprior = self.compute_logprior(state)
         self.debug("logprior: %f for parameters: %s", logprior, state['parameters'])
@@ -942,6 +976,11 @@ class Sampler(BaseClass):
         for i, key in enumerate(self.parameter_dict.keys()):
             state['parameters'][key] = jnp.array([parameters[i]])
 
+        # add constant parameters to the state
+        for key in self.parameter_dict_constant.keys():
+            if 'value' in list(self.parameter_dict_constant[key].keys()):
+                state['parameters'][key] = jnp.array([self.parameter_dict_constant[key]['value']])
+
         state = self.emulator.emulate_jit(state['parameters'])
         for likelihood in self.likelihood_collection.keys():
             state = self.likelihood_collection[likelihood].loglike_state(state)
@@ -978,10 +1017,37 @@ class Sampler(BaseClass):
             The logposteriors for the states.
         """
 
-        self.start()
-
         # rescale the parameters
         parameters = self.retranform_parameters_from_normalized_eigenspace(parameters)
+
+        loglikes = self.sample_emulate_logposterior_from_parameters_differentiable(parameters, N=N, RNGkey=RNGkey, noise = noise)
+        
+        return loglikes
+
+
+
+    def sample_emulate_logposterior_from_parameters_differentiable(self, parameters, N=1, RNGkey=jax.random.PRNGKey(int(time.time())), noise = 0.):
+        """
+        This function samples the logposteriors for given parameters from the emulator in order to test its performance.
+
+        Parameters
+        --------------
+        parameters : ndarray
+            The normalized parameters for which the logposterior is computed.
+        N : int
+            The number of samples.
+        RNGkey : jax.random.PRNGKey
+            The random key for the sampling.
+        noise : float
+            The noise level for the sampling.
+
+        Returns
+        --------------
+        ndarray :
+            The logposteriors for the states.
+        """
+
+        self.start()
 
         # Run the sampler.
         state = {'parameters': {}, 'quantities': {}, 'loglike': {}, 'total_loglike': None}
@@ -989,6 +1055,11 @@ class Sampler(BaseClass):
         # translate the parameters to the state
         for i, key in enumerate(self.parameter_dict.keys()):
             state['parameters'][key] = jnp.array([parameters[i]])
+
+        # add constant parameters to the state
+        for key in self.parameter_dict_constant.keys():
+            if 'value' in list(self.parameter_dict_constant[key].keys()):
+                state['parameters'][key] = jnp.array([self.parameter_dict_constant[key]['value']])
 
         # compute logprior
         logprior = self.compute_logprior(state)
@@ -1030,6 +1101,14 @@ class Sampler(BaseClass):
         N = self.emulator.hyperparameters['N_quality_samples']
         res = [_.sum() for _ in self.sample_emulate_logposterior_from_normalized_parameters_differentiable(parameters, N=N , noise = noise)]
         return res
+    
+    def sample_emulate_total_logposterior_from_parameters_differentiable(self, parameters, noise = 0):
+        """
+        This function samples the total loglikelihood for given parameters from the emulator in order to test its performance.
+        """
+        N = self.emulator.hyperparameters['N_quality_samples']
+        res = [_.sum() for _ in self.sample_emulate_logposterior_from_parameters_differentiable(parameters, N=N , noise = noise)]
+        return res
 
     def emulate_total_minuslogposterior_from_normalized_parameters_differentiable(self, parameters):
         """ 
@@ -1043,6 +1122,13 @@ class Sampler(BaseClass):
         This function emulates the total minus loglikelihood for given parameters.
         """
         res = -self.emulate_loglikelihood_from_parameters_differentiable(parameters)
+        return res.sum()
+    
+    def compute_total_minuslogposterior_from_normalized_parameters(self, parameters):
+        """
+        This function computes the total minus logposterior for given normalized parameters.
+        """
+        res = -self.compute_logposterior_from_normalized_parameters(parameters)
         return res.sum()
     
     def compute_logprior(self, state):

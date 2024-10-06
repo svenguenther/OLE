@@ -41,10 +41,21 @@ class MinimizeSampler(Sampler):
             # check whether to use the gradients
             self.use_gradients = self.hyperparameters['use_gradients'] if 'use_gradients' in self.hyperparameters else True
 
+            # number of restarts for the minimization
+            self.n_restarts = self.hyperparameters['n_restarts'] if 'n_restarts' in self.hyperparameters else 1
+
             # set the method for the minimization
             self.method = 'TNC' if 'method' not in self.hyperparameters else self.hyperparameters['method']
 
-            # 
+            # set flag if fisher matrix should be computed
+            self.compute_fisher = self.hyperparameters['compute_fisher'] if 'compute_fisher' in self.hyperparameters else True
+
+            # flag if to store results
+            self.store_results = self.hyperparameters['store_results'] if 'store_results' in self.hyperparameters else True
+
+            # we cannot use gradients if we do not use the emulator
+            if not self.use_emulator:
+                self.use_gradients = False
 
             # run evaluation once to train the emulator
             if self.use_emulator and not self.emulator.trained:
@@ -73,60 +84,106 @@ class MinimizeSampler(Sampler):
             self.write_to_log("Starting minimization \n")
 
             # get the initial guess
-            initial_position = self.get_initial_position(N=1, normalized=True)[0]
-            initial_position1 = self.get_initial_position(N=1, normalized=False)[0]
-
+            initial_position = self.get_initial_position(N=self.hyperparameters['n_restarts'], normalized=True)
             # get the bounds
             bounds = self.get_bounds(normalized=True)
-            bounds1 = self.get_bounds(normalized=False)
 
-            if self.use_gradients:
-                # create differentiable loglike
-                if not self.debug_mode:
-                    f = jax.jit(self.emulate_total_minuslogposterior_from_normalized_parameters_differentiable)
-                    grad_f = jax.jit(jax.grad(self.emulate_total_minuslogposterior_from_normalized_parameters_differentiable))
+            self.results = []
+            self.bestfits = []
+            self.max_loglikes = []
+
+            # check if jitted functions are already defined otherwise define them
+            # if not hasattr(self, 'f'):
+            if True:
+                # jit functions
+                if self.use_emulator:
+                    if not self.debug_mode:
+                        self.f = jax.jit(self.emulate_total_minuslogposterior_from_normalized_parameters_differentiable)
+                        if self.use_gradients:
+                            self.grad_f = jax.jit(jax.grad(self.emulate_total_minuslogposterior_from_normalized_parameters_differentiable))
+                            if self.compute_fisher:
+                                self.hessian_f = (jax.hessian(self.emulate_total_minuslogposterior_from_normalized_parameters_differentiable))
+                    else:
+                        self.f = self.emulate_total_minuslogposterior_from_normalized_parameters_differentiable
+                        if self.use_gradients:
+                            self.grad_f = jax.grad(self.emulate_total_minuslogposterior_from_normalized_parameters_differentiable)
+                            if self.compute_fisher:
+                                self.hessian_f = (jax.hessian(self.emulate_total_minuslogposterior_from_normalized_parameters_differentiable))
                 else:
-                    f = self.emulate_total_minuslogposterior_from_normalized_parameters_differentiable
-                    grad_f = jax.grad(self.emulate_total_minuslogposterior_from_normalized_parameters_differentiable)
+                    self.f = self.compute_total_minuslogposterior_from_normalized_parameters
 
-                hessian_f = (jax.hessian(self.emulate_total_minuslogposterior_from_normalized_parameters_differentiable))
 
-                self.method = 'TNC'
-                res = self.optimizer(f, 
-                                    initial_position, method=self.method, bounds=bounds, 
-                                    jac=grad_f, 
-                                    options={'disp': True, 'maxfun':2000, 'accuracy': 0.01},#, 'ftol': 1e-20, 'gtol': 1e-10 },
-                                    )
-                
-                self.inv_hessian = self.denormalize_inv_hessematrix( np.linalg.inv(hessian_f(res.x)) )
-            
+
+            for i in range(self.n_restarts):
+
+                if self.use_gradients:
+                    self.method = 'TNC'
+                    res = self.optimizer(self.f, 
+                                        initial_position[i], method=self.method, bounds=bounds, 
+                                        jac=self.grad_f, 
+                                        options={'disp': True, 'maxfun':2000, 'accuracy': 0.01,'eps':0.01},#, 'ftol': 1e-20, 'gtol': 1e-10 },
+                                        )
+                else:
+                    if self.use_emulator:
+                        res = self.optimizer(self.f,
+                                            initial_position[i], method=self.method, bounds=bounds, 
+                                            options={'disp': True,'eps':0.01})
+                    else:
+                        res = self.optimizer(self.f,
+                                            initial_position[i], method=self.method, bounds=bounds, 
+                                            options={'disp': True,'eps':0.01})
+
+                self.results.append(res)
+                self.bestfits.append(self.retranform_parameters_from_normalized_eigenspace(res.x))
+                self.max_loglikes.append(res.fun)
+
+            # write to info
+            self.info("Minimization results of " + str(self.n_restarts) + " restarts")
+            mean_loglike = np.mean(self.max_loglikes)
+            std_loglike = np.std(self.max_loglikes)
+            self.info("Mean loglike: " + str(mean_loglike) + " +- " + str(std_loglike))
+
+            # select best fit
+            idx = np.argmin(self.max_loglikes)
+            self.res = self.results[idx]
+            self.bestfit = self.bestfits[idx]
+            self.max_loglike = self.max_loglikes[idx]
+
+            # check performance by sampling the likelihood at the bestfit
+            if self.use_emulator:
+                if not hasattr(self, 'logp_sample'):
+                    self.logp_sample = jax.jit(self.sample_emulate_total_logposterior_from_parameters_differentiable)                    # this samples N realizations from the emulator to estimate the uncertainty
+                loglikes_withNoise = self.logp_sample(self.bestfit,noise = 1.)
+                self.uncertainty = np.std(loglikes_withNoise)
             else:
-                f = jax.jit(self.emulate_total_minuslogposterior_from_normalized_parameters_differentiable)
+                self.uncertainty = 0.0
 
-                res = self.optimizer(f,
-                                    initial_position, method=self.method, bounds=bounds, 
-                                    options={'disp': True})
-                try:
-                    self.inv_hessian = self.denormalize_inv_hessematrix( res.hess_inv.todense() )
-                except:
-                    self.inv_hessian = None
 
-            self.res = res
-            self.bestfit = self.retranform_parameters_from_normalized_eigenspace(res.x)
-            self.max_loglike = res.fun
+            # comptue the inverse hessian
+            if self.compute_fisher:
+                if self.use_gradients:
+                    self.inv_hessian = self.denormalize_inv_hessematrix( np.linalg.inv(self.hessian_f(self.res.x)) )
+                else:
+                    try:
+                        self.inv_hessian = self.denormalize_inv_hessematrix( self.res.hess_inv.todense() )
+                    except:
+                        self.inv_hessian = None
 
-            # now we want to store inv_hessian in self.hyperparameters['output_directory']/fisher.covmat as txt file. First line will be the name of the parameters
-            if self.inv_hessian is not None:
-                with open(self.hyperparameters['output_directory'] + '/fisher.covmat', 'w') as f:
+                # now we want to store inv_hessian in self.hyperparameters['output_directory']/fisher.covmat as txt file. First line will be the name of the parameters
+                if self.inv_hessian is not None and self.store_results:
+                    with open(self.hyperparameters['output_directory'] + '/fisher.covmat', 'w') as f:
+                        f.write(' '.join([key for key in self.parameter_dict.keys()]) + '\n')
+                        for row in self.inv_hessian:
+                            f.write(' '.join([str(val) for val in row]) + '\n')
+            
+            if self.store_results:
+                # now store bestfit with max likelihood
+                with open(self.hyperparameters['output_directory'] + '/bestfit.txt', 'w') as f:
                     f.write(' '.join([key for key in self.parameter_dict.keys()]) + '\n')
-                    for row in self.inv_hessian:
-                        f.write(' '.join([str(val) for val in row]) + '\n')
+                    f.write(' '.join([str(val) for val in self.bestfit]) + '\n')
+                    f.write(' '.join([str(self.max_loglike)]) + '\n')
+                    f.write(' '.join([str(self.uncertainty)]) + '\n')
 
-            # now store bestfit with max likelihood
-            with open(self.hyperparameters['output_directory'] + '/bestfit.txt', 'w') as f:
-                f.write(' '.join([key for key in self.parameter_dict.keys()]) + '\n')
-                f.write(' '.join([str(val) for val in self.bestfit]) + '\n')
-                f.write(' '.join([str(self.max_loglike)]) + '\n')
 
 
 

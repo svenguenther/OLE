@@ -83,11 +83,7 @@ class candl_likelihood(Likelihood):
         # Grab calculated spectra, convert to Dl
         Dl = {'ell': self.candl_like.ells}
         for spec_type in self.candl_like.unique_spec_types:
-            if spec_type == 'TT':
-                print(state['quantities'][spec_type.lower()][2:])
             Dl[spec_type] = state['quantities'][spec_type.lower()][2:] * self.cl2dl 
-
-
 
         # Shuffle into parameters, spectra into dictionary, convert tau naming conventions
         candl_input = {}
