@@ -573,33 +573,33 @@ class GP(BaseClass):
             use_nonsparse = False
 
             if self.hyperparameters["error_tolerance"] == 0.0:
-                kernel = kernelNoiseFree
                 use_nonsparse = True
-                sparse_trained = True
+                #sparse_trained = True
                 print("sparse GP training requires error_tolerance")
-            else:
+        
+        if not use_nonsparse:
 
-                kernelWhite = gpx.kernels.White()
-                # we reduce the white noise term by a factor to leave room for the unceratinity of the sparese GP. A boost of zero removes the white noise
-                # and applies all error budget to the sparse GP. Close to a value of one the sparse GP cannot converge as all error budget is used by the white noise
-                # a small allocation of white noise may be numerically ideal to smooth out the noise present in the data
-                #kernelWhite.variance=constant(self.hyperparameters["error_tolerance"] * self.hyperparameters["error_boost"])
-                kernel = gpx.kernels.SumKernel(kernels=[kernelNoiseFree, kernelWhite])
+            kernelWhite = gpx.kernels.White()
+            # we reduce the white noise term by a factor to leave room for the unceratinity of the sparese GP. A boost of zero removes the white noise
+            # and applies all error budget to the sparse GP. Close to a value of one the sparse GP cannot converge as all error budget is used by the white noise
+            # a small allocation of white noise may be numerically ideal to smooth out the noise present in the data
+            kernelWhite.variance=constant(self.hyperparameters["error_tolerance"] * self.hyperparameters["error_boost"])
+            kernel = gpx.kernels.SumKernel(kernels=[kernelNoiseFree, kernelWhite])
 
             meanf = gpx.mean_functions.Zero()
-            kernel = gpx.kernels.RBF() + gpx.kernels.White() # TODO here do fix this PDF please :) Wenn man den linear kernel benutzt gibt collaped_elbo einen guten wert und danach nurnoch nan...
+            #kernel = gpx.kernels.RBF() + gpx.kernels.White() # TODO here do fix this PDF please :) Wenn man den linear kernel benutzt gibt collaped_elbo einen guten wert und danach nurnoch nan...
             prior = gpx.gps.Prior(mean_function=meanf, kernel=kernel)
 
             lr = (
-                lambda t: self.hyperparameters["learning_rate"] / 3.0
+                lambda t: self.hyperparameters["learning_rate"] * 5.
             )  # sparse GP typically require a lower learning rate
 
             # Create the likelihood
             # the target_error defines an error for each point which is nessecary for training a sparse GP
             # ideally we want to set it very small, but this is numerically unstable. Since we know our target
             # accuracy we should make it small compared to that so that the information in the points is still used optimally
-            target_error = jnp.sqrt(self.hyperparameters["error_tolerance"]* self.hyperparameters["error_boost"]) / 100.0
-            likelihood = gpx.gps.Gaussian(num_datapoints=self.D.n)#, obs_stddev=target_error)
+            target_error = jnp.sqrt(self.hyperparameters["error_tolerance"] * self.hyperparameters["error_boost"]) / 100.0
+            likelihood = gpx.gps.Gaussian(num_datapoints=self.D.n, obs_stddev=target_error)
 
             posterior = prior * likelihood
 
@@ -616,7 +616,7 @@ class GP(BaseClass):
                     sparse_trained = True
                     use_nonsparse = True
                     print("falling back to normal GP")
-                if not use_nonsparse:
+                if not sparse_trained:
                     q = gpx.variational_families.CollapsedVariationalGaussian(
                         posterior=posterior, inducing_inputs=z
                     )
@@ -628,7 +628,7 @@ class GP(BaseClass):
                         objective=lambda p, d: -gpx.objectives.collapsed_elbo(p, d),
                         train_data=self.D,
                         optim=ox.adamw(learning_rate=lr),
-                        num_iters=self.hyperparameters["num_iters"],
+                        num_iters=self.hyperparameters["num_iters"]*5.,
                         safe=True,
                         key=jax.random.PRNGKey(0),
                     )
