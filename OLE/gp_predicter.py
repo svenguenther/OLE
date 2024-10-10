@@ -551,9 +551,7 @@ class GP(BaseClass):
 
         if self.hyperparameters["kernel"] == "RBF":
 
-            kernelNoiseFree = gpx.kernels.RBF() + gpx.kernels.Polynomial(
-                degree=1
-            )  # + gpx.kernels.White()
+            kernelNoiseFree = gpx.kernels.RBF() + gpx.kernels.Linear()  # + gpx.kernels.White()
             # we add a linear kernel to see if it imporves performance. The idea is that the GP for points
             # far away from support becomes constant and does not give the sampler a lot of usefull information
             # the lienar kernel will at least provide a slope that is meaningfull and allws the sampler to find the
@@ -576,6 +574,8 @@ class GP(BaseClass):
                 use_nonsparse = True
                 #sparse_trained = True
                 print("sparse GP training requires error_tolerance")
+        else: 
+            use_nonsparse = True
         
         if not use_nonsparse:
 
@@ -591,7 +591,7 @@ class GP(BaseClass):
             prior = gpx.gps.Prior(mean_function=meanf, kernel=kernel)
 
             lr = (
-                lambda t: self.hyperparameters["learning_rate"] * 5.
+                lambda t: self.hyperparameters["learning_rate"]*1.
             )  # sparse GP typically require a lower learning rate
 
             # Create the likelihood
@@ -599,7 +599,9 @@ class GP(BaseClass):
             # ideally we want to set it very small, but this is numerically unstable. Since we know our target
             # accuracy we should make it small compared to that so that the information in the points is still used optimally
             target_error = jnp.sqrt(self.hyperparameters["error_tolerance"] * self.hyperparameters["error_boost"]) / 100.0
-            likelihood = gpx.gps.Gaussian(num_datapoints=self.D.n, obs_stddev=target_error)
+            likelihood = gpx.gps.Gaussian(num_datapoints=self.D.n)
+            likelihood.obs_stddev = constant(target_error)
+
 
             posterior = prior * likelihood
 
@@ -622,13 +624,14 @@ class GP(BaseClass):
                     )
 
                     # print(gpx.objectives.collapsed_elbo(posterior, self.D))
+                    num_init = int(self.hyperparameters["max_num_iters"]/2.) # dynamical setting not implemented yet
 
                     self.opt_posterior, self.history = gpx.fit(
                         model=q,
                         objective=lambda p, d: -gpx.objectives.collapsed_elbo(p, d),
                         train_data=self.D,
                         optim=ox.adamw(learning_rate=lr),
-                        num_iters=self.hyperparameters["num_iters"]*5.,
+                        num_iters=num_init,
                         safe=True,
                         key=jax.random.PRNGKey(0),
                     )
@@ -696,6 +699,8 @@ class GP(BaseClass):
 
             # Create the likelihood
             likelihood = gpx.gps.Gaussian(num_datapoints=self.D.n)
+            target_error = jnp.max(jnp.array([10e-10, jnp.sqrt(self.hyperparameters["error_tolerance"])/100.]))
+            likelihood.obs_stddev = constant(target_error)
 
             self.posterior = prior * likelihood
 
