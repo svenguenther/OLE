@@ -689,7 +689,7 @@ class Sampler(BaseClass):
             self.debug("loglikes after theory: %s for parameters: %s", state['loglike'], state['parameters'])
 
             state['total_loglike'] = jnp.array(list(state['loglike'].values())).sum() + logprior
-            if self.use_emulator:
+            if self.hyperparameters['use_emulator']:
                 self.emulator.add_state(state)
         else:
             # here we need to test the emulator for its performance
