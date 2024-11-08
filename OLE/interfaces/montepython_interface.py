@@ -16,7 +16,7 @@ import numpy as np
 #####################################
 #  Set the path to MontePython here #
 #####################################
-MP_path = '/home/user/path/to/your/montepython_public/montepython'
+MP_path = '/home/markus/montepython/montepython_public/montepython'
 
 
 # -----------------MAIN-CALL---------------------------------------------
@@ -85,7 +85,20 @@ if __name__ == '__main__':
                     if res is not None and type(res) is not bool:
                         # if my_attribute not in self.attributes_with_relevant_output.keys():
                         if my_attribute in self.attributes_with_relevant_output.keys():
-                            if type(res) != dict:
+                            if (type(res) != dict) and (type(res) != tuple):
+                                #print('Checking:')
+                                #print('Attribute = ' + my_attribute)
+                                #print('res type:')
+                                #print(type(res))
+                                #if type(res)== tuple:
+                                #    noteq = False
+                                #    for i_tuple in range(len(res)):
+                                #        if not np.all(res[i_tuple] == self.attributes_with_relevant_output[my_attribute][-1][i_tuple]):
+                                #          noteq = True
+                                #    if noteq:
+                                #        self.attributes_with_relevant_output[my_attribute].append(cp.deepcopy(res))
+                                #print(self.attributes_with_relevant_output[my_attribute][-1])
+                                #print('Checked')
                                 if not res == self.attributes_with_relevant_output[my_attribute][-1]:
                                     self.attributes_with_relevant_output[my_attribute].append(cp.deepcopy(res))
                         else:
@@ -142,6 +155,14 @@ if __name__ == '__main__':
                 if type(value[0]) is dict:
                     for subkey, subvalue in value[0].items():
                         OLE_state['quantities'][subkey] = np.array(subvalue)
+                elif type(value[0]) is tuple:
+                    for subindex in range(len(value[0])):
+                        subkey = key + '_' + str(subindex)
+                        subvalue = value[0][subindex]
+                        if type(value[0][subindex]) == np.ndarray:
+                            OLE_state['quantities'][subkey] = subvalue
+                        else:
+                            OLE_state['quantities'][subkey] = np.array(subvalue)
                 else:
                     OLE_state['quantities'][key] = np.array(value)
 
