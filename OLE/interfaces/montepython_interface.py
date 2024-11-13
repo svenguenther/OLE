@@ -16,7 +16,7 @@ import numpy as np
 #####################################
 #  Set the path to MontePython here #
 #####################################
-MP_path = '/home/markus/montepython/montepython_public/montepython'
+MP_path = '/home/path/to/montepython_public/montepython'
 
 
 # -----------------MAIN-CALL---------------------------------------------
@@ -85,7 +85,7 @@ if __name__ == '__main__':
                     if res is not None and type(res) is not bool:
                         # if my_attribute not in self.attributes_with_relevant_output.keys():
                         if my_attribute in self.attributes_with_relevant_output.keys():
-                            if (type(res) != dict) and (type(res) != tuple):
+                            if (type(res) != dict) and (type(res) != tuple) and (type(res) != np.ndarray):
                                 #print('Checking:')
                                 #print('Attribute = ' + my_attribute)
                                 #print('res type:')
@@ -163,6 +163,8 @@ if __name__ == '__main__':
                             OLE_state['quantities'][subkey] = subvalue
                         else:
                             OLE_state['quantities'][subkey] = np.array(subvalue)
+                elif type(value[0]) is np.ndarray:
+                    OLE_state['quantities'][key] = value
                 else:
                     OLE_state['quantities'][key] = np.array(value)
 
