@@ -164,7 +164,7 @@ if __name__ == '__main__':
                         else:
                             OLE_state['quantities'][subkey] = np.array(subvalue)
                 elif type(value[0]) is np.ndarray:
-                    OLE_state['quantities'][key] = value
+                    OLE_state['quantities'][key] = value[0]
                 else:
                     OLE_state['quantities'][key] = np.array(value)
 
