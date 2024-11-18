@@ -194,6 +194,10 @@ if __name__ == '__main__':
                             self.emulated_result[key][0][subkey] = cp.deepcopy(np.array(OLE_state['quantities'][subkey]))[0]
                         else:
                             self.emulated_result[key][0][subkey] = cp.deepcopy(np.array(OLE_state['quantities'][subkey]))
+                elif type(value[0]) is tuple:
+                    for subindex in range(len(value[0])):
+                        subkey = key + '_' + str(subindex)
+                        self.emulated_result[key][0][subkey] = cp.deepcopy(np.array(OLE_state['quantities'][subkey]))
                 else:
                     self.emulated_result[key] = cp.deepcopy(np.array(OLE_state['quantities'][key]))
 
