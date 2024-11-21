@@ -10,13 +10,21 @@ Monte Python, a Monte Carlo Markov Chain code (with Class!)
 """
 import sys
 import warnings
+import os
 
 import numpy as np
 
 #####################################
 #  Set the path to MontePython here #
 #####################################
-MP_path = '/home/path/to/montepython_public/montepython'
+
+interface_path = os.path.dirname(__file__)
+MP_path_filepath = os.path.join(interface_path, 'MP_PATH')
+
+with open(MP_path_filepath, 'r') as file:
+    MP_path = file.read().rstrip()
+
+# MP_path = '/home/path/to/montepython_public/montepython'
 
 
 # -----------------MAIN-CALL---------------------------------------------
@@ -25,13 +33,13 @@ if __name__ == '__main__':
 
     # check that you accutally DID change the path to montepython
     if MP_path == '/path/to/your/montepython_public/montepython':
-        raise ValueError("Please change the path to your montepython version in the /OLE/interfaces/montepython_interface.py file")
+        raise ValueError("Please change the path to your montepython version in the /OLE/interfaces/MP_PATH file")
     sys.path.insert(0, MP_path)
 
     import io_mp       # all the input/output mechanisms
     from run import run
 
-    import os
+    # import os
 
     import time
     import jax
@@ -196,13 +204,13 @@ if __name__ == '__main__':
                         else:
                             self.emulated_result[key][0][subkey] = cp.deepcopy(np.array(OLE_state['quantities'][subkey]))
                 elif type(value[0]) is tuple:
-                    print(f'Emu_1({key}) = {value}')
+                    # print(f'Emu_1({key}) = {value}')
                     _list = []
                     for subindex in range(len(value[0])):
                         subkey = key + '_' + str(subindex)
                         _list.append(cp.deepcopy(np.array(OLE_state['quantities'][subkey])))
                     self.emulated_result[key][0] = tuple(_list)
-                    print(f'Emu_2({key}) = {self.emulated_result[key]}')
+                    # print(f'Emu_2({key}) = {self.emulated_result[key]}')
                 elif type(value[0]) is np.ndarray:
                     emulated_result = np.array(OLE_state['quantities'][key])
                     # print(f'OLE key={key}')
