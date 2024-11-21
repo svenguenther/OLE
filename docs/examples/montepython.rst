@@ -3,8 +3,8 @@ MontePython Interface
 
 Here we describe the interface for using MontePython with OLE. Prerequisites are that you have both MontePython and OLE installed.
 
-The key idea is that we specify the path where your MontePython installation is located into your OLE installation within the /OLE/OLE/interfaces/montepython_interface.py file.
-This is done by setting the variable `MP_path` to the path of your MontePython installation. 
+The key idea is that we specify the path where your MontePython installation is located into your OLE installation within the /OLE/OLE/interfaces/MP_PATH file.
+This file should contain exactly one line, specifying the path of your MontePython installation. The contents of the file are read and used to set the variable `MP_path` in /OLE/OLE/interfaces/montepython_interface.py. 
 
 After that, the interace will load vanilla MontePython and apply changes that are necessary to make it compatible with OLE.
 This will not change the MontePython installation itself, but only the instance that is used by OLE.
