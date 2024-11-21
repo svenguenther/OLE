@@ -164,7 +164,7 @@ if __name__ == '__main__':
                         else:
                             OLE_state['quantities'][subkey] = np.array(subvalue)
                 elif type(value[0]) is np.ndarray:
-                    OLE_state['quantities'][key] = value[0]
+                    OLE_state['quantities'][key] = value[0].flatten()
                 else:
                     OLE_state['quantities'][key] = np.array(value)
 
@@ -188,6 +188,7 @@ if __name__ == '__main__':
 
             # we now go through all branches of the emulated result and update the values
             for key, value in self.emulated_result.items():
+                
                 if type(value[0]) is dict:
                     for subkey, subvalue in value[0].items():
                         if type(subvalue)== float:
@@ -195,13 +196,23 @@ if __name__ == '__main__':
                         else:
                             self.emulated_result[key][0][subkey] = cp.deepcopy(np.array(OLE_state['quantities'][subkey]))
                 elif type(value[0]) is tuple:
+                    print(f'Emu_1({key}) = {value}')
                     _list = []
                     for subindex in range(len(value[0])):
                         subkey = key + '_' + str(subindex)
                         _list.append(cp.deepcopy(np.array(OLE_state['quantities'][subkey])))
                     self.emulated_result[key][0] = tuple(_list)
+                    print(f'Emu_2({key}) = {self.emulated_result[key]}')
+                elif type(value[0]) is np.ndarray:
+                    emulated_result = np.array(OLE_state['quantities'][key])
+                    # print(f'OLE key={key}')
+                    # print(f'My shape in OLE is {self.emulated_result[key][0].shape}')
+                    self.emulated_result[key] = [cp.deepcopy(np.reshape(emulated_result,self.emulated_result[key][0].shape))]
+                    # print(f'My reshape in OLE is {np.reshape(emulated_result,self.emulated_result[key][0].shape).shape}')
                 else:
                     self.emulated_result[key] = cp.deepcopy(np.array(OLE_state['quantities'][key]))
+                
+                
 
             self.use_emulated_result = True  
 
