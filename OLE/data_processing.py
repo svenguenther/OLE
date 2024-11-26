@@ -15,6 +15,7 @@ import copy
 
 import scipy as sp
 import sklearn.decomposition as skd
+from OLE.utils.mpi import get_mpi_rank
 
 from OLE.plotting import (
     data_plot_raw,
@@ -229,7 +230,7 @@ class data_processor(BaseClass):
         self.projection_matrix = copy.deepcopy(eigenvectors[:, :n_components])
 
         # plot the explained variance, the cumulative explained variance and the eigenvectors
-        if self.hyperparameters["plotting_directory"] is not None:
+        if (self.hyperparameters["plotting_directory"] is not None) and (get_mpi_rank() == 0):
             # check that the directory exists
             if not os.path.exists(
                 self.hyperparameters["plotting_directory"] + "/PCA_plots"
@@ -295,7 +296,7 @@ class data_processor(BaseClass):
             ) / safe_output_stds
 
         # if there is a plotting directory, plot the raw output data and the normalized output data
-        if self.hyperparameters["plotting_directory"] is not None:
+        if (self.hyperparameters["plotting_directory"] is not None) and (get_mpi_rank() == 0):
             # check that the directory exists
             if not os.path.exists(self.hyperparameters["plotting_directory"]):
                 os.makedirs(self.hyperparameters["plotting_directory"])
@@ -367,7 +368,7 @@ class data_processor(BaseClass):
         ) / self.output_pca_stds
 
         # make plots of the compressed data
-        if self.hyperparameters["plotting_directory"] is not None:
+        if (self.hyperparameters["plotting_directory"] is not None) and (get_mpi_rank() == 0):
             # check that the directory exists
             if not os.path.exists(
                 self.hyperparameters["plotting_directory"] + "/compressed_data"

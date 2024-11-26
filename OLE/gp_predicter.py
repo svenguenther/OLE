@@ -18,6 +18,7 @@ import jax.numpy as jnp
 import numpy as np
 from jaxtyping import install_import_hook
 import optax as ox
+from OLE.utils.mpi import get_mpi_rank
 
 from functools import partial
 import gc
@@ -125,6 +126,45 @@ class GP_predictor(BaseClass):
         output_data = self.data_processor.denormalize_data(output_data_normalized)
 
         return output_data
+    
+
+    def predict_GP(self, parameters):
+        # Predict the GPs of a quantity for the given parameters.
+        # First we normalize the parameters.
+        parameters_normalized = self.data_processor.normalize_input_data(parameters)
+
+        # Then we predict the output data for the normalized parameters.
+        output_data_compressed = jnp.zeros(self.num_GPs)
+        for i in range(self.num_GPs):
+            output_data_compressed = output_data_compressed.at[i].set(
+                self.GPs[i].predict(parameters_normalized)
+            )
+
+        return output_data_compressed
+    
+    def predict_GP_value_and_std(self, parameters, include_error_tolerance = False):
+        # Predict the GPs of a quantity for the given parameters.
+        # First we normalize the parameters.
+        parameters_normalized = self.data_processor.normalize_input_data(parameters)
+
+        # Then we predict the output data for the normalized parameters.
+        output_value_compressed = jnp.zeros(self.num_GPs)
+        output_std_compressed = jnp.zeros(self.num_GPs)
+        for i in range(self.num_GPs):
+            val, std, error_tol = self.GPs[i].predict_value_and_std(parameters_normalized)
+            output_value_compressed = output_value_compressed.at[i].set(
+                val
+            )
+            if include_error_tolerance:
+                output_std_compressed = output_std_compressed.at[i].set(
+                    std + error_tol
+                )
+            else:
+                output_std_compressed = output_std_compressed.at[i].set(
+                    std
+                )
+        return output_value_compressed, output_std_compressed
+
 
     # Predict the quantity for the given GPOutput. This is just to split the precit function so we can autodiff it in parts
     def predict_fromGP(self, GPOut):
@@ -339,8 +379,9 @@ class GP_predictor(BaseClass):
 
         # if we have a plotting directory, we will run some tests
         if (
-            self.hyperparameters["plotting_directory"] is not None
-            and self.hyperparameters["testset_fraction"] is not None
+            (self.hyperparameters["plotting_directory"] is not None)
+            and (self.hyperparameters["testset_fraction"] is not None)
+            and (get_mpi_rank() == 0)
         ):
             self.run_tests()
 
@@ -401,8 +442,10 @@ class GP_predictor(BaseClass):
 
         # if we have a plotting directory, we will run some tests
         if (
-            self.hyperparameters["plotting_directory"] is not None
-            and self.hyperparameters["testset_fraction"] is not None
+            (self.hyperparameters["plotting_directory"] is not None)
+            and (self.hyperparameters["testset_fraction"] is not None)
+            and (get_mpi_rank() == 0)
+
         ):
             self.run_tests()
 
@@ -528,7 +571,7 @@ class GP(BaseClass):
         self.test_D = None
 
         # if we have a test fraction, then we will split the data into a training and a test set
-        if self.hyperparameters["testset_fraction"] is not None:
+        if (self.hyperparameters["testset_fraction"] is not None) and (get_mpi_rank() == 0):
             self.debug("Splitting data into training and test set")
             np.random.seed(0)
             train_indices, test_indices = np.split(
@@ -626,15 +669,22 @@ class GP(BaseClass):
                     # print(gpx.objectives.collapsed_elbo(posterior, self.D))
                     num_init = int(self.hyperparameters["max_num_iters"]/2.) # dynamical setting not implemented yet
 
+                    obj = lambda p, d: -gpx.objectives.collapsed_elbo(p, d)
+
                     self.opt_posterior, self.history = gpx.fit(
                         model=q,
-                        objective=lambda p, d: -gpx.objectives.collapsed_elbo(p, d),
+                        objective=obj,
                         train_data=self.D,
                         optim=ox.adamw(learning_rate=lr),
                         num_iters=num_init,
                         safe=True,
                         key=jax.random.PRNGKey(0),
                     )
+
+                    del obj
+                    del q
+
+
 
                     # now we check if our error on the training points is too large
                     latent_dist = self.opt_posterior(self.input_data, train_data=self.D)
@@ -744,7 +794,7 @@ class GP(BaseClass):
         gc.collect()
 
         # some debugging output
-        if self.hyperparameters["plotting_directory"] is not None:
+        if (self.hyperparameters["plotting_directory"] is not None) and (get_mpi_rank() == 0):
             # creat directory if not exist
             import os
 
@@ -782,7 +832,7 @@ class GP(BaseClass):
                 + "_slice.png",
             )
 
-            if self.hyperparameters["testset_fraction"] is not None:
+            if (self.hyperparameters["testset_fraction"] is not None) and (get_mpi_rank() == 0):
                 # check that there are test data
                 if self.test_D.n > 0:
                     self.run_test_set_tests()
@@ -836,7 +886,6 @@ class GP(BaseClass):
         else:
 
             if self.recompute_kernel_matrix:
-                #self.recompute_kernel_matrix = False    # TODO: This leads to memory leaks in jit mode
                 self.inducing_points = jnp.array(self.opt_posterior.inducing_inputs)
                 latent_dist = self.opt_posterior(self.inducing_points, train_data=self.D)
                 predictive_dist = self.opt_posterior.posterior.likelihood(latent_dist)
@@ -874,7 +923,6 @@ class GP(BaseClass):
             return ac
            
         
-    # @partial(jit, static_argnums=0) 
     def predicttest(self, input_data):
         # Predict the output data for the given input data.
 
@@ -898,7 +946,6 @@ class GP(BaseClass):
         else:
 
             if self.recompute_kernel_matrix:
-                #self.recompute_kernel_matrix = False    # TODO: This leads to memory leaks in jit mode
                 self.inducing_points = jnp.array(self.opt_posterior.inducing_inputs)
                 latent_dist = self.opt_posterior(self.inducing_points, train_data=self.D)
                 predictive_dist = self.opt_posterior.posterior.likelihood(latent_dist)
@@ -987,7 +1034,6 @@ class GP(BaseClass):
         else:
 
             if self.recompute_kernel_matrix: # CF: do we intend to keep this flag or remove it?
-                #self.recompute_kernel_matrix = False    # TODO: This leads to memory leaks in jit mode
                 self.inducing_points = jnp.array(self.opt_posterior.inducing_inputs)
                 latent_dist = self.opt_posterior(self.inducing_points, train_data=self.D)
                 predictive_dist = self.opt_posterior.posterior.likelihood(latent_dist)
