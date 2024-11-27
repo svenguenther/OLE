@@ -23,8 +23,9 @@ MP_path_filepath = os.path.join(interface_path, 'MP_PATH')
 
 with open(MP_path_filepath, 'r') as file:
     MP_path = file.read().rstrip()
+    MP_path = os.path.join(MP_path,'montepython')
 
-# MP_path = '/home/path/to/montepython_public/montepython'
+# MP_path = '/home/path/to/montepython_public'
 
 
 # -----------------MAIN-CALL---------------------------------------------
@@ -32,7 +33,7 @@ if __name__ == '__main__':
     # use naive vanilla parser to get the path to montepython
 
     # check that you accutally DID change the path to montepython
-    if MP_path == '/path/to/your/montepython_public/montepython':
+    if MP_path == '/path/to/your/montepython_public':
         raise ValueError("Please change the path to your montepython version in the /OLE/interfaces/MP_PATH file")
     sys.path.insert(0, MP_path)
 
