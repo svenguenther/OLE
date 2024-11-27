@@ -412,6 +412,8 @@ class Sampler(BaseClass):
             with open(self.hyperparameters['covmat'], 'r') as f:
                 lines = f.readlines()
                 parameters = lines[0].split()
+                if parameters[0] == "#":
+                    parameters = parameters[1:]
                 covmat_loaded = np.zeros((len(parameters), len(parameters)))
                 for i, line in enumerate(lines[1:]):
                     covmat_loaded[i] = np.array([float(_) for _ in line.split()])
