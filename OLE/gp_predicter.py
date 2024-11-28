@@ -591,7 +591,7 @@ class GP(BaseClass):
             prior = gpx.gps.Prior(mean_function=meanf, kernel=kernel)
 
             lr = (
-                lambda t: self.hyperparameters["learning_rate"]*1.
+                lambda t: self.hyperparameters["learning_rate"]
             )  # sparse GP typically require a lower learning rate
 
             # Create the likelihood
@@ -608,8 +608,9 @@ class GP(BaseClass):
             while not sparse_trained:
                 # cosntruct a sparse GP
                 # define initial inducing points
-                z = self.input_data[: self.hyperparameters["sparse_GP_points"]]
-
+                z1 = self.input_data[: self.hyperparameters["sparse_GP_points"]]
+                z2 = self.input_data[1: self.hyperparameters["sparse_GP_points"]+1]
+                z = 0.5 * (z1+z2)
                 if (
                     len(z)
                     >= len(self.input_data)
@@ -622,8 +623,6 @@ class GP(BaseClass):
                     q = gpx.variational_families.CollapsedVariationalGaussian(
                         posterior=posterior, inducing_inputs=z
                     )
-
-                    # print(gpx.objectives.collapsed_elbo(posterior, self.D))
                     num_init = int(self.hyperparameters["max_num_iters"]/2.) # dynamical setting not implemented yet
 
                     self.opt_posterior, self.history = gpx.fit(
@@ -636,15 +635,27 @@ class GP(BaseClass):
                         key=jax.random.PRNGKey(0),
                     )
 
-                    # now we check if our error on the training points is too large
+
                     latent_dist = self.opt_posterior(self.input_data, train_data=self.D)
                     predictive_dist = self.opt_posterior.posterior.likelihood(
                         latent_dist
                     )
                     predictive_std = predictive_dist.stddev()
+                    #predictive_mean = predictive_dist.mean()
 
                     add_points = False
                     n_poor = 0
+                    
+                    #means,stds,tols = self.predict_value_and_std( jnp.array([self.input_data[40]]))
+                    #print("means")
+
+                    #print(means)
+                    #print(predictive_mean[40])
+                    #print("std")
+                    #print(stds)
+                    #print(predictive_std[40])
+                    #print("tols")
+                    #print(tols)    
                     for std in predictive_std:
                         if std**2 > self.hyperparameters["error_tolerance"]:
 
@@ -961,7 +972,7 @@ class GP(BaseClass):
                 input_data, self.D, inducing_points, inducing_values, inv_Kxx
             )
 
-            return ac, std, jnp.sqrt(self.hyperparameters["error_tolerance"])
+            return ac, std, jnp.sqrt(self.hyperparameters["error_tolerance"]*self.hyperparameters["error_boost"])
 
 
     

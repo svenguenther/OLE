@@ -197,7 +197,8 @@ def calculate_mean_single_sparse_from_inv_Kxx(
 
     # Observation noise o²
     #obs_noise = self.likelihood.obs_noise
-    # mx = self.prior.mean_function(inducing_points).flatten()
+    mx = self.prior.mean_function(inducing_points).flatten()
+    mean_t = self.prior.mean_function(t).flatten()
 
     Kxt = self.prior.kernel.cross_covariance(inducing_points, t)
 
@@ -207,7 +208,7 @@ def calculate_mean_single_sparse_from_inv_Kxx(
 
     # μt  +  Ktx (Kxx + Io²)⁻¹ (y  -  μx)
     # mean = jnp.matmul(Sigma_inv_Kxt.T, inducing_values - mx)
-    mean = jnp.matmul(Sigma_inv_Kxt.T, inducing_values)
+    mean = mean_t + jnp.matmul(Sigma_inv_Kxt.T, inducing_values- mx)
 
     #return mean
     return jnp.atleast_1d(mean.squeeze())[0]
@@ -230,7 +231,9 @@ def calculate_mean_std_single_sparse_from_inv_Kxx(
 
     # Observation noise o²
     #obs_noise = self.likelihood.obs_noise
-    # mx = self.prior.mean_function(inducing_points).flatten()
+    
+    mx = self.prior.mean_function(inducing_points).flatten()
+    mean_t = self.prior.mean_function(t).flatten()
 
     Kxt = self.prior.kernel.cross_covariance(inducing_points, t)
 
@@ -239,8 +242,8 @@ def calculate_mean_std_single_sparse_from_inv_Kxx(
     Sigma_inv_Kxt = inv_Kxx @ Kxt
 
     # μt  +  Ktx (Kxx + Io²)⁻¹ (y  -  μx)
-    # mean = jnp.matmul(Sigma_inv_Kxt.T, inducing_values - mx)
-    mean = jnp.matmul(Sigma_inv_Kxt.T, inducing_values)
+    mean = mean_t + jnp.matmul(Sigma_inv_Kxt.T, inducing_values - mx)
+    #mean = jnp.matmul(Sigma_inv_Kxt.T, inducing_values)
 
     # epsilon to ensure positive definiteness
     epsilon = 1e-14
