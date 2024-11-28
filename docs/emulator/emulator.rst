@@ -97,17 +97,13 @@ It also deals with the possible compression of data by sparse GPs.
    * - ``sparse_GP_points``
      - ``0``
      - If not set to ``0`` we try to use condensate the information of all training points into a reduced training set (sparse GPs). The initial guess of the number of estimated sparse data points is ``sparse_GP_points``. However, in the iterative search for the best number of data points there is a certain error tolerance that we deem acceptable for the acceleration. It should be choosen rather small as the subleading PCA components can be fit with very few data points.
-   * - ``error_tolerance``
+   * - ``white_noise_level``
      - ``1.``
      - If not set to ``0`` a noise term is added to the Kernel that is determined by the ``explained_variance_cutoff`` for each PCA component. This prevents the GP from fitting random noise introduced in the PCA analysis. It is also a central component of the sparse GP method since it is used to determine the optimal number of sparse points.
    * - ``error_boost`` 
-     - ``0.1``
-     - This parameter distributes the noise budget between the sparse GP uncertainity and a white noise term. A value of 0 means no white noise, while a value of 1 is only white noise.
-   * - ``excess_fraction``
-     - ``0.1``
-     - Allows a fraction of points to exxeecd the error limits to allow for fewer sparse points. Too large values lead to the GP constantly aquering new points and never converging. Too small values lead to too many sparse points being used to fit outliers in regions where the error can be very large
+     - ``2.``
+     - This parameter allocates a noise budget to the sparse GP relative to the existing white noise term. A value of 2. means that the total allowed error is twice the white noise and thus the average error of the sparse GP may be as large as the white noise term. A value of 1. means that the sparse GP error is zero, so it can never be used. Reasonable values are between 1.5 and 5. 
     
-
 
 Uncertainty qualification related to the precision criterium of the emulator and when to test it.
 

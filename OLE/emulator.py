@@ -103,7 +103,7 @@ class Emulator(BaseClass):
             # path to a directory with data covmats to do better normalization. If given, the emulator will search for data covmats in this directoy and if one is found, it will be used for normalization
             'data_covmat_directory': None,
 
-            'error_tolerance' : 1.,
+            'white_noise_level' : 1.,
             'sparse_GP_points' : 0.,
             'test_noise_levels_counter' : 50,
             # the radius around the checked points for which we do not need to check the quality criterium
@@ -520,7 +520,7 @@ class Emulator(BaseClass):
         
         return output_state
     
-    def compute_error_from_differentiable_likelihood(self, parameters, include_error_tolerance = False):
+    def compute_error_from_differentiable_likelihood(self, parameters, include_white_noise = False):
         # Here we need to compute the error of the emulator via the differentiable likelihood.
         # Therefore, we get the errors on the GPs two layers below in the GPpredictor class.
         # Addtionally we need the pipeline from the GP prediction to the likelihood. 
@@ -530,7 +530,7 @@ class Emulator(BaseClass):
 
         # define the likelihood from GP function
         a = time.time()
-        self.include_error_tolerance = include_error_tolerance
+        self.include_white_noise = include_white_noise
         
         if self.rejit_flag_likelihood_error:
             if self.jitted_likelihood_error_function is not None:
@@ -564,7 +564,7 @@ class Emulator(BaseClass):
         emulator_GP_uncertainy = {}
         emulator_GP_value = {}
         for quantity, emulator in self.emulators.items():
-            vals, std = emulator.predict_GP_value_and_std(input_data, include_error_tolerance = self.include_error_tolerance)
+            vals, std = emulator.predict_GP_value_and_std(input_data, include_white_noise = self.include_white_noise)
             emulator_GP_value[quantity] = vals
             emulator_GP_uncertainy[quantity] = std
 
@@ -699,10 +699,10 @@ class Emulator(BaseClass):
 
         if self.hyperparameters['sparse_GP_points'] > 0.:
             # require errors for sparse GP's
-            self.hyperparameters['error_tolerance'] = 1.
+            self.hyperparameters['white_noise_level'] = 1.
 
 
-        if self.hyperparameters['error_tolerance'] == 0.:
+        if self.hyperparameters['white_noise_level'] == 0.:
             for quantity_name in self.emulators.keys():
                 self.emulators[quantity_name].disable_error() 
 
@@ -764,7 +764,7 @@ class Emulator(BaseClass):
                     # set it to an minimum value of 1e-14
                     error = max(error, 1e-14) # this ensures some white kernel. Otherwise training might fail for deterministic data, like training H0 out of h etc ...
                     
-                    self.emulators[quantity_name].GPs[i].hyperparameters['error_tolerance'] = error
+                    self.emulators[quantity_name].GPs[i].hyperparameters['white_noise_level'] = error
                     self.debug("Error tolerance for GP %d of quantity %s: %e" % (i, quantity_name, error))
 
     

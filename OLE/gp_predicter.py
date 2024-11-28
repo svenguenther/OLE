@@ -70,9 +70,8 @@ class GP_predictor(BaseClass):
             # testset fraction. If we have a testset, which is not None, then we will use this fraction of the data as a testset
             "testset_fraction": None,
             # error
-            "error_tolerance": 1.0,
-            "excess_fraction": 0.1,
-            "error_boost": 0.1,
+            "white_noise_level": 1.0,
+            "error_boost": 2.,
             "kernel_fitting_frequency": 20,
         }
 
@@ -142,7 +141,7 @@ class GP_predictor(BaseClass):
 
         return output_data_compressed
     
-    def predict_GP_value_and_std(self, parameters, include_error_tolerance = False):
+    def predict_GP_value_and_std(self, parameters, include_white_noise = False):
         # Predict the GPs of a quantity for the given parameters.
         # First we normalize the parameters.
         parameters_normalized = self.data_processor.normalize_input_data(parameters)
@@ -155,7 +154,7 @@ class GP_predictor(BaseClass):
             output_value_compressed = output_value_compressed.at[i].set(
                 val
             )
-            if include_error_tolerance:
+            if include_white_noise:
                 output_std_compressed = output_std_compressed.at[i].set(
                     std + error_tol
                 )
@@ -306,17 +305,17 @@ class GP_predictor(BaseClass):
     def reset_error(self):
 
         for i in range(self.num_GPs):
-            self.GPs[i].hyperparameters["error_tolerance"] = self.hyperparameters[
-                "error_tolerance"
+            self.GPs[i].hyperparameters["white_noise_level"] = self.hyperparameters[
+                "white_noise_level"
             ]
 
     def disable_error(self):
 
-        self.hyperparameters["error_tolerance"] = 0.0
+        self.hyperparameters["white_noise_level"] = 0.0
 
         for i in range(self.num_GPs):
-            self.GPs[i].hyperparameters["error_tolerance"] = self.hyperparameters[
-                "error_tolerance"
+            self.GPs[i].hyperparameters["white_noise_level"] = self.hyperparameters[
+                "white_noise_level"
             ]
 
     # def set_error(self,index,quantity_derivs,acceptable_error):
@@ -343,8 +342,8 @@ class GP_predictor(BaseClass):
     #    for i in range(self.num_GPs):
     #        max_error = acceptable_error / dlogdGP[i] # check that this is correct ...
 
-    #        if self.GPs[i].hyperparameters['error_tolerance'] > max_error**2:
-    #            self.GPs[i].hyperparameters['error_tolerance'] = max_error[0]**2
+    #        if self.GPs[i].hyperparameters['white_noise_level'] > max_error**2:
+    #            self.GPs[i].hyperparameters['white_noise_level'] = max_error[0]**2
 
     def train(self):
         # Train the GP emulator.
@@ -537,7 +536,7 @@ class GP(BaseClass):
             # testset fraction. If we have a testset, which is not None, then we will use this fraction of the data as a testset
             "testset_fraction": None,
             # error
-            "error_tolerance": 1.0,
+            "white_noise_level": 1.0,
             # numer of test samples to determine the quality of the emulator
             "N_quality_samples": 5,
             # number of sparse GP points
@@ -604,6 +603,10 @@ class GP(BaseClass):
         else:
             raise ValueError("Kernel not implemented")
 
+        kernelWhite = gpx.kernels.White()
+        kernelWhite.variance=constant(self.hyperparameters["white_noise_level"] )
+            
+
         use_nonsparse = True
 
         if self.hyperparameters["sparse_GP_points"] > 0:
@@ -613,20 +616,15 @@ class GP(BaseClass):
             sparse_trained = False
             use_nonsparse = False
 
-            if self.hyperparameters["error_tolerance"] == 0.0:
+            if self.hyperparameters["white_noise_level"] == 0.0:
                 use_nonsparse = True
                 #sparse_trained = True
-                print("sparse GP training requires error_tolerance")
+                print("sparse GP training requires a white noise error")
         else: 
             use_nonsparse = True
         
         if not use_nonsparse:
 
-            kernelWhite = gpx.kernels.White()
-            # we reduce the white noise term by a factor to leave room for the unceratinity of the sparese GP. A boost of zero removes the white noise
-            # and applies all error budget to the sparse GP. Close to a value of one the sparse GP cannot converge as all error budget is used by the white noise
-            # a small allocation of white noise may be numerically ideal to smooth out the noise present in the data
-            kernelWhite.variance=constant(self.hyperparameters["error_tolerance"] * self.hyperparameters["error_boost"])
             kernel = gpx.kernels.SumKernel(kernels=[kernelNoiseFree, kernelWhite])
 
             meanf = gpx.mean_functions.Zero()
@@ -641,7 +639,7 @@ class GP(BaseClass):
             # the target_error defines an error for each point which is nessecary for training a sparse GP
             # ideally we want to set it very small, but this is numerically unstable. Since we know our target
             # accuracy we should make it small compared to that so that the information in the points is still used optimally
-            target_error = jnp.sqrt(self.hyperparameters["error_tolerance"] * self.hyperparameters["error_boost"]) / 100.0
+            target_error = jnp.sqrt(self.hyperparameters["white_noise_level"] ) / 100.0
             likelihood = gpx.gps.Gaussian(num_datapoints=self.D.n)
             likelihood.obs_stddev = constant(target_error)
 
@@ -684,44 +682,24 @@ class GP(BaseClass):
                     del q
 
 
-
                     # now we check if our error on the training points is too large
                     latent_dist = self.opt_posterior(self.input_data, train_data=self.D)
                     predictive_dist = self.opt_posterior.posterior.likelihood(
                         latent_dist
                     )
                     predictive_std = predictive_dist.stddev()
-                    #predictive_mean = predictive_dist.mean()
-
-                    add_points = False
-                    n_poor = 0
                     
-                    #means,stds,tols = self.predict_value_and_std( jnp.array([self.input_data[40]]))
-                    #print("means")
-
-                    #print(means)
-                    #print(predictive_mean[40])
-                    #print("std")
-                    #print(stds)
-                    #print(predictive_std[40])
-                    #print("tols")
-                    #print(tols)    
+                    add_points = False
+                    
+                    
+                    avg_err = 0. 
                     for std in predictive_std:
-                        if std**2 > self.hyperparameters["error_tolerance"]:
+                        avg_err += std**2
+                    
+                    avg_err /= self.hyperparameters["white_noise_level"]*len(predictive_std)
+                    print(f"average error {avg_err:.3f} at {len(z)} points")
 
-                            n_poor += 1
-
-                    print(
-                        "npoor/points ",
-                        n_poor,
-                        "/",
-                        self.hyperparameters["sparse_GP_points"],
-                    )
-
-                    if (
-                        n_poor
-                        > len(predictive_std) * self.hyperparameters["excess_fraction"]
-                    ):  # acceptable ratio, allowing too much will overaquire points, allowing too little forces too many spares points
+                    if ( avg_err > self.hyperparameters["error_boost"]):  
                         add_points = True
                     if add_points:
                         self.hyperparameters[
@@ -741,10 +719,7 @@ class GP(BaseClass):
 
             self.hyperparameters["is_sparse"] = False
 
-            if self.hyperparameters["error_tolerance"] > 0.0:
-                kernelWhite = gpx.kernels.White()
-                # replace the white noise with a fixed value. It cannot be trained
-                kernelWhite.variance = constant(self.hyperparameters["error_tolerance"])
+            if self.hyperparameters["white_noise_level"] > 0.0:
                 kernel = gpx.kernels.SumKernel(kernels=[kernelNoiseFree, kernelWhite])
             else:
                 kernel = kernelNoiseFree
@@ -760,7 +735,7 @@ class GP(BaseClass):
 
             # Create the likelihood
             likelihood = gpx.gps.Gaussian(num_datapoints=self.D.n)
-            target_error = jnp.max(jnp.array([10e-10, jnp.sqrt(self.hyperparameters["error_tolerance"])/100.]))
+            target_error = jnp.max(jnp.array([10e-10, jnp.sqrt(self.hyperparameters["white_noise_level"])/100.]))
             likelihood.obs_stddev = constant(target_error)
 
             self.posterior = prior * likelihood
@@ -998,7 +973,7 @@ class GP(BaseClass):
                 input_data, self.D, inv_Kxx
             )
 
-            return ac, std, jnp.sqrt(self.hyperparameters["error_tolerance"])
+            return ac, std, jnp.sqrt(self.hyperparameters["white_noise_level"])
 
         else:  
             #latent_dist = self.opt_posterior(input_data, train_data=self.D)
@@ -1019,7 +994,7 @@ class GP(BaseClass):
                 input_data, self.D, inducing_points, inducing_values, inv_Kxx
             )
 
-            return ac, std, jnp.sqrt(self.hyperparameters["error_tolerance"]*self.hyperparameters["error_boost"])
+            return ac, std, jnp.sqrt(self.hyperparameters["white_noise_level"])
 
 
     
@@ -1068,12 +1043,11 @@ class GP(BaseClass):
 
         #remove the white noise, noise = 0 meand no white noise, noise = 1 is full noise
 
-        pre_std = std
-        std -=  (1.-noise) *jnp.sqrt(self.hyperparameters["error_tolerance"])
+        #pre_std = std
+        std -=  (1.-noise) *jnp.sqrt(self.hyperparameters["white_noise_level"])
+        
         std = jnp.abs(std) 
-        # TODO: SG: Here is a bug. Some of the computed std, can be infinetly close to zero and do not consider the white kernel into account!
-        # Then when we want to substract the white noise, we get a negative value. This leads to nan values when taking sqrt ...
-
+        
 
         return (
             random.normal(key=subkey, shape=(N, 1)) * jnp.sqrt(std) + ac,

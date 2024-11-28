@@ -424,7 +424,7 @@ class NUTSSampler(Sampler):
                             self.logp_and_grad = jax.jit(jax.value_and_grad(self.emulate_total_logposterior_from_normalized_parameters_differentiable))     # this is the differentiable loglike
                             self.logp_sample = jax.jit(self.sample_emulate_total_logposterior_from_normalized_parameters_differentiable)                    # this samples N realizations from the emulator to estimate the uncertainty
                     else:
-                        if self.emulator.hyperparameters['test_noise_levels_counter'] > 0 and self.emulator.hyperparameters['error_tolerance'] != 0.:
+                        if self.emulator.hyperparameters['test_noise_levels_counter'] > 0 and self.emulator.hyperparameters['white_noise_level'] != 0.:
                             self.emulator.hyperparameters['test_noise_levels_counter'] -= 1
                             loglikes_withNoise = self.logp_sample(thetas[i],noise = 1.)
                     

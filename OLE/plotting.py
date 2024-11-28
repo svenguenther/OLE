@@ -294,7 +294,7 @@ def plot_pca_components_test_set(true, pred, pred_std, err_tol, title, file_name
     plt.grid()
     plt.title(title)
     plt.errorbar(true, true - pred, yerr=pred_std, fmt="o", label="Prediction and total error")
-    plt.errorbar(true, true - pred, yerr=err_tol, fmt="o", label="Error tolerance")
+    plt.errorbar(true, true - pred, yerr=err_tol, fmt="o", label="White Noise Level")
     plt.legend()
     plt.xlabel("True")
     plt.ylabel("Residuals")
@@ -348,7 +348,7 @@ def plot_prediction_test(
             prediction * norm_factor * mask,
             yerr=err_tol * mask,
             fmt="o",
-            label="Error tolerance",
+            label="White Noise",
         )
         
         ax[0].errorbar([0], true * norm_factor, fmt="o", label="True")
@@ -366,7 +366,7 @@ def plot_prediction_test(
             (true - prediction) * norm_factor * mask,
             yerr=err_tol * norm_factor * mask,
             fmt="o",
-            label="Error tolerance",
+            label="White Noise",
         )
         
 
@@ -383,7 +383,7 @@ def plot_prediction_test(
             (true - prediction) / std * mask,
             yerr=err_tol / std * mask,
             fmt="o",
-            label="Error tolerance",
+            label="White Noise",
         )
 
     else:
@@ -405,7 +405,7 @@ def plot_prediction_test(
             (prediction - err_tol) * norm_factor * mask,
             (prediction + err_tol) * norm_factor * mask,
             alpha=0.5,
-            label="Error tolerance",
+            label="White Noise",
         )        
         ax[0].plot(range(len(true[0])), true[0] * norm_factor, label="True")
 
@@ -427,7 +427,7 @@ def plot_prediction_test(
             -err_tol * norm_factor * mask,
             err_tol * norm_factor * mask,
             alpha=0.5,
-            label="Error tolerance",
+            label="White Noise",
         )
 
         # make residuals
@@ -435,7 +435,7 @@ def plot_prediction_test(
             range(len(true[0])), (true[0] - prediction) * mask / std, label="Residuals"
         )
         ax[2].fill_between(range(len(true[0])), -1, 1, alpha=0.5, label="1$\sigma$")
-        ax[2].fill_between(range(len(true[0])), -err_tol/std, err_tol/std, alpha=0.5, label="Error tolerance")
+        ax[2].fill_between(range(len(true[0])), -err_tol/std, err_tol/std, alpha=0.5, label="White Noise")
 
     ax[2].set_xlabel("Data index")
     ax[0].set_ylabel("Prediction")
