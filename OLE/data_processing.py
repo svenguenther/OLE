@@ -163,8 +163,8 @@ class data_processor(BaseClass):
             self.output_stds = jnp.std(self.output_data_raw, axis=0)
 
         # set all stds which are 0 to 1
-
         self.input_stds = jnp.where(self.input_stds == 0, 1, self.input_stds)
+        self.output_stds = jnp.where(self.output_stds == 0, 1, self.output_stds)
 
     def compute_compression(self):
         # Compress the normalized data. This is done by applying a PCA to the normalized data.
