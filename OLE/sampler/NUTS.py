@@ -440,6 +440,8 @@ class NUTSSampler(Sampler):
 
             self.print_status(i, thetas)
 
+        self.write_to_log("NUTS: Finished Sampling \n")
+
         # save the chain and the logprobability
         # initialize the chain
         self.chain = np.zeros((self.M_adapt + nsteps + 1, self.ndim))
