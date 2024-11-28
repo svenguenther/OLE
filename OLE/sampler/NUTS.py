@@ -114,6 +114,10 @@ class NUTSSampler(Sampler):
     
     def run_mcmc(self, nsteps, **kwargs):
         # Run the sampler.
+
+        # Ensure Number of steps requested is an integer
+        nsteps = int(nsteps)
+
         # Initialize the position of the walkers.
         pos = jnp.zeros((self.nwalkers, self.ndim))
 
