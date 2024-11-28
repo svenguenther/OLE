@@ -179,11 +179,18 @@ class Emulator(BaseClass):
         else:
             self.input_parameters = list(ini_state['parameters'].keys())
 
+        self.likelihood_collection_differentiable = False
+
         self.likelihood_collection = likelihood_collection
         if self.likelihood_collection is not None:
             for likelihood_name, likelihood in self.likelihood_collection.items():
                 if not likelihood.initialized:
                     likelihood.initialize(**self.hyperparameters['likelihood_collection_settings'][likelihood_name])
+        
+            # create likelihood flags if they are differentiable and jittable
+            # doesnt work for MP/Cobaya
+            # self.likelihood_collection_differentiable = all([likelihood.differentiable for likelihood in self.likelihood_collection.values()])
+            # self.likelihood_collection_jitable = all([likelihood.jitable for likelihood in self.likelihood_collection.values()])
 
         # A state dictionary is a nested dictionary with the following structure:
         # state = {
@@ -226,7 +233,7 @@ class Emulator(BaseClass):
             # at this point the (constant + linear) term is equal to the quadratic term
             self.hyperparameters['quality_threshold_quadratic'] = (self.hyperparameters['quality_threshold_constant'] + self.hyperparameters['quality_threshold_linear']*accuracy_loglike)/accuracy_loglike**2
 
-            self.debug("Quality threshold quadratic: ", self.hyperparameters['quality_threshold_quadratic'])
+            self.debug("Quality threshold quadratic: %f", self.hyperparameters['quality_threshold_quadratic'])
 
         # if we have a data_covmat_directory we search for the data covmat in this directory
         self.data_covmats = {quantity_name: None for quantity_name in ini_state['quantities'].keys()}
@@ -273,6 +280,10 @@ class Emulator(BaseClass):
         # rejit_flag. If the emulator is retrained/updated, we set this flag to True. This flag is used to determine whether the emulator is to be rejited.
         self.rejit_flag_emulator = True
         self.rejit_flag_sampling = True
+        self.rejit_flag_likelihood_error = True
+
+        # following function is the jitted version of the error computation for differentiable likelihoods
+        self.jitted_likelihood_error_function = None
 
         # this counter is used to determine the number of continously successful emulator calls
         self.continuous_successful_calls = 0
@@ -371,6 +382,7 @@ class Emulator(BaseClass):
         self.trained = True
         self.rejit_flag_emulator = True
         self.rejit_flag_sampling = True
+        self.rejit_flag_likelihood_error = True
 
         pass
 
@@ -424,6 +436,7 @@ class Emulator(BaseClass):
         self.trained = True
         self.rejit_flag_emulator = True
         self.rejit_flag_sampling = True
+        self.rejit_flag_likelihood_error = True
 
         jax.clear_backends()
 
@@ -431,7 +444,7 @@ class Emulator(BaseClass):
 
 
         # if we have a plotting directory we plot the loglikelihood
-        if self.hyperparameters['plotting_directory'] is not None:
+        if (self.hyperparameters['plotting_directory'] is not None) and (get_mpi_rank() == 0):
             loglikes = jnp.array(self.data_cache.get_loglikes())
             parameters = jnp.array(self.data_cache.get_parameters())
 
@@ -457,6 +470,7 @@ class Emulator(BaseClass):
             if self.rejit_flag_emulator: # if the emulator was updated/retrained, we rejit the emulator
                 # if there is a old jitted function, we delete it
                 if hasattr(self, 'jitted_emulation_function'):
+                    self.jitted_emulation_function.clear_cache()
                     del self.jitted_emulation_function
                     # clear memory
                     jax.clear_backends()
@@ -506,6 +520,79 @@ class Emulator(BaseClass):
         
         return output_state
     
+    def compute_error_from_differentiable_likelihood(self, parameters, include_error_tolerance = False):
+        # Here we need to compute the error of the emulator via the differentiable likelihood.
+        # Therefore, we get the errors on the GPs two layers below in the GPpredictor class.
+        # Addtionally we need the pipeline from the GP prediction to the likelihood. 
+        # Thus, computing the decompression of each emulated quantity and feed it through the likelihood collection.
+        # Then we can use jit.grad to compute the gradient of the loglikelihood with respect to the GP prediction.
+        # By multiplying this gradient with the error of the GP we get the error of the likelihood without some shooting method.
+
+        # define the likelihood from GP function
+        a = time.time()
+        self.include_error_tolerance = include_error_tolerance
+        
+        if self.rejit_flag_likelihood_error:
+            if self.jitted_likelihood_error_function is not None:
+                self.jitted_likelihood_error_function.clear_cache()
+                del self.jitted_likelihood_error_function
+            # clear memory
+            jax.clear_backends()
+            self.jitted_likelihood_error_function = None
+        
+
+        if self.rejit_flag_likelihood_error:
+            self.jitted_likelihood_error_function = jax.jit(self.jittable_likelihood_error_function)
+            error = self.jitted_likelihood_error_function(parameters)
+            self.rejit_flag_likelihood_error = False
+
+        
+        error = self.jitted_likelihood_error_function(parameters)
+        b = time.time()
+        print("Time for error computation: ", b-a)
+        # return the loglikelihood
+        return error
+    
+
+    # def the jittable version of the likelihood function
+    def jittable_likelihood_error_function(self, parameters):
+        output_state = {'parameters': {}, 'quantities':{}, 'loglike': {}, 'total_loglike': None} 
+        output_state['parameters'] = parameters
+
+        input_data = jnp.array([[parameters[key][0] for key in self.input_parameters]])
+
+        emulator_GP_uncertainy = {}
+        emulator_GP_value = {}
+        for quantity, emulator in self.emulators.items():
+            vals, std = emulator.predict_GP_value_and_std(input_data, include_error_tolerance = self.include_error_tolerance)
+            emulator_GP_value[quantity] = vals
+            emulator_GP_uncertainy[quantity] = std
+
+        def likelihood_from_GP(emulator_GPs):
+            # decompress the data
+            for quantity, emulator in self.emulators.items():
+                output_state['quantities'][quantity] = emulator.predict_fromGP(emulator_GPs[quantity])
+
+            # feed the data through the likelihood collection
+            for likelihood_name, likelihood in self.likelihood_collection.items():
+                output_state['loglike'][likelihood_name] = likelihood.loglike(output_state)
+
+            output_state['total_loglike'] = sum(output_state['loglike'].values())
+
+            return output_state['total_loglike'][0]
+
+        # compute the gradient of the loglikelihood with respect to the GP prediction
+        grad_loglike = jax.grad(likelihood_from_GP)(emulator_GP_value)
+
+        # compute the error of the likelihood
+        error = 0.
+        for quantity, emulator in self.emulators.items():
+            error += jnp.sum(grad_loglike[quantity]**2 * emulator_GP_uncertainy[quantity]**2)
+
+        return jnp.sqrt(error)
+
+
+
 
     # function to get N samples from the same input parameters
     def emulate_samples(self, parameters, RNGkey,noise = 0):
@@ -551,6 +638,7 @@ class Emulator(BaseClass):
             if self.rejit_flag_sampling: # if the emulator was updated/retrained, we rejit the emulator
 
                 if hasattr(self, 'jitted_sampling_function'):
+                    self.jitted_sampling_function.clear_cache()
                     del self.jitted_sampling_function
                     # clear memory
                     jax.clear_backends()
@@ -695,11 +783,18 @@ class Emulator(BaseClass):
 
         # if the emulator is trained, we check the quality criterium
         # we check whether the loglikes are within the quality criterium
+        if not self.likelihood_collection_differentiable:
+            std_loglike = jnp.std(loglikes)
+        else:
+            std_loglike = loglikes[0]
+
         if reference_loglike is None:
             mean_loglike = jnp.mean(loglikes)
+            if self.likelihood_collection_differentiable:
+                raise ValueError("Reference loglike is not provided for Quality check!")
         else:
             mean_loglike = reference_loglike
-        std_loglike = jnp.std(loglikes)
+
 
         max_loglike = max(self.data_cache.max_loglike, self.max_loglike_encountered)
 
@@ -724,14 +819,14 @@ class Emulator(BaseClass):
             # the full criterium 
             if std_loglike > self.hyperparameters['quality_threshold_constant'] + self.hyperparameters['quality_threshold_linear']*delta_loglike + self.hyperparameters['quality_threshold_quadratic']*delta_loglike**2:
                 self.debug("Emulator quality criterium NOT fulfilled")
-                _ = "Quality criterium NOT fulfilled; "+"; ".join([key+ ': ' +str(value) for key, value in parameters.items()]) + " Max loglike: %f, delta loglikes: " % (max_loglike.sum()) + " ".join([str(loglike) for loglike in loglikes]) + "\n"
+                _ = "Quality criterium NOT fulfilled; "+"; ".join([key+ ': ' +str(value) for key, value in parameters.items()]) + " Max loglike: %f, delta loglikes: " % (max_loglike) + " ".join([str(loglike) for loglike in loglikes]) + "\n"
                 if write_log: 
                     self.write_to_log(_)
                 self.quality_check_unsuccessful_counter += 1
                 return False
 
         self.debug("Emulator quality criterium fulfilled")
-        _ = "Quality criterium fulfilled; "+"; ".join([key+ ': ' +str(value) for key, value in parameters.items()]) + " Max loglike: %f, delta loglikes: " % (max_loglike.sum()) + " ".join([str(loglike) for loglike in loglikes]) + "\n"
+        _ = "Quality criterium fulfilled; "+"; ".join([key+ ': ' +str(value) for key, value in parameters.items()]) + " Max loglike: %f, delta loglikes: " % (max_loglike) + " ".join([str(loglike) for loglike in loglikes]) + "\n"
         if write_log: 
             self.write_to_log(_)
         self.continuous_successful_calls += 1

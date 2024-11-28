@@ -240,7 +240,7 @@ def check_cache_and_compute(self, params_values_dict,
 
             likelihoods = list(self.provider.model._loglikes_input_params(self.provider.params, cached=False, return_derived = False))
 
-            emulator_state['total_loglike'] = np.array(sum(likelihoods))
+            emulator_state['total_loglike'] = np.array([sum(likelihoods)])
 
             self.initial_emulator_state = copy.deepcopy(emulator_state)
 

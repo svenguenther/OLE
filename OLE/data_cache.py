@@ -94,7 +94,7 @@ class DataCache(BaseClass):
 
             # print the estimated delta_loglike
             self.debug(
-                "Estimated delta_loglike: ", self.hyperparameters["delta_loglike"]
+                "Estimated delta_loglike: %f", self.hyperparameters["delta_loglike"]
             )
 
         self.states = []

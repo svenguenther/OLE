@@ -10,13 +10,22 @@ Monte Python, a Monte Carlo Markov Chain code (with Class!)
 """
 import sys
 import warnings
+import os
 
 import numpy as np
 
 #####################################
 #  Set the path to MontePython here #
 #####################################
-MP_path = '/home/path/to/montepython_public/montepython'
+
+interface_path = os.path.dirname(__file__)
+MP_path_filepath = os.path.join(interface_path, 'MP_PATH')
+
+with open(MP_path_filepath, 'r') as file:
+    MP_path = file.read().rstrip()
+    MP_path = os.path.join(MP_path,'montepython')
+
+# MP_path = '/home/path/to/montepython_public'
 
 
 # -----------------MAIN-CALL---------------------------------------------
@@ -24,14 +33,14 @@ if __name__ == '__main__':
     # use naive vanilla parser to get the path to montepython
 
     # check that you accutally DID change the path to montepython
-    if MP_path == '/path/to/your/montepython_public/montepython':
-        raise ValueError("Please change the path to your montepython version in the /OLE/interfaces/montepython_interface.py file")
+    if MP_path == '/path/to/your/montepython_public':
+        raise ValueError("Please change the path to your montepython version in the /OLE/interfaces/MP_PATH file")
     sys.path.insert(0, MP_path)
 
     import io_mp       # all the input/output mechanisms
     from run import run
 
-    import os
+    # import os
 
     import time
     import jax
@@ -51,7 +60,7 @@ if __name__ == '__main__':
 
     import classy
 
-    # deepcopy all callable methods of the Class class 
+    # deepcopy all callable methods of the Class class
     callable_methods = {}
 
     for name in dir(classy.Class):
@@ -78,10 +87,10 @@ if __name__ == '__main__':
                     if self.attribute_couter[my_attribute] == self.attribute_max_couter[my_attribute]:
                         self.attribute_couter[my_attribute] = 0
                         # del self.attributes_with_relevant_output[my_attribute]
-                    
+
                 else:
                     res = self.cosmo.__getattribute__(my_attribute)(*args, **kwargs)
-                        
+
                     if res is not None and type(res) is not bool:
                         # if my_attribute not in self.attributes_with_relevant_output.keys():
                         if my_attribute in self.attributes_with_relevant_output.keys():
@@ -112,7 +121,7 @@ if __name__ == '__main__':
 
                         self.attribute_couter[my_attribute] = 0
 
-                return res  
+                return res
 
             callable_methods[name] = new_method
 
@@ -137,10 +146,10 @@ if __name__ == '__main__':
             for name, method in callable_methods.items():
                 setattr(Class_OLE, name, method)
             pass
-        
+
         def __getattribute__(self, name):
             if name != 'current_attribute':
-                self.current_attribute = name   
+                self.current_attribute = name
             return super().__getattribute__(name)
 
         def MP_state_to_OLE_state(self, data, MP_state):
@@ -164,7 +173,7 @@ if __name__ == '__main__':
                         else:
                             OLE_state['quantities'][subkey] = np.array(subvalue)
                 elif type(value[0]) is np.ndarray:
-                    OLE_state['quantities'][key] = value[0]
+                    OLE_state['quantities'][key] = value[0].flatten()
                 else:
                     OLE_state['quantities'][key] = np.array(value)
 
@@ -176,9 +185,11 @@ if __name__ == '__main__':
                     OLE_state['quantities'][key] = np.array([value])
 
             # add parameters from data
-            for key in data.cosmo_arguments.keys():
-                if key in data.parameters.keys():
-                    OLE_state['parameters'][key] = np.array([data.cosmo_arguments[key]])
+            for key in data.get_mcmc_parameters(['cosmo']):
+                OLE_state['parameters'][key] = \
+                    np.array([data.mcmc_parameters[key]['current'] * \
+                              data.mcmc_parameters[key]['scale']])
+                #print("OLE_state here:",key,OLE_state['parameters'][key])
 
             return OLE_state
 
@@ -188,6 +199,7 @@ if __name__ == '__main__':
 
             # we now go through all branches of the emulated result and update the values
             for key, value in self.emulated_result.items():
+
                 if type(value[0]) is dict:
                     for subkey, subvalue in value[0].items():
                         if type(subvalue)== float:
@@ -195,15 +207,25 @@ if __name__ == '__main__':
                         else:
                             self.emulated_result[key][0][subkey] = cp.deepcopy(np.array(OLE_state['quantities'][subkey]))
                 elif type(value[0]) is tuple:
+                    # print(f'Emu_1({key}) = {value}')
                     _list = []
                     for subindex in range(len(value[0])):
                         subkey = key + '_' + str(subindex)
                         _list.append(cp.deepcopy(np.array(OLE_state['quantities'][subkey])))
                     self.emulated_result[key][0] = tuple(_list)
+                    # print(f'Emu_2({key}) = {self.emulated_result[key]}')
+                elif type(value[0]) is np.ndarray:
+                    emulated_result = np.array(OLE_state['quantities'][key])
+                    # print(f'OLE key={key}')
+                    # print(f'My shape in OLE is {self.emulated_result[key][0].shape}')
+                    self.emulated_result[key] = [cp.deepcopy(np.reshape(emulated_result,self.emulated_result[key][0].shape))]
+                    # print(f'My reshape in OLE is {np.reshape(emulated_result,self.emulated_result[key][0].shape).shape}')
                 else:
                     self.emulated_result[key] = cp.deepcopy(np.array(OLE_state['quantities'][key]))
 
-            self.use_emulated_result = True  
+
+
+            self.use_emulated_result = True
 
             return self.emulated_result
 
@@ -220,9 +242,11 @@ if __name__ == '__main__':
                             'total_loglike': None}
 
             # fill parameters from data
-            for key in data.cosmo_arguments.keys():
-                if key in data.parameters.keys():
-                    OLE_state['parameters'][key] = np.array([data.cosmo_arguments[key]])
+            for key in data.get_mcmc_parameters(['cosmo']):
+                OLE_state['parameters'][key] = \
+                    np.array([data.mcmc_parameters[key]['current'] * \
+                              data.mcmc_parameters[key]['scale']])
+                #print("OLE_state there::",key,OLE_state['parameters'][key])
 
             # check if we reuqire a quality check
             if self.emulator.require_quality_check(OLE_state['parameters']):
@@ -271,7 +295,7 @@ if __name__ == '__main__':
                 predictions = self.emulator.emulate(OLE_state['parameters'])
                 MP_sample_state = self.OLE_state_to_MP_state(predictions)
                 return True
-            
+
 
 
     classy.Class_OLE = Class_OLE
@@ -515,18 +539,20 @@ if __name__ == '__main__':
             # get initial state
             initial_state = cosmo.MP_state_to_OLE_state(data, cosmo.attributes_with_relevant_output)
 
-            # select parameters taht are in data.cosmo_arguments and are keys in data.parameters
-            for key in data.cosmo_arguments.keys():
-                if key in data.parameters.keys():
-                    initial_state['parameters'][key] = np.array([data.cosmo_arguments[key]])
+            # select varying cosmological parameters
+            for key in data.get_mcmc_parameters(['cosmo']):
+                initial_state['parameters'][key] = \
+                    np.array([data.mcmc_parameters[key]['current'] * \
+                              data.mcmc_parameters[key]['scale']])
+                #print("Initial:",key,initial_state['parameters'][key])
 
             # get initial output
             initial_state['total_loglike'] = np.array(loglike)
-            
+
             from OLE.emulator import Emulator
             cosmo.emulator = Emulator(**data.emulator_settings)
             cosmo.emulator.initialize(ini_state=initial_state, **data.emulator_settings)
-        
+
         # Add state to emulator if it wasnt generated by the emulator
         if emulation_success is not None:
             if not emulation_success:

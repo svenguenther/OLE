@@ -241,8 +241,13 @@ class Sampler(BaseClass):
         self.covmat = self.generate_covmat()
 
         # go into eigenspace of covmat and build the inverse of the eigenvectors
+        # ultimately don't think we will need these anymore
         self.eigenvalues, self.eigenvectors = jnp.linalg.eigh(self.covmat)
         self.inv_eigenvectors = jnp.linalg.inv(self.eigenvectors)
+
+        # grab cholesky decompoisition for transformation to noramlised space
+        self.covmat_chol = jnp.linalg.cholesky(self.covmat)
+        self.covmat_chol_inv = jnp.linalg.inv(self.covmat_chol)
 
         # we can now transform the parameters into the (normalized) eigenspace
 
@@ -322,7 +327,11 @@ class Sampler(BaseClass):
             self.error("Covmat contains nans or infs")
             raise ValueError("Covmat contains nans or infs")
 
-        self.inv_eigenvectors = self.eigenvectors.T        
+        self.inv_eigenvectors = self.eigenvectors.T      
+
+        # update cholesky decomposition too
+        self.covmat_chol = jnp.linalg.cholesky(self.covmat)
+        self.covmat_chol_inv = jnp.linalg.inv(self.covmat_chol)
 
         return 0
 
@@ -367,26 +376,29 @@ class Sampler(BaseClass):
         This function denormalizes the inverse hessian matrix according to the eigenspace.
         """
         # this function denormalizes the matrix
-        a = jnp.dot(self.eigenvectors,  
-                    jnp.dot( 
-                        jnp.dot(
-                            jnp.dot( jnp.diag(jnp.sqrt(self.eigenvalues)),matrix), jnp.diag(jnp.sqrt(self.eigenvalues))), self.eigenvectors.T))
-
-        return a
+        #a = jnp.dot(self.eigenvectors,  
+        #            jnp.dot( 
+        #                jnp.dot(
+        #                    jnp.dot( jnp.diag(jnp.sqrt(self.eigenvalues)),matrix), jnp.diag(jnp.sqrt(self.eigenvalues))), self.eigenvectors.T))
+        #return a
+        # I'm not 100% sure about this updated version - someone who likes linear algebra should verify...
+        return jnp.dot(self.covmat_chol, jnp.dot(matrix, self.covmat_chol.T))
 
     def transform_parameters_into_normalized_eigenspace(self, parameters):
         """ 
         This function transforms the parameters into the normalized eigenspace.
         """
         # this function transforms the parameters into the normalized eigenspace
-        return jnp.dot( self.inv_eigenvectors, ( parameters - self.proposal_means ))/jnp.sqrt(self.eigenvalues)
+        return jnp.dot(self.covmat_chol_inv, (parameters - self.proposal_means))
+        #return jnp.dot( self.inv_eigenvectors, ( parameters - self.proposal_means ))/jnp.sqrt(self.eigenvalues)
     
     def retranform_parameters_from_normalized_eigenspace(self, parameters):
         """
         This function transforms the parameters back from the normalized eigenspace.
         """
         # this function transforms the parameters back from the normalized eigenspace
-        return jnp.dot(self.eigenvectors, parameters * jnp.sqrt(self.eigenvalues) ) + self.proposal_means
+        return self.proposal_means + jnp.dot(self.covmat_chol, parameters)
+        #return jnp.dot(self.eigenvectors, parameters * jnp.sqrt(self.eigenvalues) ) + self.proposal_means
 
     def generate_covmat(self):
         """
@@ -412,6 +424,8 @@ class Sampler(BaseClass):
             with open(self.hyperparameters['covmat'], 'r') as f:
                 lines = f.readlines()
                 parameters = lines[0].split()
+                if parameters[0] == "#":
+                    parameters = parameters[1:]
                 covmat_loaded = np.zeros((len(parameters), len(parameters)))
                 for i, line in enumerate(lines[1:]):
                     covmat_loaded[i] = np.array([float(_) for _ in line.split()])

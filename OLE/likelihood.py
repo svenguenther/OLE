@@ -12,6 +12,10 @@ class Likelihood(BaseClass):
         self.nuisance_sample_dict = {}
         self.hyperparameters = {}
         self.requirements = {}
+
+        # some flags that indicate the capabilities of the likelihood. If both are set, we will be able to compute the gradients and have faster tecniques available.
+        self.differentiable = False
+        self.jitable = False
         super().__init__(name, **kwargs)
 
     def update_theory_settings(self, theory_settings):
