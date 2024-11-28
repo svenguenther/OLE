@@ -100,7 +100,8 @@ def predict_mean_single_sparse(
 
     # Observation noise o²
     #obs_noise = self.likelihood.obs_noise
-    # mx = self.prior.mean_function(inducing_points).flatten()
+    mx = self.prior.mean_function(inducing_points).flatten()
+    mean_t = self.prior.mean_function(t).flatten()
 
     # Precompute Gram matrix, Kxx, at training inputs, x
     Kxx = self.prior.kernel.gram(inducing_points)
@@ -117,7 +118,7 @@ def predict_mean_single_sparse(
     Sigma_inv_Kxt = cola.solve(Sigma, Kxt)
 
     # μt  +  Ktx (Kxx + Io²)⁻¹ (y  -  μx)
-    mean = jnp.matmul(Sigma_inv_Kxt.T, inducing_values)
+    mean = mean_t + jnp.matmul(Sigma_inv_Kxt.T, inducing_values -mx )
     # mean = jnp.matmul(Sigma_inv_Kxt.T, inducing_values - mx)
 
     #return mean
