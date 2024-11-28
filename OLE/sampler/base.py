@@ -707,7 +707,7 @@ class Sampler(BaseClass):
                 self.emulator.add_state(state)
         else:
             # here we need to test the emulator for its performance
-            emulator_sample_states, RNGkey = self.emulator.emulate_samples(state['parameters'], RNGkey=RNGkey,noise=1)
+            emulator_sample_states, RNGkey = self.emulator.emulate_samples(state['parameters'], RNGkey=RNGkey,noise=0)
             emulator_sample_loglikes = jnp.zeros(len(emulator_sample_states))
             for i, emulator_sample_state in enumerate(emulator_sample_states):
                 for likelihood in self.likelihood_collection.keys():
@@ -809,7 +809,7 @@ class Sampler(BaseClass):
             self.debug("state after theory: %s for parameters: %s", state['quantities'], state['parameters'])
         else:
             # here we need to test the emulator for its performance
-            emulator_sample_states, RNGkey = self.emulator.emulate_samples(state['parameters'],RNGkey=RNGkey , noise=1)
+            emulator_sample_states, RNGkey = self.emulator.emulate_samples(state['parameters'],RNGkey=RNGkey , noise=0)
 
             emulator_sample_loglikes = jnp.zeros(len(emulator_sample_states))
             for i, emulator_sample_state in enumerate(emulator_sample_states):
