@@ -19,6 +19,8 @@ import jax
 from copy import deepcopy
 from copy import copy
 
+import datetime
+
 from functools import partial
 
 from OLE.utils.base import BaseClass
@@ -915,7 +917,7 @@ class Emulator(BaseClass):
     def print_status(self):
         if self.emulate_counter%self.hyperparameters['status_print_frequency'] == 0:
             # print the status of the emulator
-            self.info("Emulator status:")
+            self.info("Emulator status: [" + datetime.datetime.now().strftime("%d/%m/%y %H:%M:%S") + "]")
             self.info("Number of data points in cache: %d", len(self.data_cache.states))
             self.info("Number of emulation calls: %d", self.emulate_counter)
             self.info("Number of quality check successful calls: %d", self.quality_check_successful_counter)
