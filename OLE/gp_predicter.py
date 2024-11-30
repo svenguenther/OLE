@@ -526,7 +526,7 @@ class GP(BaseClass):
             # Number of iterations
             "num_iters": 200, # per iteration
             # Maximal number of iterations
-            "max_num_iters": 2000,
+            "max_num_iters": 400,
             # Early stopping criterion
             "early_stopping": 0.05,
             # Early stopping averaging window

@@ -25,7 +25,7 @@ dependencies = [
 "jax",
 "jaxlib",
 "tqdm",
-"gpjax == 0.9.1",
+"gpjax == 0.9.3",
 "scipy",
 "pytreeclass",
 "jaxtyping",
@@ -33,6 +33,7 @@ dependencies = [
 "emcee",
 "matplotlib",
 "scikit-learn",
+"mpi4py",
 ]
 
 [project.optional-dependencies]

@@ -21,6 +21,9 @@ These settings are independent of the sampling method.
    * - ``cache_file``
      - ``cache.pkl``
      - File in which the cache is going to be stored in.
+   * - ``shared_cache``
+     - ``True``
+     - If this flag is set to ``True`` the cache is shared between all chains and processes. This is useful if you want to run the sampler in parallel. If set to ``False`` each chain has its own cache. Shared cache allows for faster training of the emulator. However, biases of the emulator can be shared between chains. If each emulator uses its own cache, this can lead to a minimal R-1 (due to the emulation bias). Actually, thts a nice estimate of the emulation bias :)
    * - ``load_cache``
      - ``False``
      - If set ``True``, the cache of a previous run is loaded. Note that if the likelihood is changed, this can corrupt your cache leading to bugs! Thus, if you change the theory or likelihood code, always create a new cache or set this flag to ``False``. In this case the old cache file will be overwritten.
@@ -80,7 +83,7 @@ It also deals with the possible compression of data by sparse GPs.
      - ``100``
      - Proposed number of training epochs. If we see that the loss is still falling (more than ``early_stopping`` within two batches of ``early_stopping_window`` iterations)
    * - ``max_num_iters``
-     - ``2000``
+     - ``400``
      - Maximal training epochs if early stopping is not triggered. Should not be reached. Produces a warning when exceeded!
    * - ``early_stopping``
      - ``0.05``
@@ -124,6 +127,9 @@ Uncertainty qualification related to the precision criterium of the emulator and
    * - ``N_quality_samples``   
      - ``5``
      - Number of samples which are drawn from the emulator to estimate the performance of the emulator. The runtime is about linear in that parameter! From this number of samples we compute the mean loglikelihood $m$  and its standard deviation $\sigma_m$. In general we want the emulator to be very precise at the best fit point with its loglikelihood $b$ and less accurate for points more away. We accept the prediction of the emulator if $\sigma_m < \mathrm{quality.threshold.constant} +  \mathrm{quality.threshold.linear}*(b-m) +  \mathrm{quality.threshold.quadratic} * (b-m)^2 $
+   * - ``tail_cut_fraction``   
+     - ``0.2``
+     - The distribution of the sampled loglikes is found to be non-gaussian. However, by cutting the low end tail, we find sufficient estimates for the mean and standard deviation. This parameter specifies the fraction of the tail that is cut. 
    * - ``quality_threshold_constant``
      - ``0.1``
      - See ``N_quality_samples``
@@ -180,6 +186,9 @@ Debugging. Very recommended when investigating a new problem:
    * - ``logfile``
      - ``None``
      - If set to a text file, the emulator writes a log.   
+   * - ``status_print_frequency``
+     - ``200``
+     - Every ``status_print_frequency`` runs the status of the emulator will be printed.   
    * - ``debug``
      - ``False``
      - If set to ``True`` the emulator will print out a lot of debugging information. This is very helpful when investigating a new problem.

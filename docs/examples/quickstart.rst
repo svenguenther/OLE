@@ -49,7 +49,7 @@ It takes the state that was filled by the theory model and returns the logarithm
         def initialize(self, **kwargs):
             self.requirements = ['D_scalar', 'D_array']
         def loglike(self, state):
-            return -0.5 * (state['parameters']['D_scalar'][0] - 1)**2 - 0.5 * (state['parameters']['D_array'][0] - 1)**2 - 0.5 * (state['parameters']['D_array'][1] - 1)**2 - 0.5 * (state['parameters']['D_array'][2] - 1)**2
+            return -0.5 * (state['quantities']['D_scalar'][0] - 1)**2 - 0.5 * (state['quantities']['D_array'][0] - 1)**2 - 0.5 * (state['quantities']['D_array'][1] - 1)**2 - 0.5 * (state['quantities']['D_array'][2] - 1)**2
 
 In general it is highly recommended to use the 'jax' library to compute the likelihood. 
 This is because 'jax' allows for just-in-time compilation that can speed up the computation of the likelihood and the emulator significantly and OLE will try to use 'jax' if it is available.
@@ -97,10 +97,12 @@ You can select between uniform, gaussian, log-normal and jeffreys priors. Once t
 
     sampler.initialize(
         theory = MyTheory(), 
-        likelihood = MyLikelihood(),
+        likelihood_collection = {'MyLikelihood': MyLikelihood()},
         parameters = parameters, 
         sampling_settings = sampling_settings, 
         emulator_settings = emulator_settings)
+
+We initialize multiple likelihoods in the likelihood collection. This is useful if you have multiple data sets that you want to fit simultaneously.
 
 Step 3: Run the sampler
 ------------------------

@@ -102,6 +102,9 @@ class Emulator(BaseClass):
             # numer of test samples to determine the quality of the emulator
             'N_quality_samples': 5,
 
+            # tail cut fraction for the N_quality_samples. Since the loglike is chisquare distributed we need to cut the tail to get a good estimate of the std. We will do this by cutting at least 1 data point but in general a certain farction of it.
+            'tail_cut_fraction': 0.2,
+
             # path to a directory with data covmats to do better normalization. If given, the emulator will search for data covmats in this directoy and if one is found, it will be used for normalization
             'data_covmat_directory': None,
 
@@ -130,7 +133,7 @@ class Emulator(BaseClass):
             'jit': True,
 
             # print frequency for the emulator
-            'status_print_frequency': 50,
+            'status_print_frequency': 200,
 
 
             # Settings related with the quality criterium
@@ -304,7 +307,10 @@ class Emulator(BaseClass):
         
         pass
 
+    # @profile
     def add_state(self, state):
+        # start timer
+        self.start("add_state")
 
         # new state
         new_state = deepcopy(state)
@@ -346,14 +352,20 @@ class Emulator(BaseClass):
                     emulator_updated = True
                 #else: do nothing as updating does not really improve the sparese GP anyways
         
+        # stop timer
+        self.increment("add_state")
             
         if state_added:
             self.continuous_successful_calls = 0
             return True , emulator_updated
         else:
             return False , emulator_updated
-
+        
+    # @profile
     def update(self):
+        # start timer
+        self.start("update")
+
         # Update the emulator. This means that the emulator is retrained.
         # Load the data from the cache.
         self.debug("Loading data from cache")
@@ -386,9 +398,15 @@ class Emulator(BaseClass):
         self.rejit_flag_sampling = True
         self.rejit_flag_likelihood_error = True
 
+        # stop timer
+        self.increment("update")
+
         pass
 
+    # @profile
     def train(self):
+        self.start("train")
+
         # Load the data from the cache.
         self.debug("Loading data from cache")
         self.data_cache.load_cache()
@@ -454,13 +472,19 @@ class Emulator(BaseClass):
                 plot_loglikes(loglikes[:], parameters[:,i], self.input_parameters[i], self.hyperparameters['plotting_directory']+'/loglike_'+str(i)+'.png')
         pass
 
+        self.increment("train")
+
     def set_data_covmats(self, data_covmats):
         # set the data covmats for the different quantities
         for quantity_name, data_covmat in data_covmats.items():
             self.data_covmats[quantity_name] = data_covmat
             self.emulators[quantity_name].data_processor.data_covmat = data_covmat
 
+    # @profile
     def emulate(self, parameters):
+        # start timer 
+        self.start("emulate") 
+
         # Prepare output state
         output_state = self.ini_state.copy() # TODO Talk with christian about thish here
 
@@ -473,7 +497,8 @@ class Emulator(BaseClass):
                 # if there is a old jitted function, we delete it
                 if hasattr(self, 'jitted_emulation_function'):
                     self.jitted_emulation_function.clear_cache()
-                    del self.jitted_emulation_function
+                    self.jitted_emulation_function = None
+                    # del self.jitted_emulation_function
                     # clear memory
                     jax.clear_backends()
                 self.jitted_emulation_function = jax.jit(self.emulate_jit)
@@ -493,6 +518,10 @@ class Emulator(BaseClass):
 
         self.emulate_counter += 1
         self.print_status()
+
+        # end timer
+        self.increment("emulate")
+
         return output_state
 
     def emulate_jit(self, parameters):
@@ -597,6 +626,7 @@ class Emulator(BaseClass):
 
 
     # function to get N samples from the same input parameters
+    # @profile
     def emulate_samples(self, parameters, RNGkey,noise = 0):
         # add Sphinx documentation
         """
@@ -630,6 +660,9 @@ class Emulator(BaseClass):
         jax.random.PRNGKey
             The updated random number generator key.
         """
+        # start timer
+        self.start("emulate_samples")
+
         # Prepare list of N output states
         state = deepcopy(self.ini_state) # TODO Talk with christian about thish here
         state['parameters'] = parameters
@@ -657,6 +690,9 @@ class Emulator(BaseClass):
         for i in range(self.hyperparameters['N_quality_samples']):
             for quantity, emulator_output in output_states_emulator[i]['quantities'].items():
                 output_states[i]['quantities'][quantity] = emulator_output
+
+        # increment timer
+        self.increment("emulate_samples")
 
         return output_states, RNGkey
 
@@ -786,7 +822,13 @@ class Emulator(BaseClass):
         # if the emulator is trained, we check the quality criterium
         # we check whether the loglikes are within the quality criterium
         if not self.likelihood_collection_differentiable:
-            std_loglike = jnp.std(loglikes)
+            # here we need to cut outlier of the chisquare distribution.
+            N_cut = max(1, int(self.hyperparameters['tail_cut_fraction'] * self.hyperparameters['N_quality_samples']))
+
+            # Thus we gonna cut the N_cut smallest values
+            loglikes = jnp.sort(loglikes)[N_cut:]
+            std_loglike = jnp.std(loglikes)/jnp.sqrt(len(loglikes)) # we use the standard deviation of the mean as the error
+
         else:
             std_loglike = loglikes[0]
 
@@ -809,7 +851,7 @@ class Emulator(BaseClass):
         if mean_loglike > max_loglike:
             if std_loglike > self.hyperparameters['quality_threshold_constant']:
                 self.debug("Emulator quality criterium NOT fulfilled")
-                _ = "Quality criterium NOT fulfilled; "+"; ".join([key+ ': ' +str(value) for key, value in parameters.items()]) + " Max loglike: %f, delta loglikes: " % (max_loglike) + " ".join([str(loglike) for loglike in loglikes]) + "\n"
+                _ = "Quality criterium NOT fulfilled; "+"; ".join([key+ ': ' +str(value) for key, value in parameters.items()]) + " Max loglike: %f, Reference loglike: %f, delta loglikes: " % (max_loglike,mean_loglike) + " ".join([str(loglike) for loglike in loglikes]) + "\n"
                 if write_log: 
                     self.write_to_log(_)
                 self.quality_check_unsuccessful_counter += 1
@@ -821,14 +863,14 @@ class Emulator(BaseClass):
             # the full criterium 
             if std_loglike > self.hyperparameters['quality_threshold_constant'] + self.hyperparameters['quality_threshold_linear']*delta_loglike + self.hyperparameters['quality_threshold_quadratic']*delta_loglike**2:
                 self.debug("Emulator quality criterium NOT fulfilled")
-                _ = "Quality criterium NOT fulfilled; "+"; ".join([key+ ': ' +str(value) for key, value in parameters.items()]) + " Max loglike: %f, delta loglikes: " % (max_loglike) + " ".join([str(loglike) for loglike in loglikes]) + "\n"
+                _ = "Quality criterium NOT fulfilled; "+"; ".join([key+ ': ' +str(value) for key, value in parameters.items()]) + " Max loglike: %f, Reference loglike: %f, delta loglikes: " % (max_loglike,mean_loglike) + " ".join([str(loglike) for loglike in loglikes]) + "\n"
                 if write_log: 
                     self.write_to_log(_)
                 self.quality_check_unsuccessful_counter += 1
                 return False
 
         self.debug("Emulator quality criterium fulfilled")
-        _ = "Quality criterium fulfilled; "+"; ".join([key+ ': ' +str(value) for key, value in parameters.items()]) + " Max loglike: %f, delta loglikes: " % (max_loglike) + " ".join([str(loglike) for loglike in loglikes]) + "\n"
+        _ = "Quality criterium fulfilled; "+"; ".join([key+ ': ' +str(value) for key, value in parameters.items()]) + " Max loglike: %f, Reference loglike: %f, delta loglikes: " % (max_loglike,mean_loglike) + " ".join([str(loglike) for loglike in loglikes]) + "\n"
         if write_log: 
             self.write_to_log(_)
         self.continuous_successful_calls += 1
@@ -922,6 +964,8 @@ class Emulator(BaseClass):
             self.info("Number of emulation calls: %d", self.emulate_counter)
             self.info("Number of quality check successful calls: %d", self.quality_check_successful_counter)
             self.info("Number of quality check unsuccessful calls: %d", self.quality_check_unsuccessful_counter)
+            self.info("Number of not tested calls: %d", self.emulate_counter - self.quality_check_unsuccessful_counter - self.quality_check_successful_counter)
+            self.log_all_times(self.logger)
         pass
 
     def write_to_log(self, message):

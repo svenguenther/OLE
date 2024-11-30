@@ -55,6 +55,8 @@ class DataCache(BaseClass):
             "cache_size": 1000,
             # the cache file is the hdf5 file in which the cache is stored
             "cache_file": "cache.pkl",
+            # flag if we want to share the cache between different processes
+            "share_cache": True,
             # load the cache from the cache file
             "load_cache": False,
             # delta loglike is the the maximum allowed difference of the loglike between two states which are stored in the cache.
@@ -100,6 +102,11 @@ class DataCache(BaseClass):
         self.states = []
 
         self.max_loglike = None
+
+        # if we do not want to share the cache we need to modify the cache file by the rank
+        if not self.hyperparameters["share_cache"]:
+            rank = get_mpi_rank()
+            self.hyperparameters["cache_file"] = self.hyperparameters["cache_file"][:-4] + "_%d.pkl" % rank
 
         # if the cache file exists, load the cache from the file
         if self.hyperparameters["load_cache"]:

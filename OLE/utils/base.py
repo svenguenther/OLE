@@ -15,47 +15,72 @@ from .mpi import *
 
 c_km_s = 299792.458
 
-class Timer:
+class SubTimer:
     def __init__(self, name = None):
-        self.n = 0
-        self.time_sum = 0.
+        self._name = name
         self._start = None
         self._first_time = None
+        self.n = 0
+        self.time_sum = 0
 
     def start(self):
         self._start = time.time()
+        if self._first_time is None:
+            self._first_time = self._start
 
     def time_from_start(self):
         return time.time() - self._start
-
-    def n_avg(self):
-        return self.n - 1 if self.n > 1 else self.n
-
+    
+    def time_from_first(self):
+        return time.time() - self._first_time
+    
     def get_time_avg(self):
-        if self.n > 1:
-            return self.time_sum / (self.n - 1)
-        else:
-            return self._first_time
+        return self.time_sum / self.n
+    
+    def increment(self):
+        self.n += 1
+        self.time_sum += self.time_from_start()
 
-    def increment(self, logger=None):
-        delta_time = time.time() - self._start
-        if self._first_time is None:
-            if not delta_time:
-                logger.warning("Timing returning zero, may be inaccurate")
-            # first may differ due to caching, discard
-            self._first_time = delta_time
-            self.n = 1
-            if logger:
-                logger.debug("First evaluation time: %g s", delta_time)
 
-        else:
-            self.n += 1
-            self.time_sum += delta_time
-        if logger:
-            logger.debug("Total evaluation time: %f s", self.time_sum)
-            logger.debug("Number of calls: %d", self.n)
-            logger.debug("Average evaluation time: %g s", self.get_time_avg())
+class Timer:
+    def __init__(self, name = None):
+        self._start_time = time.time()  
+        self.subtimer = {}
 
+    def _init_sub_timer(self, name):
+        self.subtimer[name] = SubTimer(name)
+
+    def start(self, name):
+        if name not in self.subtimer:
+            self._init_sub_timer(name)
+        self.subtimer[name]._start = time.time()
+
+    def time_from_start(self, name):
+        return time.time() - self.subtimer[name]._start
+    
+    def time_from_init(self):
+        return time.time() - self._start_time
+
+    def n(self, name):
+        return self.subtimer[name].n
+        
+    def get_time_avg(self, name):
+        return self.subtimer[name].get_time_avg()
+    
+    def get_summed_time(self, name):
+        return self.subtimer[name].time_sum
+
+    def increment(self, name):
+        self.subtimer[name].n += 1
+        self.subtimer[name].time_sum += self.time_from_start(name)
+
+    def log_time(self, name, logger):
+        # do logging but give only 3 decimals
+        logger.info(f"Timing for {name}: total: {self.get_summed_time(name):.4f}s calls: {self.n(name)} avg: {self.get_time_avg(name):.4f}s")
+
+    def log_all_times(self, logger):
+        for name in self.subtimer:
+            self.log_time(name, logger)
 
 class Logger:
     def __init__(self, name = None):
@@ -117,7 +142,6 @@ class BaseClass(Logger, Timer):
         self.set_loglevel(logging.DEBUG if debug else logging.INFO)
         self.debug_mode = debug
         self.initialized = False
-        self.start()
     
     def initialize(self, **kwargs):
         self.initialized = True
