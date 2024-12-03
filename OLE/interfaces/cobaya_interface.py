@@ -13,14 +13,13 @@ from functools import partial
 import copy
 import gc
 
-global annoying_CAMB_flag_to_skip_CAMB_transfers
-annoying_CAMB_flag_to_skip_CAMB_transfers = False # This extremly ugly flag only exists because CAMB decided to split itself into 2 theory codes...
+global CAMB_flag_to_skip_CAMB_transfers
+CAMB_flag_to_skip_CAMB_transfers = False # This ugly flag because CAMB is split into 2 theory codes...
 
 
 def check_cache_and_compute(self, params_values_dict,
                                 dependency_params=None, want_derived=False, cached=True):
-    global annoying_CAMB_flag_to_skip_CAMB_transfers
-    # This ugly thing appears here because CAMB wants to make you and me and everyone in this world unhappy!
+    global CAMB_flag_to_skip_CAMB_transfers
     for param in params_values_dict.keys():
         self.theory_params[param] = params_values_dict[param]
 
@@ -32,7 +31,7 @@ def check_cache_and_compute(self, params_values_dict,
 
     params_values_dict can be safely modified and stored.
     """
-    if (self._name == 'camb.transfers') and annoying_CAMB_flag_to_skip_CAMB_transfers:
+    if (self._name == 'camb.transfers') and CAMB_flag_to_skip_CAMB_transfers:
         self._current_state = {'params': {}, 'derived': {}}
         return True
     
@@ -98,12 +97,12 @@ def check_cache_and_compute(self, params_values_dict,
         for _state in self._states:
             # compare dictionaries elementwise
             same = True
-            # AHHH DANGEROUS CODE! Only because we have to make this work with CAMB. WHYYY? Hopefully this wont break anything :'(
+            # we have to make this work with CAMB
             for key, value in params_values_dict.items():
                 if (value != _state["params"][key]):
                     same = False
 
-            if same and (_state["derived"] is not None): # Here we dont check for derived because CAMB is a pain. Lets hope for the best
+            if same and (_state["derived"] is not None): # Here we dont check for derived because CAMB. Lets hope for the best
                 state = _state
                 self.log.debug("Re-using computed results")
                 self._states.remove(_state)
@@ -114,7 +113,6 @@ def check_cache_and_compute(self, params_values_dict,
             # try to emulate a state
             self.log.debug("Try emulating new state")
 
-            # Uff CAMB! Just WHY?! REALLY?
             if hasattr(self, '_camb_transfers'):
                 params_values_dict.update(self._camb_transfers.theory_params)
 
@@ -130,10 +128,10 @@ def check_cache_and_compute(self, params_values_dict,
             if successful_emulation:
                 # translate the emulator state back to the cobaya state
                 state = translate_emulator_state_to_cobaya_state(self._current_state, emulator_state)
-                annoying_CAMB_flag_to_skip_CAMB_transfers = True
+                CAMB_flag_to_skip_CAMB_transfers = True
                 self.log.debug("Emulation successful")
             else:
-                annoying_CAMB_flag_to_skip_CAMB_transfers = False # When using CAMB (not sure why would ever want to do that) we need to reset this flag such that CAMB_transfers is computed
+                CAMB_flag_to_skip_CAMB_transfers = False # When using CAMB we need to reset this flag such that CAMB_transfers is computed
                 # raise error
                 self.log.debug("Emulation not successful")
 
@@ -144,7 +142,7 @@ def check_cache_and_compute(self, params_values_dict,
                         if key not in self._camb_transfers.theory_params.keys():
                             del new_params_values_dict[key]
 
-                    # EXTREME UGLY CAMB HACK. I am so sorry for this. I hope you can forgive me :'(
+                    # weird hack
                     self._camb_transfers.check_cache_and_compute(new_params_values_dict, dependency_params, want_derived, cached) 
 
         if not successful_emulation:
@@ -210,7 +208,7 @@ def check_cache_and_compute(self, params_values_dict,
         state["params"][key] = float(value)
 
     # make this state the current one
-    try: # we have to have this meey ugly try except block because CAMB cannot be deepcopyied since its some weird FORTAN thing @.@
+    try: # we have to have try except block because CAMB cannot be deepcopyied since its FORTAN @.@
         _ = copy.deepcopy(state)
     except:
         _ = state
@@ -218,17 +216,13 @@ def check_cache_and_compute(self, params_values_dict,
     self._states.appendleft(_)
     self._current_state = state
 
-    # if self._name == 'camb':
-    #     print('self._states')
-    #     print(self._states)
-
     # if we want to use the emulator here, we need to initialize it here
     if self.emulate:
         if self.emulator is None:
             # import the emulator
             from OLE.emulator import Emulator
 
-            # here we need to make an ugly CAMB specific hack ...
+            # here we need to make an CAMB specific hack ...
             if hasattr(self, '_camb_transfers'):
                 state['params'].update(self._camb_transfers.theory_params) 
 
