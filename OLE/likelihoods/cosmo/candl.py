@@ -11,6 +11,10 @@ class candl_likelihood(Likelihood):
     def initialize(self, **kwargs):
         super().initialize(**kwargs)
 
+        # set flags
+        self.differentiable = True
+        self.jitable = True
+
         # Grab data set
         like_requested = kwargs["candl_dataset"]
         clear_priors = kwargs["clear_priors"] if "clear_priors" in kwargs else False

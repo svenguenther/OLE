@@ -671,8 +671,8 @@ class Sampler(BaseClass):
         parameters = self.retranform_parameters_from_normalized_eigenspace(parameters)
         
         # every 100 self.n calls, state the n
-        if self.n % 100 == 0:
-            self.info("Current sampler call: %d", self.n)
+        if self.n('compute_logposterior_from_normalized_parameters') % 100 == 0:
+            self.info("Current sampler call: %d", self.n('compute_logposterior_from_normalized_parameters'))
 
         # Run the sampler.
         state = {'parameters': {}, 'quantities': {}, 'loglike': {}, 'total_loglike': None}
@@ -707,16 +707,29 @@ class Sampler(BaseClass):
             if self.hyperparameters['use_emulator']:
                 self.emulator.add_state(state)
         else:
+
+            self.debug("emulator available - check emulation performance")
+            state = self.emulator.emulate(state['parameters'])
+            self.debug("state after emulator: %s for parameters: %s", state['quantities'], state['parameters'])
+
+            for likelihood in self.likelihood_collection.keys():
+                state = self.likelihood_collection[likelihood].loglike_state(state)
+            self.debug("loglike after theory: %s for parameters: %s", state['loglike'], state['parameters'])
+
+            state['total_loglike'] = jnp.array(list(state['loglike'].values())).sum() + logprior
+            self.debug("emulator prediction: %s", state['quantities'])
+            
             # here we need to test the emulator for its performance
             emulator_sample_states, RNGkey = self.emulator.emulate_samples(state['parameters'], RNGkey=RNGkey,noise=0)
             emulator_sample_loglikes = jnp.zeros(len(emulator_sample_states))
             for i, emulator_sample_state in enumerate(emulator_sample_states):
                 for likelihood in self.likelihood_collection.keys():
                     emulator_sample_state = self.likelihood_collection[likelihood].loglike_state(emulator_sample_state)
-                emulator_sample_loglikes.at[i].set(jnp.array(list(emulator_sample_state['loglike'].values())).sum())
+                emulator_sample_state['total_loglike'] = jnp.array(list(emulator_sample_state['loglike'].values())).sum() + logprior
+                emulator_sample_loglikes = emulator_sample_loglikes.at[i].set(jnp.array(list(emulator_sample_state['loglike'].values())).sum() + logprior)
 
             # check whether the emulator is good enough
-            if not self.emulator.check_quality_criterium(emulator_sample_loglikes, parameters=state['parameters']):
+            if not self.emulator.check_quality_criterium(emulator_sample_loglikes, reference_loglike=state['total_loglike'] , parameters=state['parameters']):
                 state = self.theory.compute(state)
                 for likelihood in self.likelihood_collection.keys():
                     state = self.likelihood_collection[likelihood].loglike_state(state)
@@ -726,16 +739,6 @@ class Sampler(BaseClass):
                 # Add the point to the quality points
                 self.emulator.add_quality_point(state['parameters'])
             
-                self.debug("emulator available - check emulation performance")
-                state = self.emulator.emulate(state['parameters'])
-                self.debug("state after emulator: %s for parameters: %s", state['quantities'], state['parameters'])
-
-                for likelihood in self.likelihood_collection.keys():
-                    state = self.likelihood_collection[likelihood].loglike_state(state)
-                self.debug("loglike after theory: %s for parameters: %s", state['loglike'], state['parameters'])
-
-                state['total_loglike'] = jnp.array(list(state['loglike'].values())).sum() + logprior
-                self.debug("emulator prediction: %s", state['quantities'])
 
 
         # if we have a minimal number of states in the cache, we can train the emulator

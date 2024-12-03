@@ -34,7 +34,7 @@ class EnsembleSampler(Sampler):
     def initialize(self, **kwargs):
         super().initialize(**kwargs)
 
-        self.nwalkers = kwargs['nwalkers'] if 'nwalkers' in kwargs else 10
+        self.nwalkers = kwargs['nwalkers'] if 'nwalkers' in kwargs else 50
         self.ndim = len(self.parameter_dict)
 
         # initialize the sampler

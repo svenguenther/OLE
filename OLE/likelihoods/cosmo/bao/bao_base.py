@@ -9,6 +9,10 @@ import sys
 class bao_base(Likelihood):
     def initialize(self, **kwargs):
         super().initialize(**kwargs)
+
+        # set flags
+        self.differentiable = True
+        self.jitable = True
         
         # load data from self._name.yaml
         with open(os.path.dirname(__file__) + '/' + self._name + '.yaml', 'r') as file:
