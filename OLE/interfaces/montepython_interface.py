@@ -95,19 +95,6 @@ if __name__ == '__main__':
                         # if my_attribute not in self.attributes_with_relevant_output.keys():
                         if my_attribute in self.attributes_with_relevant_output.keys():
                             if (type(res) != dict) and (type(res) != tuple) and (type(res) != np.ndarray):
-                                #print('Checking:')
-                                #print('Attribute = ' + my_attribute)
-                                #print('res type:')
-                                #print(type(res))
-                                #if type(res)== tuple:
-                                #    noteq = False
-                                #    for i_tuple in range(len(res)):
-                                #        if not np.all(res[i_tuple] == self.attributes_with_relevant_output[my_attribute][-1][i_tuple]):
-                                #          noteq = True
-                                #    if noteq:
-                                #        self.attributes_with_relevant_output[my_attribute].append(cp.deepcopy(res))
-                                #print(self.attributes_with_relevant_output[my_attribute][-1])
-                                #print('Checked')
                                 if not res == self.attributes_with_relevant_output[my_attribute][-1]:
                                     self.attributes_with_relevant_output[my_attribute].append(cp.deepcopy(res))
                         else:
@@ -115,9 +102,12 @@ if __name__ == '__main__':
 
                         if self.number_of_compute_calls==1: # count the total number of calls to each attribute
                             if my_attribute in self.attribute_max_couter.keys():
-                                self.attribute_max_couter[my_attribute] += 1
+                                if args not in self.attribute_input_args[my_attribute]:
+                                    self.attribute_max_couter[my_attribute] += 1
+                                    self.attribute_input_args[my_attribute].append(args)
                             else:
                                 self.attribute_max_couter[my_attribute] = 1
+                                self.attribute_input_args[my_attribute] = [args]
 
                         self.attribute_couter[my_attribute] = 0
 
@@ -133,6 +123,7 @@ if __name__ == '__main__':
             self.callable_methods = callable_methods
             self.current_attribute = None
             self.attribute_max_couter = {} # this is a dictonary with the attributes and the number of times they are typically called in a likelihood calculation
+            self.attribute_input_args = {} # this is a dictonary with the attributes and their input arguments
             self.attribute_couter = {} # this is a dictonary with the attributes and the number of times they were called in the current likelihood calculation
             self.number_of_compute_calls = 0
             self.attributes_with_relevant_output = {} # this is a dictonary with the relevant attributes and their output
