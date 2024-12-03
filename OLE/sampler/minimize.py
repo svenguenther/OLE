@@ -53,6 +53,9 @@ class MinimizeSampler(Sampler):
             # flag if to store results
             self.store_results = self.hyperparameters['store_results'] if 'store_results' in self.hyperparameters else True
 
+            # falg if we want to check the minimization result
+            self.check_minimum = self.hyperparameters['check_minimum'] if 'check_minimum' in self.hyperparameters else True
+
             # we cannot use gradients if we do not use the emulator
             if not self.use_emulator:
                 self.use_gradients = False
@@ -92,11 +95,16 @@ class MinimizeSampler(Sampler):
             self.bestfits = []
             self.max_loglikes = []
 
-            # check if jitted functions are already defined otherwise define them
-            # if not hasattr(self, 'f'):
-            if True:
+            minimum_checked = False
+            counter = 0 # we improve only once!
+
+            while (not minimum_checked) and (counter <= 1):
+                counter += 1
+
+                # check if jitted functions are already defined otherwise define them
                 # jit functions
                 if self.use_emulator:
+                    # if not self.debug_mode:
                     if not self.debug_mode:
                         self.f = jax.jit(self.emulate_total_minuslogposterior_from_normalized_parameters_differentiable)
                         if self.use_gradients:
@@ -114,49 +122,86 @@ class MinimizeSampler(Sampler):
 
 
 
-            for i in range(self.n_restarts):
+                for i in range(self.n_restarts):
 
-                if self.use_gradients:
-                    self.method = 'TNC'
-                    res = self.optimizer(self.f, 
-                                        initial_position[i], method=self.method, bounds=bounds, 
-                                        jac=self.grad_f, 
-                                        options={'disp': True, 'maxfun':2000, 'accuracy': 0.01,'eps':0.01},#, 'ftol': 1e-20, 'gtol': 1e-10 },
-                                        )
-                else:
-                    if self.use_emulator:
-                        res = self.optimizer(self.f,
+                    if self.use_gradients:
+                        self.method = 'TNC'
+                        res = self.optimizer(self.f, 
                                             initial_position[i], method=self.method, bounds=bounds, 
-                                            options={'disp': True,'eps':0.01})
+                                            jac=self.grad_f, 
+                                            options={'disp': False, 'maxfun':2000, 'accuracy': 0.01,'eps':0.01},#, 'ftol': 1e-20, 'gtol': 1e-10 },
+                                            )
                     else:
-                        res = self.optimizer(self.f,
-                                            initial_position[i], method=self.method, bounds=bounds, 
-                                            options={'disp': True,'eps':0.01})
+                        if self.use_emulator:
+                            res = self.optimizer(self.f,
+                                                initial_position[i], method=self.method, bounds=bounds, 
+                                                options={'disp': False,'eps':0.01})
+                        else:
+                            res = self.optimizer(self.f,
+                                                initial_position[i], method=self.method, bounds=bounds, 
+                                                options={'disp': False,'eps':0.01})
 
-                self.results.append(res)
-                self.bestfits.append(self.retranform_parameters_from_normalized_eigenspace(res.x))
-                self.max_loglikes.append(res.fun)
+                    self.results.append(res)
+                    self.bestfits.append(self.retranform_parameters_from_normalized_eigenspace(res.x))
+                    self.max_loglikes.append(res.fun)
 
-            # write to info
-            self.info("Minimization results of " + str(self.n_restarts) + " restarts")
-            mean_loglike = np.mean(self.max_loglikes)
-            std_loglike = np.std(self.max_loglikes)
-            self.info("Mean loglike: " + str(mean_loglike) + " +- " + str(std_loglike))
+                # write to info
+                self.info("Minimization results of " + str(self.n_restarts) + " restarts")
+                mean_loglike = np.mean(self.max_loglikes)
+                std_loglike = np.std(self.max_loglikes)
+                self.info("Mean loglike: " + str(mean_loglike) + " +- " + str(std_loglike))
 
-            # select best fit
-            idx = np.argmin(self.max_loglikes)
-            self.res = self.results[idx]
-            self.bestfit = self.bestfits[idx]
-            self.max_loglike = self.max_loglikes[idx]
+                # select best fit
+                idx = np.argmin(self.max_loglikes)
+                self.res = self.results[idx]
+                self.bestfit = self.bestfits[idx]
+                self.max_loglike = self.max_loglikes[idx]
 
-            # check performance by sampling the likelihood at the bestfit
-            if self.use_emulator:
-                if not hasattr(self, 'logp_sample'):
-                    self.logp_sample = jax.jit(self.sample_emulate_total_logposterior_from_parameters_differentiable)                    # this samples N realizations from the emulator to estimate the uncertainty
-                loglikes_withNoise = self.logp_sample(self.bestfit,noise = 1.)
-                self.uncertainty = np.std(loglikes_withNoise)
-            else:
-                self.uncertainty = 0.0
+                # check performance by sampling the likelihood at the bestfit
+                if self.use_emulator:
+                    # go throught the likelihoods and check if all of them are differentiable
+                    if self.emulator.likelihood_collection_differentiable:
+                        self.uncertainty = self.compute_loglike_uncertainty_for_differentiable_likelihood_from_normalized_parameters(self.res.x)
+                    else:
+                        loglikes_withNoise = self.sample_emulate_total_logposterior_from_parameters_differentiable(self.bestfit,noise = 1.)
+                        self.uncertainty = np.std(loglikes_withNoise)
+                else:
+                    self.uncertainty = 0.0            
+
+                # check if the minimum is correct
+                if self.use_emulator and self.check_minimum:
+                    parameters={key: jnp.array([self.bestfit[i]]) for i, key in enumerate(self.parameter_dict.keys())}
+                    # update with constant parametesr
+                    parameters.update({key: jnp.array([self.parameter_dict_constant[key]['value']]) for key in self.parameter_dict_constant.keys()})
+                    
+                    minimum_checked = self.emulator.check_quality_criterium(jnp.array([self.uncertainty]), reference_loglike=self.max_loglike, parameters=parameters)
+                    if not minimum_checked:
+
+                        if counter == 1:
+                            self.info("Quality criterium not fulfilled for best fit! Adding new state to emulator")
+                            state = {'parameters': parameters, 'quantities': {}, 'loglike': {}, 'total_loglike': None}
+                            state = self.theory.compute(state)
+                            for likelihood in self.likelihood_collection.keys():
+                                state = self.likelihood_collection[likelihood].loglike_state(state)
+                            state['total_loglike'] = jnp.array(list(state['loglike'].values())).sum() + self.compute_logprior(state)
+                            added_flag, _ = self.emulator.add_state(state)
+                            print('self.emulator.rejit_flag_likelihood_error')
+                            print(self.emulator.rejit_flag_likelihood_error)
+                            if not added_flag:
+                                self.info("Could not add state to emulator! Check if we prevent this state to be added. Accepting large error and continuing with minimization")
+                                minimum_checked = True
+                            else:
+                                del self.f
+                                del self.grad_f
+                        else:
+                            # we need to send a warning.
+                            minimum_checked = True
+                            self.warning("Quality criterium not fulfilled for best fit after adding a new state to the emulator. Improve the performance by reducing the variance_per_bin!")
+
+                    else:
+                        self.info("Minimum checked. Finished minimization")
+                else:
+                    minimum_checked = True
 
 
             # comptue the inverse hessian

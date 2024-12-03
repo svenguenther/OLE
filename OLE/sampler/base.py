@@ -343,7 +343,7 @@ class Sampler(BaseClass):
             ess = self.estimate_effective_sample_size(chain[:i,:])
             mean_ess = np.mean(ess)
             self.info("Iteration %d: Mean ESS = %f", i, mean_ess)
-            self.info("Iteration %d: Mean ESS/sek = %f", i, mean_ess/self.time_from_start())
+            self.info("Iteration %d: Mean ESS/sek = %f", i, mean_ess/self.time_from_init())
             
         return 0
 
@@ -662,7 +662,8 @@ class Sampler(BaseClass):
         float :
             The logposterior.
         """
-        self.start()
+
+        self.start("compute_logposterior_from_normalized_parameters")
 
         RNGkey = jax.random.PRNGKey(int(time.clock_gettime_ns(0)))
 
@@ -744,13 +745,54 @@ class Sampler(BaseClass):
                 self.emulator.train()
                 self.debug("Emulator trained")
 
-        self.increment(self.logger)
+        self.increment("compute_logposterior_from_normalized_parameters")
 
         if type(state['total_loglike']) != jax._src.interpreters.ad.JVPTracer:
             _ = "Logposterior: "+ str(state['total_loglike']) + ' at ' + " ".join([str(key) + ": " + str(value[0]) for key, value in state['parameters'].items()]) + "\n"
             self.write_to_log(_)
 
         return state['total_loglike']
+    
+    def compute_loglike_uncertainty_for_differentiable_likelihood_from_normalized_parameters(self, parameters, include_error_tolerance=False):
+        """
+        This function computes the uncertainty of the loglikelihoods for given normalized parameters.
+        It is used in the NUTS sampler to accelerate the initial burn-in phase by minimizing the nuisance parameters for the theory code.
+
+        Parameters
+        --------------
+        parameters : ndarray
+            The normalized parameters for which the uncertainty is computed.
+
+        Returns
+        --------------
+        float :
+            The uncertainty of the loglikelihood.
+        """
+
+        self.start("compute_loglike_uncertainty_for_differentiable_likelihood_from_normalized_parameters")
+
+        # rescale the parameters
+        parameters = self.retranform_parameters_from_normalized_eigenspace(parameters)
+
+        # Run the sampler.
+        state = {'parameters': {}, 'quantities': {}, 'loglike': {}, 'total_loglike': None}
+
+        # translate the parameters to the state
+        for i, key in enumerate(self.parameter_dict.keys()):
+            state['parameters'][key] = jnp.array([parameters[i]])
+
+        # add constant parameters to the state
+        for key in self.parameter_dict_constant.keys():
+            if 'value' in list(self.parameter_dict_constant[key].keys()):
+                state['parameters'][key] = jnp.array([self.parameter_dict_constant[key]['value']])
+
+        # use emulator to compute the uncertainty            
+        loglike_uncertainty = self.emulator.compute_error_from_differentiable_likelihood(state['parameters'], include_error_tolerance=include_error_tolerance)
+
+        self.increment("compute_loglike_uncertainty_for_differentiable_likelihood_from_normalized_parameters")
+
+        return loglike_uncertainty
+
 
 
     def compute_total_logposterior_from_normalized_parameters(self, parameters):
@@ -787,7 +829,8 @@ class Sampler(BaseClass):
         dict :
             The state after the theory computation.
         """
-        self.start()
+
+        self.start("compute_theory_from_normalized_parameters")
 
         # rescale the parameters
         parameters = self.retranform_parameters_from_normalized_eigenspace(parameters)
@@ -811,22 +854,46 @@ class Sampler(BaseClass):
             # here we need to test the emulator for its performance
             emulator_sample_states, RNGkey = self.emulator.emulate_samples(state['parameters'],RNGkey=RNGkey , noise=0)
 
-            emulator_sample_loglikes = jnp.zeros(len(emulator_sample_states))
-            for i, emulator_sample_state in enumerate(emulator_sample_states):
-                for likelihood in self.likelihood_collection.keys():
-                    emulator_sample_state = self.likelihood_collection[likelihood].loglike_state(emulator_sample_state)
-                emulator_sample_loglikes.at[i].set(jnp.array(list(emulator_sample_state['loglike'].values())).sum())
-
-            # check whether the emulator is good enough
-            if not self.emulator.check_quality_criterium(emulator_sample_loglikes, parameters=state['parameters']):
-                state = self.theory.compute(state)
-            else:
-                # Add the point to the quality points
-                self.emulator.add_quality_point(state['parameters'])
-            
-                self.debug("emulator available - check emulation performance")
+            # here we do tests. If the likelihood collection is differentiable, we fo not need to sample
+            if self.emulator.likelihood_collection_differentiable:
                 state = self.emulator.emulate(state['parameters'])
-                self.debug("state after emulator: %s for parameters: %s", state['quantities'], state['parameters'])
+                for likelihood in self.likelihood_collection.keys():
+                    state = self.likelihood_collection[likelihood].loglike_state(state)
+                state['total_loglike'] = jnp.array(list(state['loglike'].values())).sum()+self.compute_logprior(state)
+                loglike_uncertainty = jnp.array([self.compute_loglike_uncertainty_for_differentiable_likelihood_from_normalized_parameters(state['parameters'])])
+
+                # check whether the emulator is good enough
+                if not self.emulator.check_quality_criterium(loglike_uncertainty, reference_loglike=state['total_loglike'], parameters=state['parameters']):
+                    state = self.theory.compute(state)
+                else:
+                    # Add the point to the quality points
+                    self.emulator.add_quality_point(state['parameters'])
+                
+                    self.debug("emulator available - check emulation performance")
+                    state = self.emulator.emulate(state['parameters'])
+                    self.debug("state after emulator: %s for parameters: %s", state['quantities'], state['parameters'])
+
+
+            else:
+                # here we need to test the emulator for its performance
+                emulator_sample_states, RNGkey = self.emulator.emulate_samples(state['parameters'],RNGkey=RNGkey , noise=1)
+
+                emulator_sample_loglikes = jnp.zeros(len(emulator_sample_states))
+                for i, emulator_sample_state in enumerate(emulator_sample_states):
+                    for likelihood in self.likelihood_collection.keys():
+                        emulator_sample_state = self.likelihood_collection[likelihood].loglike_state(emulator_sample_state)
+                    emulator_sample_loglikes.at[i].set(jnp.array(list(emulator_sample_state['loglike'].values())).sum())
+
+                # check whether the emulator is good enough
+                if not self.emulator.check_quality_criterium(emulator_sample_loglikes, parameters=state['parameters']):
+                    state = self.theory.compute(state)
+                else:
+                    # Add the point to the quality points
+                    self.emulator.add_quality_point(state['parameters'])
+                
+                    self.debug("emulator available - check emulation performance")
+                    state = self.emulator.emulate(state['parameters'])
+                    self.debug("state after emulator: %s for parameters: %s", state['quantities'], state['parameters'])
 
         # if we have a minimal number of states in the cache, we can train the emulator
         if (len(self.emulator.data_cache.states) >= self.emulator.hyperparameters['min_data_points']) and not self.emulator.trained:
@@ -834,7 +901,7 @@ class Sampler(BaseClass):
             self.emulator.train()
             self.debug("Emulator trained")
 
-        self.increment(self.logger)        
+        self.increment("compute_theory_from_normalized_parameters")        
         return state
     
     def logposterior_function(self, parameter_values, local_state):
@@ -906,7 +973,8 @@ class Sampler(BaseClass):
         float :
             The logposterior.
         """
-        self.start()
+
+        self.start("emulate_logposterior_from_parameters_differentiable")
 
         # Run the sampler.
         state = {'parameters': {}, 'quantities': {}, 'loglike': {}, 'total_loglike': None}
@@ -957,7 +1025,7 @@ class Sampler(BaseClass):
 
         parameters = self.transform_parameters_into_normalized_eigenspace(parameters)
 
-        self.increment(self.logger)
+        self.increment("emulate_logposterior_from_parameters_differentiable")
         
         if type(state['total_loglike']) != jax._src.interpreters.ad.JVPTracer:
             _ = "Logposterior: "+ str(state['total_loglike']) + ' at ' + " ".join([str(key) + ": " + str(value[0]) for key, value in state['parameters'].items()]) + "\n"
@@ -981,7 +1049,8 @@ class Sampler(BaseClass):
         float :
             The loglikelihood.
         """
-        self.start()
+
+        self.start("emulate_loglikelihood_from_parameters_differentiable")
 
         # Run the sampler.
         state = {'parameters': {}, 'quantities': {}, 'loglike': {}, 'total_loglike': None}
@@ -1001,7 +1070,7 @@ class Sampler(BaseClass):
         state['total_loglike'] = jnp.array(list(state['loglike'].values())).sum()
         self.debug("loglike after theory: %f for parameters: %s", state['total_loglike'], state['parameters'])
 
-        self.increment(self.logger)
+        self.increment("emulate_loglikelihood_from_parameters_differentiable")
 
         if type(state['total_loglike']) != jax._src.interpreters.ad.JVPTracer:
             _ = "Logposterior: "+ str(state['total_loglike']) + ' at ' + " ".join([str(key) + ": " + str(value[0]) for key, value in state['parameters'].items()]) + "\n"
@@ -1061,7 +1130,7 @@ class Sampler(BaseClass):
             The logposteriors for the states.
         """
 
-        self.start()
+        self.start("sample_emulate_logposterior_from_parameters_differentiable")
 
         # Run the sampler.
         state = {'parameters': {}, 'quantities': {}, 'loglike': {}, 'total_loglike': None}
@@ -1091,7 +1160,7 @@ class Sampler(BaseClass):
             state['total_loglike'] = jnp.array(list(state['loglike'].values())).sum() + logprior
             loglikes = loglikes.at[i].set(state['total_loglike'])
 
-        self.increment(self.logger)
+        self.increment("sample_emulate_logposterior_from_parameters_differentiable")
 
         # Currently not working. TODO: SG: Fix that
         # if type(states[0]['loglike'][0]) != jax._src.interpreters.ad.JVPTracer:
