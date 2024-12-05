@@ -107,8 +107,7 @@ class Emulator(BaseClass):
 
             # path to a directory with data covmats to do better normalization. If given, the emulator will search for data covmats in this directoy and if one is found, it will be used for normalization
             'data_covmat_directory': None,
-
-            'white_noise_level' : 1.,
+            'white_noise_ratio' : 1., 
             'sparse_GP_points' : 0.,
             'test_noise_levels_counter' : 50,
             # the radius around the checked points for which we do not need to check the quality criterium
@@ -737,10 +736,12 @@ class Emulator(BaseClass):
 
         if self.hyperparameters['sparse_GP_points'] > 0.:
             # require errors for sparse GP's
-            self.hyperparameters['white_noise_level'] = 1.
+            if self.hyperparameters['white_noise_ratio'] == 0.:
+                print("Sparse GP require a white noise error. I have set the noise ratio to one!") 
+                self.hyperparameters['white_noise_ratio'] = 1.
 
 
-        if self.hyperparameters['white_noise_level'] == 0.:
+        if self.hyperparameters['white_noise_ratio'] == 0.:
             for quantity_name in self.emulators.keys():
                 self.emulators[quantity_name].disable_error() 
 
@@ -800,9 +801,9 @@ class Emulator(BaseClass):
                     error = 1. / relative_importance[i]
 
                     # set it to an minimum value of 1e-14
-                    error = max(error, 1e-14) # this ensures some white kernel. Otherwise training might fail for deterministic data, like training H0 out of h etc ...
+                    error = max(error* self.hyperparameters['white_noise_ratio'], 1e-14) # this ensures some white kernel. Otherwise training might fail for deterministic data, like training H0 out of h etc ...
                     
-                    self.emulators[quantity_name].GPs[i].hyperparameters['white_noise_level'] = error
+                    self.emulators[quantity_name].GPs[i].hyperparameters['white_noise_level'] = error 
                     self.debug("Error tolerance for GP %d of quantity %s: %e" % (i, quantity_name, error))
 
     
@@ -818,26 +819,49 @@ class Emulator(BaseClass):
         if jnp.any(jnp.isnan(loglikes)):
             self.quality_check_unsuccessful_counter += 1
             return False
-
-        # if the emulator is trained, we check the quality criterium
-        # we check whether the loglikes are within the quality criterium
-        if not self.likelihood_collection_differentiable:
-            # here we need to cut outlier of the chisquare distribution.
-            N_cut = max(1, int(self.hyperparameters['tail_cut_fraction'] * self.hyperparameters['N_quality_samples']))
-
-            # Thus we gonna cut the N_cut smallest values
-            loglikes = jnp.sort(loglikes)[N_cut:]
-            std_loglike = jnp.std(loglikes)/jnp.sqrt(len(loglikes)) # we use the standard deviation of the mean as the error
-
-        else:
-            std_loglike = loglikes[0]
-
+        
         if reference_loglike is None:
             mean_loglike = jnp.mean(loglikes)
             if self.likelihood_collection_differentiable:
                 raise ValueError("Reference loglike is not provided for Quality check!")
         else:
             mean_loglike = reference_loglike
+
+        # if the emulator is trained, we check the quality criterium
+        # we check whether the loglikes are within the quality criterium
+        if not self.likelihood_collection_differentiable:
+            
+            # old estimator
+            # here we need to cut outlier of the chisquare distribution.
+            #N_cut = max(1, int(self.hyperparameters['tail_cut_fraction'] * self.hyperparameters['N_quality_samples']))
+
+            #std_loglike_precut = jnp.std(loglikes) # we use the standard deviation of the mean as the error
+            # Thus we gonna cut the N_cut smallest values
+            #loglikes = jnp.sort(loglikes)[N_cut:]
+
+            
+            #std_loglike = jnp.std(loglikes) # we use the standard deviation of the mean as the error
+            # this scaling is wierd as more samples lead to a smaller error, but even if we know the mean very well, how is this important. 
+            # We are then very certain tha the meam is the mean so ... 
+            #if (std_loglike_precut - std_loglike)/std_loglike_precut * 100 > 85:
+            #    print("error reduced byt cut ",(std_loglike_precut - std_loglike)/std_loglike_precut * 100)
+
+            # new estimator here
+            # this is based on using that we rolled all points at the 1 sigma level and thus we can use them to estimate the posterior
+            # one sigma assuming that we stay in the tangent-space of the likeleehood
+            # as long as mean_loglike is bugged we pass the correct one as the first point
+            mean_loglike = loglikes[0]
+            loglikesNew = loglikes[1:]
+            variances_loglikes = ( loglikesNew - mean_loglike )**2
+            std_loglike = jnp.sqrt(jnp.mean(variances_loglikes))
+            
+
+
+
+        else:
+            std_loglike = loglikes[0]
+
+        
 
 
         max_loglike = max(self.data_cache.max_loglike, self.max_loglike_encountered)

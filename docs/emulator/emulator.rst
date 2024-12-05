@@ -100,9 +100,9 @@ It also deals with the possible compression of data by sparse GPs.
    * - ``sparse_GP_points``
      - ``0``
      - If not set to ``0`` we try to use condensate the information of all training points into a reduced training set (sparse GPs). The initial guess of the number of estimated sparse data points is ``sparse_GP_points``. However, in the iterative search for the best number of data points there is a certain error tolerance that we deem acceptable for the acceleration. It should be choosen rather small as the subleading PCA components can be fit with very few data points.
-   * - ``white_noise_level``
+   * - ``white_noise_ratio``
      - ``1.``
-     - If not set to ``0`` a noise term is added to the Kernel that is determined by the ``explained_variance_cutoff`` for each PCA component. This prevents the GP from fitting random noise introduced in the PCA analysis. It is also a central component of the sparse GP method since it is used to determine the optimal number of sparse points.
+     - If not set to ``0`` a noise term is added to the Kernel that is determined by the ``explained_variance_cutoff`` for each PCA component. This prevents the GP from fitting random noise introduced in the PCA analysis. It is also a central component of the sparse GP method since it is used to determine the optimal number of sparse points. A value of one sets the white noise error such that is comparable to the dropped PCA components
    * - ``error_boost`` 
      - ``2.``
      - This parameter allocates a noise budget to the sparse GP relative to the existing white noise term. A value of 2. means that the total allowed error is twice the white noise and thus the average error of the sparse GP may be as large as the white noise term. A value of 1. means that the sparse GP error is zero, so it can never be used. Reasonable values are between 1.5 and 5. 

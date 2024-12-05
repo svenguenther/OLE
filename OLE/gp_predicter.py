@@ -1047,12 +1047,21 @@ class GP(BaseClass):
         std -=  (1.-noise) *jnp.sqrt(self.hyperparameters["white_noise_level"])
         
         std = jnp.abs(std) 
-        
-
+        # Generate the random samples and apply transformation
+        samples = 2. * jax.random.randint(key=subkey, shape=(N-1, 1), minval=0, maxval=2) - 1.
+        scaled_samples = samples * jnp.sqrt(std) + ac
+        # Prepend `ac` to the transformed array
+        result = jnp.vstack([jnp.array([[ac]]), scaled_samples])
+        # new method: roll +- one std values only for new estimator of variance
         return (
-            random.normal(key=subkey, shape=(N, 1)) * jnp.sqrt(std) + ac,
+            result,
             RNGkey,
         )
+
+        #return (
+        #    random.normal(key=subkey, shape=(N, 1)) * jnp.sqrt(std) + ac,
+        #    RNGkey,
+        #)
 
     # TODO: SG: Is this still needed?
     def sample_mean(self, input_data, RNGkey=random.PRNGKey(time.time_ns())):

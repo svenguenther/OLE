@@ -439,7 +439,7 @@ class NUTSSampler(Sampler):
                             if not self.emulator.likelihood_collection_differentiable: # if we do not have differentaibel likelihoods, we need to sample from the emulator
                                 self.logp_sample = jax.jit(self.sample_emulate_total_logposterior_from_normalized_parameters_differentiable)                    # this samples N realizations from the emulator to estimate the uncertainty
                     else:
-                        if self.emulator.hyperparameters['test_noise_levels_counter'] > 0 and self.emulator.hyperparameters['white_noise_level'] != 0.:
+                        if self.emulator.hyperparameters['test_noise_levels_counter'] > 0 and self.emulator.hyperparameters['white_noise_ratio'] != 0.:
                             self.emulator.hyperparameters['test_noise_levels_counter'] -= 1
 
                             if not self.emulator.likelihood_collection_differentiable:
