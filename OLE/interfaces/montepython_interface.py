@@ -90,19 +90,18 @@ if __name__ == '__main__':
 
                 else:
                     res = self.cosmo.__getattribute__(my_attribute)(*args, **kwargs)
-
                     if res is not None and type(res) is not bool:
                         # if my_attribute not in self.attributes_with_relevant_output.keys():
                         if my_attribute in self.attributes_with_relevant_output.keys():
                             if (type(res) != dict) and (type(res) != tuple) and (type(res) != np.ndarray):
-                                if len(args) > 0:
+                                if len(args)+len(kwargs) > 0:
                                     self.attributes_with_relevant_output[my_attribute].append(cp.deepcopy(res))
                         else:
                             self.attributes_with_relevant_output[my_attribute] = [cp.deepcopy(res)]
 
                         if self.number_of_compute_calls==1: # count the total number of calls to each attribute
                             if my_attribute in self.attribute_max_couter.keys():
-                                if len(args) > 0 and my_attribute not in ['lensed_cl', 'raw_cl', 'density_cl','get_pk_and_k_and_z','get_transfer_and_k_and_z','get_Weyl_pk_and_k_and_z','get_perturbations']:
+                                if len(args)+len(kwargs) > 0 and my_attribute not in ['lensed_cl', 'raw_cl', 'density_cl','get_pk_and_k_and_z','get_transfer_and_k_and_z','get_Weyl_pk_and_k_and_z','get_perturbations']:
                                     self.attribute_max_couter[my_attribute] += 1
                                     self.attribute_input_args[my_attribute].append(args)
                             else:
@@ -110,7 +109,6 @@ if __name__ == '__main__':
                                 self.attribute_input_args[my_attribute] = [args]
 
                         self.attribute_couter[my_attribute] = 0
-
                 return res
 
             callable_methods[name] = new_method
@@ -181,7 +179,7 @@ if __name__ == '__main__':
                     np.array([data.mcmc_parameters[key]['current'] * \
                               data.mcmc_parameters[key]['scale']])
                 #print("OLE_state here:",key,OLE_state['parameters'][key])
-
+            
             return OLE_state
 
         def OLE_state_to_MP_state(self, OLE_state):
