@@ -828,8 +828,9 @@ class Emulator(BaseClass):
             mean_loglike = reference_loglike
 
         # as long as mean_loglike is bugged we pass the correct one as the first point
-        # BUG: fix refernce loglike
-        mean_loglike = loglikes[0]
+        # BUG: fix refernce loglike (apears to be fixed)
+        # mean_loglike = loglikes[0]
+
 
         # if the emulator is trained, we check the quality criterium
         # we check whether the loglikes are within the quality criterium
@@ -854,9 +855,9 @@ class Emulator(BaseClass):
             # this is based on using that we rolled all points at the 1 sigma level and thus we can use them to estimate the posterior
             # one sigma assuming that we stay in the tangent-space of the likeleehood
          
-            loglikesNew = loglikes[1:]
-            variances_loglikes = ( loglikesNew - mean_loglike )**2
-            std_loglike = jnp.sqrt(jnp.mean(variances_loglikes))
+            #loglikesNew = loglikes[1:]
+            variances_loglikes = ( loglikes - mean_loglike )**2
+            std_loglike = jnp.sqrt(jnp.median(variances_loglikes))
             
 
         else:
