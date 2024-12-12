@@ -397,14 +397,14 @@ class NUTSSampler(Sampler):
                     # here we need to test the emulator for its performance
                     # noiseFree is only required if a noise term is used at all !!
                     if not self.emulator.likelihood_collection_differentiable:
-                        loglikes = self.logp_sample(thetas[i])
+                        loglikes = self.logp_sample(thetas[i+1])
 
                         self.debug('dumping loglikes emulated')
                         # self.debug(jnp.std(jnp.array(loglikes)))
                         self.debug(jnp.std(jnp.array(loglikes)))
 
                     else:
-                        loglikes = jnp.array([self.compute_loglike_uncertainty_for_differentiable_likelihood_from_normalized_parameters(thetas[i])])
+                        loglikes = jnp.array([self.compute_loglike_uncertainty_for_differentiable_likelihood_from_normalized_parameters(thetas[i+1])])
 
 
                     # remove this after enough testing
@@ -417,6 +417,7 @@ class NUTSSampler(Sampler):
 
                     # we need to compute the logposterior for checking the quality of the emulator
                     reference_loglike, _ = self.logp_and_grad(thetas[i+1])
+
 
                     # check whether the emulator is good enough
                     if not self.emulator.check_quality_criterium(jnp.array(loglikes), reference_loglike=reference_loglike, parameters=state['parameters']):
