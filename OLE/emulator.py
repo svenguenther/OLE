@@ -337,6 +337,9 @@ class Emulator(BaseClass):
             _ = "Current data cache size: %d\n" % len(self.data_cache.states)
             self.write_to_log(_)
         
+        # stop timer
+        self.increment("add_state")
+        
         # if the emulator is already trained, we can add the new state to the GP without fitting the Kernel parameters
         emulator_updated = False
         if self.trained and state_added:
@@ -350,9 +353,6 @@ class Emulator(BaseClass):
                     self.update()
                     emulator_updated = True
                 #else: do nothing as updating does not really improve the sparese GP anyways
-        
-        # stop timer
-        self.increment("add_state")
             
         if state_added:
             self.continuous_successful_calls = 0
