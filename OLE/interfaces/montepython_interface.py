@@ -63,52 +63,124 @@ if __name__ == '__main__':
     # deepcopy all callable methods of the Class class
     callable_methods = {}
 
+    CLASS_functions_class_1 = ['Omega_m', 'h', 'T_cmb'] # no input, float output
+    CLASS_functions_class_2 = ['z_of_r']  # input: np.array, output: tuple( np.array, np.array) 
+    CLASS_functions_class_3 = ['get_pk', 'get_pk_lin', 'get_Pk_cb_m_ratio', 'get_pk_cb_lin']  # input: np.array, output: N-d np.array
+    CLASS_functions_class_4 = ['angular_distance', 'pk_lin', 'pk_cb_lin', 'sigma_cb', 'sigma', 'Hubble'] # input: dict/array/float, output: float
+    CLASS_functions_class_5 = ['lensed_cl'] # input: int, output: cl_dict
+    CLASS_functions_class_6 = ['get_current_derived_parameters'] # input: list of strings, output: dict with floats
+    
+    
+    
+
+    ALL_CLASS_functions = CLASS_functions_class_1 + CLASS_functions_class_2 + CLASS_functions_class_3 + CLASS_functions_class_4 + CLASS_functions_class_5 + CLASS_functions_class_6
+
+
     for name in dir(classy.Class):
         if callable(getattr(classy.Class, name)) and not name.startswith("__"):
             def new_method(self, *args, **kwargs):
                 my_attribute = self.current_attribute
 
                 if my_attribute=='compute':
-                    self.attributes_with_relevant_output = {} # reset the attributes with relevant output
+                    self.attributes_with_relevant_output = {} # In this dictionary we store the calls of classy
+                    self.tuple_flag = {}
 
                 if my_attribute=='set':
                     self.number_of_compute_calls += 1
-                    for key in self.attribute_couter.keys():
-                        self.attribute_couter[key] = 0
+                    for likelihood in self.all_likelihoods:
+                        self.attribute_couter[likelihood] = {}
+                        for key in self.attribute_max_couter[likelihood].keys():
+                            self.attribute_couter[likelihood][key] = 0 # start counting the number of calls to each attribute from scratch
 
                 # if the current attribute is not in the list of attributes with relevant output, we do not want to call the method
                 if self.use_emulated_result and my_attribute in self.emulated_result.keys():
-                    if len(self.emulated_result[my_attribute]) >= self.attribute_couter[my_attribute]:
-                        res = cp.deepcopy(self.emulated_result[my_attribute][self.attribute_couter[my_attribute]])
-                    else:
-                        res = cp.deepcopy(self.emulated_result[my_attribute][-1])
-                    self.attribute_couter[my_attribute] += 1
+                    # 
+                    # copy emulated result into res
+                    # 
 
-                    if self.attribute_couter[my_attribute] == self.attribute_max_couter[my_attribute]:
-                        self.attribute_couter[my_attribute] = 0
-                        # del self.attributes_with_relevant_output[my_attribute]
+                    print(self.indexing)
+                    print(self.attribute_couter)
 
+                    # cut our chunk of the emulated result
+                    lower_index = self.indexing[self.current_likelihood][my_attribute][self.attribute_couter[self.current_likelihood][my_attribute]]
+                    upper_index = self.indexing[self.current_likelihood][my_attribute][self.attribute_couter[self.current_likelihood][my_attribute]+1]
+
+                    # the extra info can provide shape and other things that allows to shape the OLE output to the CLASS output
+                    info = self.attribute_input_args[self.current_likelihood][my_attribute][self.attribute_couter[self.current_likelihood][my_attribute]]
+
+                    res_OLE_shape = cp.deepcopy(self.emulated_result[my_attribute][lower_index:upper_index])
+
+                    # transform the OLE output to the CLASS output
+                    res, _ = self.transform_from_OLE_to_CLASSY(my_attribute, res_OLE_shape, info)
+                    self.attribute_couter[self.current_likelihood][my_attribute] += 1
+
+                    # if for example we use oversampling, we need to provide the same output multiple times. In that case we need to start counting from scratch
+                    if self.attribute_couter[self.current_likelihood][my_attribute] == self.attribute_max_couter[self.current_likelihood][my_attribute]:
+                        self.attribute_couter[self.current_likelihood][my_attribute] = 0
                 else:
+                    # USE THE ORIGINAL CLASS
                     res = self.cosmo.__getattribute__(my_attribute)(*args, **kwargs)
-                    if res is not None and type(res) is not bool:
-                        # if my_attribute not in self.attributes_with_relevant_output.keys():
-                        if my_attribute in self.attributes_with_relevant_output.keys():
-                            if (type(res) != dict) and (type(res) != tuple) and (type(res) != np.ndarray):
-                                if len(args)+len(kwargs) > 0:
-                                    self.attributes_with_relevant_output[my_attribute].append(cp.deepcopy(res))
-                        else:
-                            self.attributes_with_relevant_output[my_attribute] = [cp.deepcopy(res)]
+                    res_OLE_shape, extra_info = self.transform_from_CLASSY_to_OLE(my_attribute, res)
 
-                        if self.number_of_compute_calls==1: # count the total number of calls to each attribute
-                            if my_attribute in self.attribute_max_couter.keys():
-                                if len(args)+len(kwargs) > 0 and my_attribute not in ['lensed_cl', 'raw_cl', 'density_cl','get_pk_and_k_and_z','get_transfer_and_k_and_z','get_Weyl_pk_and_k_and_z','get_perturbations']:
-                                    self.attribute_max_couter[my_attribute] += 1
-                                    self.attribute_input_args[my_attribute].append(args)
+                    
+                    # If we run the pipline for the first time, we need to count the number of calls to each attribute
+                    if self.number_of_compute_calls==1: # count the total number of calls to each attribute
+
+                        # only check implemented functions
+                        if my_attribute in ALL_CLASS_functions:
+
+                            # check if the attribute was already called earlier
+                            if self.current_likelihood not in self.attribute_max_couter.keys():
+                                self.attribute_max_couter[self.current_likelihood] = {}
+                                self.attribute_input_args[self.current_likelihood] = {}
+                                self.indexing[self.current_likelihood] = {}
+                                self.all_likelihoods.append(self.current_likelihood)
+
+                            # check if the attribute was already called earlier
+                            if my_attribute not in self.attribute_max_couter[self.current_likelihood].keys():
+                                self.attribute_max_couter[self.current_likelihood][my_attribute] = 0
+                                self.attribute_input_args[self.current_likelihood][my_attribute] = []
+
+                                # check if the attribute was already called by another likelihood
+                                max_index = 0
+                                for likelihood in self.all_likelihoods:
+                                    if likelihood != self.current_likelihood:
+                                        if my_attribute in self.attribute_max_couter[likelihood].keys():
+                                            max_index = max(max_index, self.indexing[likelihood][my_attribute][-1])
+
+
+                                self.indexing[self.current_likelihood][my_attribute] = [max_index, max_index + len(res_OLE_shape)]
                             else:
-                                self.attribute_max_couter[my_attribute] = 1
-                                self.attribute_input_args[my_attribute] = [args]
+                                self.indexing[self.current_likelihood][my_attribute].append(self.indexing[self.current_likelihood][my_attribute][-1] + len(res_OLE_shape))
 
-                        self.attribute_couter[my_attribute] = 0
+                            # store the number of input arguments
+                            self.attribute_max_couter[self.current_likelihood][my_attribute] += 1
+                            self.attribute_input_args[self.current_likelihood][my_attribute].append((len(res_OLE_shape), extra_info))                                
+
+                        elif my_attribute in ['set','compute']:
+                            pass
+
+                        else:
+                            raise ValueError(f'CLASS function {my_attribute} is not implemented in the OLE wrapper')
+                        
+                    # For all calls:
+                    if my_attribute in ALL_CLASS_functions:
+
+                        # if it is the first call since the compute function was called, we need to create the output entry
+                        if my_attribute not in self.attributes_with_relevant_output.keys():
+                            self.attributes_with_relevant_output[my_attribute] = cp.deepcopy(res_OLE_shape)
+                        else:
+                            # fill the output entry
+                            self.attributes_with_relevant_output[my_attribute] = np.append(self.attributes_with_relevant_output[my_attribute],cp.deepcopy(res_OLE_shape))
+
+                if my_attribute=='lensed_cl':
+                    print('lensed_cl')
+                    print(res)
+
+                if my_attribute=='T_cmb':
+                    print('T_cmb')
+                    print(res)
+
                 return res
 
             callable_methods[name] = new_method
@@ -127,6 +199,9 @@ if __name__ == '__main__':
             self.attributes_with_relevant_output = {} # this is a dictonary with the relevant attributes and their output
             self.use_emulated_result = False
             self.emulated_result = {}
+            self.current_likelihood = None
+            self.all_likelihoods = []
+            self.indexing = {} # this gives a mapping from the output of the OLE wrapper to the output of the CLASS code
 
             # Emulator related attributes
             self.emulator = None
@@ -140,6 +215,97 @@ if __name__ == '__main__':
             if name != 'current_attribute':
                 self.current_attribute = name
             return super().__getattribute__(name)
+        
+        def transform_from_OLE_to_CLASSY(self, attribute, res, info):
+            # This function reads the original output of the CLASS code and transforms it into the OLE format. 
+            # It might give extra information about the transformation such as shape etc...
+
+            if attribute in CLASS_functions_class_1:
+                return res[0], None
+            
+            elif attribute in CLASS_functions_class_2:
+                # split the output into two arrays
+                out1, out2 = np.split(res, 2)
+                return (out1,out2), None
+            
+            elif attribute in CLASS_functions_class_3:
+                # get entry with the same arg_hash
+                res_shape = info[1]['shape']
+
+                # reshape the output
+                res = res.reshape(res_shape)
+
+                return res, None
+            
+            elif attribute in CLASS_functions_class_4:
+                return res[0], None
+
+            elif attribute in CLASS_functions_class_5:
+                # split the output into the different keys
+                out = {}
+                for i, key in enumerate(info[1]['keys']):
+                    out[key] = res[i*(info[1]['max_l']+1):(i+1)*(info[1]['max_l']+1)]
+
+                return out, info
+            
+            elif attribute in CLASS_functions_class_6:
+                # split the output into the different keys
+                out = {}
+                for i, key in enumerate(info[1]['keys']):
+                    out[key] = res[i]
+
+                return out, info
+            
+            elif attribute in ['set','compute']:
+                return res, None
+            
+            else:
+                raise ValueError(f'CLASS function {attribute} is not implemented in the OLE wrapper')
+
+        
+        def transform_from_CLASSY_to_OLE(self, attribute, res):
+            # This function reads the original output of the CLASS code and transforms it into the OLE format. 
+            # It might give extra information about the transformation such as shape etc...
+
+            if attribute in CLASS_functions_class_1:
+                return np.array([res]), None
+            
+            elif attribute in CLASS_functions_class_2:
+                out = np.hstack([res[0],res[1]])
+                return out, None
+            
+            elif attribute in CLASS_functions_class_3:
+                # save shape of the output
+                res_shape = res.shape
+
+                # flatten the output
+                res = res.flatten()
+
+                return res, {'shape': res_shape}
+            
+            elif attribute in CLASS_functions_class_4:
+                return np.array([res]), None
+            
+            elif attribute in CLASS_functions_class_5:
+                info = {'keys': list(res.keys()), 'max_l': max(res['ell'])}
+                # flatten the out
+                res = np.hstack([res[key] for key in info['keys']])
+
+                return res, info
+            
+            elif attribute in CLASS_functions_class_6:
+                info = {'keys': list(res.keys())}
+                res = np.array([res[key] for key in info['keys']])
+
+                return res, info
+            
+                        
+            elif attribute in ['set','compute']:
+                return res, None
+
+            else:
+                raise ValueError(f'CLASS function {attribute} is not implemented in the OLE wrapper')
+        
 
         def MP_state_to_OLE_state(self, data, MP_state):
             OLE_state = {'parameters': {},
@@ -150,36 +316,14 @@ if __name__ == '__main__':
 
             # go through all MP elements and addthem to the OLE quantities
             for key, value in MP_state.items():
-                if type(value[0]) is dict:
-                    for subkey, subvalue in value[0].items():
-                        OLE_state['quantities'][subkey] = np.array(subvalue)
-                elif type(value[0]) is tuple:
-                    for subindex in range(len(value[0])):
-                        subkey = key + '_' + str(subindex)
-                        subvalue = value[0][subindex]
-                        if type(value[0][subindex]) == np.ndarray:
-                            OLE_state['quantities'][subkey] = subvalue
-                        else:
-                            OLE_state['quantities'][subkey] = np.array(subvalue)
-                elif type(value[0]) is np.ndarray:
-                    OLE_state['quantities'][key] = value[0].flatten()
-                else:
-                    OLE_state['quantities'][key] = np.array(value)
-
-            # we need to check the dimensionality of the quantities. They all have to be 1D arrays. If they are not, we need to covnert them
-            for key, value in OLE_state['quantities'].items():
-                if len(value.shape) >= 1:
-                    OLE_state['quantities'][key] = value.flatten()
-                else:
-                    OLE_state['quantities'][key] = np.array([value])
+                OLE_state['quantities'][key] = value
 
             # add parameters from data
             for key in data.get_mcmc_parameters(['cosmo']):
                 OLE_state['parameters'][key] = \
                     np.array([data.mcmc_parameters[key]['current'] * \
                               data.mcmc_parameters[key]['scale']])
-                #print("OLE_state here:",key,OLE_state['parameters'][key])
-            
+
             return OLE_state
 
         def OLE_state_to_MP_state(self, OLE_state):
@@ -188,32 +332,7 @@ if __name__ == '__main__':
 
             # we now go through all branches of the emulated result and update the values
             for key, value in self.emulated_result.items():
-
-                if type(value[0]) is dict:
-                    for subkey, subvalue in value[0].items():
-                        if type(subvalue)== float:
-                            self.emulated_result[key][0][subkey] = cp.deepcopy(np.array(OLE_state['quantities'][subkey]))[0]
-                        else:
-                            self.emulated_result[key][0][subkey] = cp.deepcopy(np.array(OLE_state['quantities'][subkey]))
-                elif type(value[0]) is tuple:
-                    # print(f'Emu_1({key}) = {value}')
-                    _list = []
-                    for subindex in range(len(value[0])):
-                        subkey = key + '_' + str(subindex)
-                        _list.append(cp.deepcopy(np.array(OLE_state['quantities'][subkey])))
-                    self.emulated_result[key][0] = tuple(_list)
-                    # print(f'Emu_2({key}) = {self.emulated_result[key]}')
-                elif type(value[0]) is np.ndarray:
-                    emulated_result = np.array(OLE_state['quantities'][key])
-                    # print(f'OLE key={key}')
-                    # print(f'My shape in OLE is {self.emulated_result[key][0].shape}')
-                    self.emulated_result[key] = [cp.deepcopy(np.reshape(emulated_result,self.emulated_result[key][0].shape))]
-                    # print(f'My reshape in OLE is {np.reshape(emulated_result,self.emulated_result[key][0].shape).shape}')
-                else:
-                    self.emulated_result[key] = cp.deepcopy(np.array(OLE_state['quantities'][key]))
-
-
-
+                self.emulated_result[key] = np.array(OLE_state['quantities'][key])
             self.use_emulated_result = True
 
             return self.emulated_result
@@ -235,7 +354,6 @@ if __name__ == '__main__':
                 OLE_state['parameters'][key] = \
                     np.array([data.mcmc_parameters[key]['current'] * \
                               data.mcmc_parameters[key]['scale']])
-                #print("OLE_state there::",key,OLE_state['parameters'][key])
 
             # check if we reuqire a quality check
             if self.emulator.require_quality_check(OLE_state['parameters']):
@@ -255,6 +373,7 @@ if __name__ == '__main__':
 
                     lkl = 0.0
                     for likelihood in dictvalues(data.lkl):
+                        self.current_likelihood = likelihood.name
                         value = likelihood.loglkl(self, data)
                         lkl += value
 
@@ -268,6 +387,7 @@ if __name__ == '__main__':
 
                 reference_loglike = 0.0
                 for likelihood in dictvalues(data.lkl):
+                    self.current_likelihood = likelihood.name
                     value = likelihood.loglkl(self, data)
                     reference_loglike += value
 
@@ -436,9 +556,6 @@ if __name__ == '__main__':
                     except CosmoComputationError as failure_message:
                         # could be useful to uncomment for debugging:
                         #np.set_printoptions(precision=30, linewidth=150)
-                        #print('cosmo params')
-                        #print(data.cosmo_arguments)
-                        #print(data.cosmo_arguments['tau_reio'])
                         sys.stderr.write(str(failure_message)+'\n')
                         sys.stderr.flush()
                         return data.boundary_loglike
@@ -461,6 +578,7 @@ if __name__ == '__main__':
 
         for likelihood in dictvalues(data.lkl):
             if likelihood.need_update is True:
+                cosmo.current_likelihood = likelihood.name
                 value = likelihood.loglkl(cosmo, data)
                 # Storing the result
                 likelihood.backup_value = value
@@ -533,7 +651,6 @@ if __name__ == '__main__':
                 initial_state['parameters'][key] = \
                     np.array([data.mcmc_parameters[key]['current'] * \
                               data.mcmc_parameters[key]['scale']])
-                #print("Initial:",key,initial_state['parameters'][key])
 
             # get initial output
             initial_state['total_loglike'] = np.array(loglike)
