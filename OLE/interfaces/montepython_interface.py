@@ -79,7 +79,7 @@ if __name__ == '__main__':
     for name in dir(classy.Class):
         if callable(getattr(classy.Class, name)) and not name.startswith("__"):
             def new_method(self, *args, **kwargs):
-                my_attribute = self.current_attribute
+                my_attribute = self.current_attribute                    
 
                 if my_attribute=='compute':
                     self.attributes_with_relevant_output = {} # In this dictionary we store the calls of classy
@@ -98,25 +98,28 @@ if __name__ == '__main__':
                     # copy emulated result into res
                     # 
 
-                    print(self.indexing)
-                    print(self.attribute_couter)
+                    # this works for all functions but 'get_current_derived_parameters'. This function is also called by the sampler itself. It will be sorted into the last likelihood.
+                    if my_attribute == 'get_current_derived_parameters':
+                        res_OLE_shape = cp.deepcopy(self.emulated_result[my_attribute])
+                        info = self.attribute_input_args[self.all_likelihoods[-1]][my_attribute][0]
+                        res, _ = self.transform_from_OLE_to_CLASSY(my_attribute, res_OLE_shape, info)
+                    else:
+                        # cut our chunk of the emulated result
+                        lower_index = self.indexing[self.current_likelihood][my_attribute][self.attribute_couter[self.current_likelihood][my_attribute]]
+                        upper_index = self.indexing[self.current_likelihood][my_attribute][self.attribute_couter[self.current_likelihood][my_attribute]+1]
 
-                    # cut our chunk of the emulated result
-                    lower_index = self.indexing[self.current_likelihood][my_attribute][self.attribute_couter[self.current_likelihood][my_attribute]]
-                    upper_index = self.indexing[self.current_likelihood][my_attribute][self.attribute_couter[self.current_likelihood][my_attribute]+1]
+                        # the extra info can provide shape and other things that allows to shape the OLE output to the CLASS output
+                        info = self.attribute_input_args[self.current_likelihood][my_attribute][self.attribute_couter[self.current_likelihood][my_attribute]]
 
-                    # the extra info can provide shape and other things that allows to shape the OLE output to the CLASS output
-                    info = self.attribute_input_args[self.current_likelihood][my_attribute][self.attribute_couter[self.current_likelihood][my_attribute]]
+                        res_OLE_shape = cp.deepcopy(self.emulated_result[my_attribute][lower_index:upper_index])
 
-                    res_OLE_shape = cp.deepcopy(self.emulated_result[my_attribute][lower_index:upper_index])
+                        # transform the OLE output to the CLASS output
+                        res, _ = self.transform_from_OLE_to_CLASSY(my_attribute, res_OLE_shape, info)
+                        self.attribute_couter[self.current_likelihood][my_attribute] += 1
 
-                    # transform the OLE output to the CLASS output
-                    res, _ = self.transform_from_OLE_to_CLASSY(my_attribute, res_OLE_shape, info)
-                    self.attribute_couter[self.current_likelihood][my_attribute] += 1
-
-                    # if for example we use oversampling, we need to provide the same output multiple times. In that case we need to start counting from scratch
-                    if self.attribute_couter[self.current_likelihood][my_attribute] == self.attribute_max_couter[self.current_likelihood][my_attribute]:
-                        self.attribute_couter[self.current_likelihood][my_attribute] = 0
+                        # if for example we use oversampling, we need to provide the same output multiple times. In that case we need to start counting from scratch
+                        if self.attribute_couter[self.current_likelihood][my_attribute] == self.attribute_max_couter[self.current_likelihood][my_attribute]:
+                            self.attribute_couter[self.current_likelihood][my_attribute] = 0
                 else:
                     # USE THE ORIGINAL CLASS
                     res = self.cosmo.__getattribute__(my_attribute)(*args, **kwargs)
@@ -172,14 +175,6 @@ if __name__ == '__main__':
                         else:
                             # fill the output entry
                             self.attributes_with_relevant_output[my_attribute] = np.append(self.attributes_with_relevant_output[my_attribute],cp.deepcopy(res_OLE_shape))
-
-                if my_attribute=='lensed_cl':
-                    print('lensed_cl')
-                    print(res)
-
-                if my_attribute=='T_cmb':
-                    print('T_cmb')
-                    print(res)
 
                 return res
 
@@ -316,7 +311,18 @@ if __name__ == '__main__':
 
             # go through all MP elements and addthem to the OLE quantities
             for key, value in MP_state.items():
-                OLE_state['quantities'][key] = value
+
+                # here we translate the lensed_cl into the different ingredients
+                if key == 'lensed_cl':
+                    for likelihood in self.all_likelihoods:
+                        if 'lensed_cl' in self.attribute_input_args[likelihood].keys():
+                            info = self.attribute_input_args[likelihood]['lensed_cl'][0]
+
+
+                    for i, key2 in enumerate(info[1]['keys']):
+                        OLE_state['quantities'][key2] = MP_state['lensed_cl'][i*(info[1]['max_l']+1):(i+1)*(info[1]['max_l']+1)]
+                else:
+                    OLE_state['quantities'][key] = value
 
             # add parameters from data
             for key in data.get_mcmc_parameters(['cosmo']):
@@ -332,7 +338,21 @@ if __name__ == '__main__':
 
             # we now go through all branches of the emulated result and update the values
             for key, value in self.emulated_result.items():
-                self.emulated_result[key] = np.array(OLE_state['quantities'][key])
+
+                # same as above:
+                if key == 'lensed_cl':
+                    N_cl_dependent_likelihoods = 0
+                    for likelihood in self.all_likelihoods:
+                        if 'lensed_cl' in self.attribute_input_args[likelihood].keys():
+                            info = self.attribute_input_args[likelihood]['lensed_cl'][0]
+                            N_cl_dependent_likelihoods += 1
+
+                    for j in range(N_cl_dependent_likelihoods):
+                        index_offset = j*(info[1]['max_l']+1)*len(info[1]['keys'])
+                        for i, key2 in enumerate(info[1]['keys']):
+                            self.emulated_result[key][index_offset+i*(info[1]['max_l']+1):index_offset+(i+1)*(info[1]['max_l']+1)] = OLE_state['quantities'][key2]
+                else:
+                    self.emulated_result[key] = np.array(OLE_state['quantities'][key])
             self.use_emulated_result = True
 
             return self.emulated_result
