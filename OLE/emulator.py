@@ -103,7 +103,9 @@ class Emulator(BaseClass):
             'N_quality_samples': 5,
 
             # tail cut fraction for the N_quality_samples. Since the loglike is chisquare distributed we need to cut the tail to get a good estimate of the std. We will do this by cutting at least 1 data point but in general a certain farction of it.
-            'tail_cut_fraction': 0.2,
+            'tail_cut_fraction': 0.2, # deprecated
+
+
 
             # path to a directory with data covmats to do better normalization. If given, the emulator will search for data covmats in this directoy and if one is found, it will be used for normalization
             'data_covmat_directory': None,
@@ -145,12 +147,21 @@ class Emulator(BaseClass):
             # testing_strategy: 
             # 'test_all', (default) test always all points
             # 'test_early', test all points until the first 'test_early_points' points were consecutively successful. Stop testing afterwards.
-            # 'test_GP_criterium', use GP to determine which points to test
+            # NOT IMPLEMENTED YET: 'test_GP_criterium', use GP to determine which points to test
             # 'test_none', do not test the emulator
+            # 'test_stochastic', do not test the emulator
 
-            'testing_strategy': 'test_all',
+            'testing_strategy': 'test_stochastic',
 
+            # number of points to test early
             'test_early_points': 1000,
+
+            # stocaistic testing parameters
+            'test_stochastic_scale': 20, # sclae of the exponential testing ratio
+            'test_stochastic_rate': None, # minimal rate of testing, even after the exponential testing rate is reached. if not set, it will be estimated by meassureing time of testing and the emulation time.
+            'test_stochastic_testing_time_fraction': 0.1, # fraction of the time which is used for testing
+
+
             
         }
 
@@ -274,7 +285,11 @@ class Emulator(BaseClass):
 
         # initialize the points which were already tested with the quality criterium
         self.quality_points = []
-        
+
+        # set groundlevel_testing_prob:
+        self.groundlevel_testing_prob = None
+        if self.hyperparameters['test_stochastic_rate'] != None:
+            self.groundlevel_testing_prob = self.hyperparameters['test_stochastic_rate']
 
         # if we fulfill the minimum number of data points, we train the emulator
         if len(self.data_cache.states) >= self.hyperparameters['min_data_points']:
@@ -521,6 +536,9 @@ class Emulator(BaseClass):
         # end timer
         self.increment("emulate")
 
+        # start timer for likelihood computation/oversampling
+        self.start("likelihood")
+
         return output_state
 
     def emulate_jit(self, parameters):
@@ -693,6 +711,10 @@ class Emulator(BaseClass):
         # increment timer
         self.increment("emulate_samples")
 
+        # start the likelihood_testing counter
+        self.start("likelihood_testing")
+
+
         return output_states, RNGkey
 
     # @partial(jax.jit, static_argnums=0)
@@ -808,6 +830,12 @@ class Emulator(BaseClass):
 
     
     def check_quality_criterium(self, loglikes, parameters, reference_loglike = None, write_log = True):
+        
+        # stop the likelihood counter
+        self.increment("likelihood_testing")
+        # correct for the emulator runtime
+        self.subtimer["likelihood_testing"].time_sum -= self.subtimer["emulate"].last_round
+
         # check whether the emulator is good enough to be used
         # if the emulator is not yet trained, we return False
         if not self.trained:
@@ -913,6 +941,10 @@ class Emulator(BaseClass):
         # if we return False, the emulator is expected to perform well and we do not need to check the quality criterium
         # if we return True, the emulator is expected to perform poorly and we need to check the quality criterium
 
+        # stop the likelihood counter
+        if 'likelihood' in self.subtimer.keys():
+            self.increment("likelihood")
+
         # if we do not require a quality check, we return False
         if self.hyperparameters['testing_strategy'] == 'test_none':
             self.debug("Quality check not required. Test emulator is False")
@@ -926,6 +958,30 @@ class Emulator(BaseClass):
             self.write_to_log("Quality check not required. Test emulator is False \n")
             self.continuous_successful_calls += 1
             return False
+
+        # implement testing strategy
+        if self.hyperparameters['testing_strategy'] == 'test_stochastic':
+            if self.hyperparameters['dimensionality'] is not None:
+                testing_prob = np.exp(-self.continuous_successful_calls/self.hyperparameters['test_stochastic_scale']/self.hyperparameters['dimensionality'])
+            else:
+                testing_prob = np.exp(-self.continuous_successful_calls/self.hyperparameters['test_stochastic_scale']/10.0)
+
+            # set to groundlevel testing probability
+            if self.hyperparameters['test_stochastic_rate'] == None:
+                if self.groundlevel_testing_prob == None:
+                    self.groundlevel_testing_prob = 1.0
+                if ('likelihood_testing' in self.subtimer.keys()) and (self.emulate_counter<20):
+                    self.groundlevel_testing_prob = self.subtimer['likelihood'].time_sum / (self.subtimer['likelihood_testing'].time_sum) * self.hyperparameters['test_stochastic_testing_time_fraction']
+                if self.emulate_counter==20: 
+                    self.debug("Groundlevel testing probability set to %f", self.groundlevel_testing_prob)
+                    self.write_to_log("Groundlevel testing probability set to " + str(self.groundlevel_testing_prob) + "\n")
+            testing_prob = max(testing_prob, self.groundlevel_testing_prob)
+            if np.random.rand() > testing_prob:
+                self.debug("Quality check not required. Test emulator is False")
+                self.write_to_log("Quality check not required. Test emulator is False \n")
+                self.continuous_successful_calls += 1
+                return False
+
 
         # The idea is that we collect all points which were checked by the quality criterium and then check whether the new point is within the convex hull of the checked points.
         input_data = jnp.array([[value[0] for key, value in parameters.items() if key in self.input_parameters]])

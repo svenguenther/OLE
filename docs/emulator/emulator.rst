@@ -119,15 +119,27 @@ Uncertainty qualification related to the precision criterium of the emulator and
      - default
      - description
    * - ``testing_strategy``
-     - ``'test_all'``
-     - Specify testing strategy. Possible stragies: ``'test_all','test_early','test_none'``. When ``'test_all'`` is selected each emulator call will be tested. When ``'test_none'`` is selected none emulator call will be tested. If ``'test_early'`` is selected we test all points until we tested ``test_early_points`` consecutive points positive. Afterwards we turn off the testing.
+     - ``'test_stochastic'``
+     - Specify testing strategy. Possible stragies: ``'test_all','test_early','test_none','test_stochastic'``. When ``'test_all'`` is selected each emulator call will be tested. When ``'test_none'`` is selected none emulator call will be tested. If ``'test_early'`` is selected we test all points until we tested ``test_early_points`` consecutive points positive. 
+     Afterwards we turn off the testing. ``test_stochastik`` starts with a 100% testing probability. However, the chance of testing will exponentially decrease with the number of consecutive successful emulator calls. The scale of the ``test_stochastic_scale`` times ``dimensionality`` is the scale of the exponential decrease. 
+     If ``test_stochastic_rate`` is set, even after the exponential decay we will test at least with a ``test_stochastic_rate`` the points. 
+     If it is not set, it will be determined by ``test_stochastic_testing_time_fraction``. In this case, the time for testing and the actual emulator call is balanced, such that the testing time is a fraction of the total time.
    * - ``test_early_points``
      - ``1000``
      - Number of consective positive test calls until testing is switched off. See ``testing_strategy``
+   * - ``test_stochastic_scale``
+     - ``20``
+     - Scale of each dimension for the stochastik testing. See ``testing_strategy``.
+   * - ``test_stochastic_rate``
+     - ``None``
+     - See ``testing_strategy``.
+   * - ``test_stochastic_testing_time_fraction``
+     - ``0.1``
+     - See ``testing_strategy``.
    * - ``N_quality_samples``   
      - ``5``
      - Number of samples which are drawn from the emulator to estimate the performance of the emulator. The runtime is about linear in that parameter! From this number of samples we compute the mean loglikelihood $m$  and its standard deviation $\sigma_m$. In general we want the emulator to be very precise at the best fit point with its loglikelihood $b$ and less accurate for points more away. We accept the prediction of the emulator if $\sigma_m < \mathrm{quality.threshold.constant} +  \mathrm{quality.threshold.linear}*(b-m) +  \mathrm{quality.threshold.quadratic} * (b-m)^2 $
-   * - ``tail_cut_fraction``   
+   * - ``DEPRECATED: tail_cut_fraction``   
      - ``0.2``
      - The distribution of the sampled loglikes is found to be non-gaussian. However, by cutting the low end tail, we find sufficient estimates for the mean and standard deviation. This parameter specifies the fraction of the tail that is cut. 
    * - ``quality_threshold_constant``

@@ -46,6 +46,7 @@ class Timer:
     def __init__(self, name = None):
         self._start_time = time.time()  
         self.subtimer = {}
+        self.last_round = 0.0
 
     def _init_sub_timer(self, name):
         self.subtimer[name] = SubTimer(name)
@@ -73,6 +74,7 @@ class Timer:
     def increment(self, name):
         self.subtimer[name].n += 1
         self.subtimer[name].time_sum += self.time_from_start(name)
+        self.subtimer[name].last_round = self.time_from_start(name)
 
     def log_time(self, name, logger):
         # do logging but give only 3 decimals
