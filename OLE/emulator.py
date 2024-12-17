@@ -127,6 +127,10 @@ class Emulator(BaseClass):
             'N_sigma': 4,
             'dimensionality': None, # if we give the dimensionality, the code estimates where we need to be accruate in the quality criterium (inside of N_sigma). Thus, we can estimate the quality_threshold_quadratic, in a way, that it becomes dominant over the linear at this point!
 
+            # max sigma for the quality criterium. If this is set, we will use the emulator only if we are 'reasonably' close to the best fit posterior. 
+            # Otherwise it can happen for chains very far from the best fit, that they get unreasonable results
+            'max_sigma': 20,
+
             # a dictionary for the likelihood settings
             'likelihood_collection_settings': {},
 
@@ -157,7 +161,7 @@ class Emulator(BaseClass):
             'test_early_points': 1000,
 
             # stocaistic testing parameters
-            'test_stochastic_scale': 20, # sclae of the exponential testing ratio
+            'test_stochastic_scale': 40, # sclae of the exponential testing ratio
             'test_stochastic_rate': None, # minimal rate of testing, even after the exponential testing rate is reached. if not set, it will be estimated by meassureing time of testing and the emulation time.
             'test_stochastic_testing_time_fraction': 0.1, # fraction of the time which is used for testing
 
@@ -207,6 +211,8 @@ class Emulator(BaseClass):
             # self.likelihood_collection_differentiable = all([likelihood.differentiable for likelihood in self.likelihood_collection.values()])
             # self.likelihood_collection_jitable = all([likelihood.jitable for likelihood in self.likelihood_collection.values()])
 
+        self.maximal_delta_loglike = 300 # if we are insanely far away from where the emulator was trained (like > 20 sigma), we should not use the emulator
+
         # A state dictionary is a nested dictionary with the following structure:
         # state = {
         #     "parameters": {
@@ -249,6 +255,14 @@ class Emulator(BaseClass):
             self.hyperparameters['quality_threshold_quadratic'] = (self.hyperparameters['quality_threshold_constant'] + self.hyperparameters['quality_threshold_linear']*accuracy_loglike)/accuracy_loglike**2
 
             self.debug("Quality threshold quadratic: %f", self.hyperparameters['quality_threshold_quadratic'])
+
+
+            # now check for max_sigma
+            if self.hyperparameters['max_sigma'] is not None:
+                max_sigma = self.hyperparameters['max_sigma']
+                dimensionality = self.hyperparameters['dimensionality']
+                self.maximal_delta_loglike = -1.53901996e-03 * dimensionality**2 + 3.46998485e-01  * max_sigma**2 + 5.55189162e-02 * dimensionality * max_sigma + 6.39086834e-01 * dimensionality + 2.36251372e+00 * max_sigma + -5.14787690e+00
+
 
         # if we have a data_covmat_directory we search for the data covmat in this directory
         self.data_covmats = {quantity_name: None for quantity_name in ini_state['quantities'].keys()}
@@ -846,7 +860,11 @@ class Emulator(BaseClass):
         # check for nans in the loglikes
         if jnp.any(jnp.isnan(loglikes)):
             self.quality_check_unsuccessful_counter += 1
+            # send warning
+            self.warning("Loglike is NaN!!! Please ensure that your pipeline is working correctly.")
+            self.log("Loglike is NaN!!! Please ensure that your pipeline is working correctly.")
             return False
+        
         
         if reference_loglike is None:
             mean_loglike = jnp.mean(loglikes)
@@ -854,6 +872,16 @@ class Emulator(BaseClass):
                 raise ValueError("Reference loglike is not provided for Quality check!")
         else:
             mean_loglike = reference_loglike
+
+
+        max_loglike = max(self.data_cache.max_loglike, self.max_loglike_encountered)
+
+        # check if the loglike is too far away from the training data
+        if jnp.any(jnp.abs(loglikes - max_loglike) > self.maximal_delta_loglike):
+            self.quality_check_unsuccessful_counter += 1
+            _ = "Loglikes are too far away from best-fit point. Not using OLE; "+"; ".join([key+ ': ' +str(value) for key, value in parameters.items()]) + " Max loglike: %f, Reference loglike: %f, delta loglikes: " % (max_loglike,mean_loglike) + " ".join([str(loglike) for loglike in loglikes]) + "\n"
+            self.write_to_log(_)
+            return False
 
         # as long as mean_loglike is bugged we pass the correct one as the first point
         # BUG: fix refernce loglike (apears to be fixed)
@@ -890,11 +918,6 @@ class Emulator(BaseClass):
 
         else:
             std_loglike = loglikes[0]
-
-        
-
-
-        max_loglike = max(self.data_cache.max_loglike, self.max_loglike_encountered)
 
 
         delta_loglike = jnp.abs(mean_loglike - max_loglike)

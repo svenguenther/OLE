@@ -128,7 +128,7 @@ Uncertainty qualification related to the precision criterium of the emulator and
      - ``1000``
      - Number of consective positive test calls until testing is switched off. See ``testing_strategy``
    * - ``test_stochastic_scale``
-     - ``20``
+     - ``40``
      - Scale of each dimension for the stochastik testing. See ``testing_strategy``.
    * - ``test_stochastic_rate``
      - ``None``
@@ -136,6 +136,9 @@ Uncertainty qualification related to the precision criterium of the emulator and
    * - ``test_stochastic_testing_time_fraction``
      - ``0.1``
      - See ``testing_strategy``.
+   * - ``max_sigma``   
+     - ``20``
+     - The emulator should only be used in the vicinity of the best-fit where it is trained. If the loglike is far away (like during burn-in) it should not be used.
    * - ``N_quality_samples``   
      - ``5``
      - Number of samples which are drawn from the emulator to estimate the performance of the emulator. The runtime is about linear in that parameter! From this number of samples we compute the mean loglikelihood $m$  and its standard deviation $\sigma_m$. In general we want the emulator to be very precise at the best fit point with its loglikelihood $b$ and less accurate for points more away. We accept the prediction of the emulator if $\sigma_m < \mathrm{quality.threshold.constant} +  \mathrm{quality.threshold.linear}*(b-m) +  \mathrm{quality.threshold.quadratic} * (b-m)^2 $
