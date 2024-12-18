@@ -11,6 +11,7 @@ import fasteners
 import copy
 
 import jax.numpy as jnp
+import numpy as np
 
 # /write a data cache which stores the data in a hdf5 file. The data cache should be able to handle the following operations:
 # - write a state to the cache
@@ -100,6 +101,7 @@ class DataCache(BaseClass):
             )
 
         self.states = []
+        self.states_hashes = []
 
         self.max_loglike = None
 
@@ -155,7 +157,7 @@ class DataCache(BaseClass):
 
         # check if the new data point is already in the cache
         for state in self.states:
-            if state["parameters"] == new_state["parameters"]:
+            if str(state["parameters"]) == str(new_state["parameters"]):
                 # update the loglike if the new loglike is larger
                 if new_loglike > state["total_loglike"]:
                     state["total_loglike"] = new_loglike
@@ -173,32 +175,56 @@ class DataCache(BaseClass):
                         self.states.pop(i)  #
                         break
 
-        # add a state to the cache
-        self.states.append(new_state)
 
         self.debug("Added state to cache: %s", new_state["parameters"])
-        self.info(
-            "Cache size: %d/%d", len(self.states), self.hyperparameters["cache_size"]
-        )
 
         # if there exists a chache file, store the cache in the file
         if os.path.exists(self.hyperparameters["cache_file"]):
             self.synchronize_to_cache(new_state)
         else:
+            # add a state to the cache
+            self.states.append(new_state)
+            
             self.store_cache()
+
+        self.info(
+            "Cache size: %d/%d", len(self.states), self.hyperparameters["cache_size"]
+        )
+
+        self.update_hashes()
 
         return True
 
-    def get_parameters(self):
-        # returns all parameters
-        return [
-            [values[0] for parameter, values in state["parameters"].items()]
-            for state in self.states
-        ]
+    def get_parameters(self, veto_hashes=[]):
+        # get indices of veto_hashes which are not in self.states_hashes
+        removal_indices = []
+        for i, _hash in enumerate(veto_hashes):
+            if _hash not in self.states_hashes:
+                removal_indices.append(i)
 
-    def get_quantities(self, quantity):
-        # returns all quantities of the given name
-        return [state["quantities"][quantity] for state in self.states]
+        # get the new states which are not in the veto_hashes
+        new_parameters = []
+        for i, state in enumerate(self.states):
+            if self.states_hashes[i] not in veto_hashes:
+                _ = [values[0] for parameter, values in state["parameters"].items()]
+                new_parameters.append(_)
+
+        return new_parameters, removal_indices
+
+    def get_quantities(self, quantity, veto_hashes=[]):
+        # get indices of veto_hashes which are not in self.states_hashes
+        removal_indices = []
+        for i, _hash in enumerate(veto_hashes):
+            if _hash not in self.states_hashes:
+                removal_indices.append(i)
+
+        # get the new states which are not in the veto_hashes
+        new_quantity = []
+        for i, state in enumerate(self.states):
+            if self.states_hashes[i] not in veto_hashes:
+                new_quantity.append(state["quantities"][quantity])
+
+        return new_quantity, removal_indices
 
     def get_loglikes(self):
         # returns all loglikes     
@@ -271,11 +297,31 @@ class DataCache(BaseClass):
             self.max_loglike = self.get_max_loglike()
 
     def load_cache(self):
-        # load the cache from the hdf5 file
-        self.states = []
+        # if we give the deployed_hashes, we only load the states which are not in the deployed_hashes
+        remove_flag = np.zeros(len(self.states), dtype=bool)
 
         with fasteners.InterProcessLock(self.hyperparameters["cache_file"] + ".lock"):
             with open(self.hyperparameters["cache_file"], "rb") as fp:
-                self.states = pickle.load(fp)
+                stored_states = pickle.load(fp)
+
+                for state in stored_states:
+                    _hash = hash(str(state["parameters"]))
+
+                    if _hash not in self.states_hashes:
+                        self.states.append(state)
+
+                    for i, _ in enumerate(self.states_hashes):
+                        if _hash == self.states_hashes[i]:
+                            remove_flag[i] = True
+
+        # now remove the data points which are not in the cache anymore
+        for i in reversed(range(len(self.states_hashes))):
+            if not remove_flag[i]:
+                self.states.pop(i)
+
+        self.update_hashes()
 
         self.debug("Loaded cache from file: %s", self.hyperparameters["cache_file"])
+
+    def update_hashes(self):
+        self.states_hashes = [hash(str(state["parameters"])) for state in self.states]
