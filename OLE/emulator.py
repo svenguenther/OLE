@@ -15,6 +15,12 @@ import warnings
 import logging
 import jax.numpy as jnp
 import jax
+import fasteners
+
+# set jax_enable_compilation_cache to False to avoid memory issues
+os.environ['JAX_ENABLE_X64'] = 'True'
+os.environ['JAX_ENABLE_COMPILED_PARTIAL_EVAL'] = 'True'
+
 
 from copy import deepcopy
 from copy import copy
@@ -26,10 +32,11 @@ from functools import partial
 from OLE.utils.base import BaseClass
 from OLE.utils.mpi import *
 from OLE.data_cache import DataCache
-from OLE.gp_predicter import GP_predictor
+from OLE.gp_predicter import GP_predictor, GP
 from OLE.likelihood import Likelihood
 
 from OLE.plotting import plot_loglikes
+
 
 class Emulator(BaseClass): 
 
@@ -165,8 +172,9 @@ class Emulator(BaseClass):
             'test_stochastic_rate': None, # minimal rate of testing, even after the exponential testing rate is reached. if not set, it will be estimated by meassureing time of testing and the emulation time.
             'test_stochastic_testing_time_fraction': 0.1, # fraction of the time which is used for testing
 
-
-            
+            'working_directory': './',
+            'emulator_state_file': 'emulator_state.pkl',
+            'normalized_cache_file': 'normalized_cache.pkl',
         }
 
         # The hyperparameters are a dictionary of the hyperparameters for the different quantities. The keys are the names of the quantities.
@@ -185,9 +193,6 @@ class Emulator(BaseClass):
             self.ini_state = self.data_cache.states[0].copy()
         else:
             self.ini_state = ini_state
-
-        # Add initial state to the data cache
-        self.data_cache.initialize(ini_state)
 
         # Initialize the emulator with an initial state. In this state the parameters and the quantitites which are to be emulated are defined. They also come with an example value to determine the dimensionality of the quantities.
         ini_state = self.ini_state
@@ -305,11 +310,6 @@ class Emulator(BaseClass):
         if self.hyperparameters['test_stochastic_rate'] != None:
             self.groundlevel_testing_prob = self.hyperparameters['test_stochastic_rate']
 
-        # if we fulfill the minimum number of data points, we train the emulator
-        if len(self.data_cache.states) >= self.hyperparameters['min_data_points']:
-            self.data_cache.load_cache()
-            self.train()
-
         # rejit_flag. If the emulator is retrained/updated, we set this flag to True. This flag is used to determine whether the emulator is to be rejited.
         self.rejit_flag_emulator = True
         self.rejit_flag_sampling = True
@@ -331,7 +331,12 @@ class Emulator(BaseClass):
         # max loglike encountered in the run
         self.max_loglike_encountered = -np.inf
 
+        # if we fulfill the minimum number of data points, we train the emulator
+        if len(self.data_cache.states) >= self.hyperparameters['min_data_points']:
+            self.data_cache.load_cache()
+            self.train()
 
+        self.broadcast_training_flag = False # flag for rank 0 if it demands a training
         
         pass
 
@@ -372,9 +377,14 @@ class Emulator(BaseClass):
         # if the emulator is already trained, we can add the new state to the GP without fitting the Kernel parameters
         emulator_updated = False
         if self.trained and state_added:
-            self.added_data_points += 1
+            self.added_data_points = self.data_cache.recently_added
             if self.added_data_points%self.hyperparameters['kernel_fitting_frequency'] == 0:
-                self.train()
+                # if you are doing MPI, tell all others that we require training
+                if not is_main_process():
+                    get_mpi_comm().send("require_training", dest=0, tag=24)
+                else:
+                    self.broadcast_training_flag = True
+                self.update() # we still update here, because we will do a joint training soon :)
                 emulator_updated = True
                 self.hyperparameters['test_noise_levels_counter'] = 100
             else:
@@ -403,13 +413,14 @@ class Emulator(BaseClass):
 
         self.write_to_log("Update emulator\n")
 
+        input_data_raw, _ = self.data_cache.get_parameters()
+        input_data_raw_jax = jnp.array(input_data_raw)
+
         # Train the emulator.
         for quantity, emulator in self.emulators.items():
             self.debug("Updating emulator for quantity %s", quantity)
-            input_data_raw = self.data_cache.get_parameters()
-            output_data_raw = self.data_cache.get_quantities(quantity)
+            output_data_raw, _ = self.data_cache.get_quantities(quantity)
 
-            input_data_raw_jax = jnp.array(input_data_raw)
             output_data_raw_jax = jnp.array(output_data_raw)
 
             # load data into emulators
@@ -419,7 +430,15 @@ class Emulator(BaseClass):
             emulator.data_processor.normalize_training_data()
             emulator.data_processor.compress_training_data()
 
-            emulator.update()            
+            emulator.update()  
+
+            del output_data_raw_jax
+
+        # a = time.time()
+        del input_data_raw_jax
+        jax.clear_caches()
+        # print("Time to clear caches: ", time.time()-a)
+          
             
         self.trained = True
         self.rejit_flag_emulator = True
@@ -431,55 +450,277 @@ class Emulator(BaseClass):
 
         pass
 
+    def create_emulator_state_file(self):
+        # we store the relevant information of the emulator (at this very point) in a file.
+        # This includes a nested dictionary with the following structure:
+        # emulator_state = {
+        #     "parameter_mean": ,
+        #     "parameter_std": ,
+        #     "quantites": {
+            #     "quantity1": {
+            #         "GPs": [{
+            #             "kernel": ,       # empty if not trained 
+            #             "status": ,},     # 0 for not trained, 1 for currently training, 2 for trained
+            #           {PCA: , mean_PCA: , std_PCA: , kernel: , status: },
+            #           ...
+            #         ],
+            #         "quantity_mean": ,
+            #         "quantity_std": ,
+            #         "PCAs": ,
+            #         "mean_PCA": ,
+            #         "std_PCA": ,},
+            #     "quantity2": {...},
+        #    
+        # 
+
+        emulator_state = {}
+        emulator_state['quantities'] = {}
+        for quantity, emulator in self.emulators.items():
+            emulator_state['quantities'][quantity] = {}
+            GPs = []
+            for GP in emulator.GPs:
+                _ = {}
+                _['kernel'] = None
+                _['white_noise_level'] = GP.hyperparameters['white_noise_level']
+                _['status'] = 0
+                
+                GPs.append(_)
+            emulator_state['quantities'][quantity]["GPs"] = list(GPs)
+
+            emulator_state['quantities'][quantity]["quantity_mean"] = emulator.data_processor.output_means
+            emulator_state['quantities'][quantity]["quantity_std"] = emulator.data_processor.output_stds
+            emulator_state['quantities'][quantity]["PCA"] = emulator.data_processor.projection_matrix
+            emulator_state['quantities'][quantity]["mean_PCA"] = emulator.data_processor.output_pca_means
+            emulator_state['quantities'][quantity]["std_PCA"] = emulator.data_processor.output_pca_stds
+
+            emulator_state["parameter_mean"] = emulator.data_processor.input_means
+            emulator_state["parameter_std"] = emulator.data_processor.input_stds
+
+        # pickle the emulator state with a lock. Overwrite if it already exists. Create it if it does not exist.
+        with open(self.hyperparameters['working_directory'] + self.hyperparameters['emulator_state_file'] , 'wb') as f:
+            pickle.dump(emulator_state, f)
+
+
+        return None     
+
+
+    def store_normalized_training_cache(self):
+        # here we want to store the compressed and normalized data in a file. This is smaller than the raw data.
+        data = {}
+        for quantity, emulator in self.emulators.items():
+            data['input_data_normalized'] = emulator.data_processor.input_data_normalized
+            data[quantity] = emulator.data_processor.output_data_emulator
+
+        with fasteners.InterProcessLock(self.hyperparameters['working_directory'] + self.hyperparameters["normalized_cache_file"] + ".lock"):
+            with open(self.hyperparameters['working_directory'] + self.hyperparameters["normalized_cache_file"], "wb") as fp:
+                pickle.dump(data, fp)
+
+
     # @profile
     def train(self):
         self.start("train")
 
-        # Load the data from the cache.
-        self.debug("Loading data from cache")
-        self.data_cache.load_cache()
 
+        # if your rank is not 0, you should tell rank 0 that you need help
         self.write_to_log("Training emulator\n")
 
-        
-        # Train the emulator.
-        input_data_raw = self.data_cache.get_parameters()
-        input_data_raw_jax = jnp.array(input_data_raw)
 
+
+
+        # here we do different things depending on the MPI rank.
+
+        # Rank 0 has to prepare the data, do the compression and create the emulator state file.
+
+        # Meanwhile all other ranks have to wait for the signal from rank 0 that the data is ready. 
+        # Then they can load the data and train the emulator for the different quantities.
+
+        # If all quantities are trained, all ranks wait for the signal from rank 0 that training is done.
+        # Then they can load the compressed data and the emulator state file and update the emulators with the compressed data.
+
+
+
+        if is_main_process():
+            self.debug("Loading data from cache")
+            self.data_cache.load_cache()
+
+            # Load the data from the cache.
+            self.debug("Loading data from cache")
+            self.data_cache.load_cache()
+            
+            # Train the emulator.
+            input_data_raw, _ = self.data_cache.get_parameters()
+            input_data_raw_jax = jnp.array(input_data_raw)
+
+            for quantity, emulator in self.emulators.items():
+                self.debug("Start training emulator for quantity %s", quantity)
+                output_data_raw, _ = self.data_cache.get_quantities(quantity)
+
+                output_data_raw_jax = jnp.array(output_data_raw)
+
+                # load data into emulators
+                emulator.load_data(input_data_raw_jax, output_data_raw_jax)
+
+                del output_data_raw_jax
+                del output_data_raw
+
+                # compute normalization and compression and apply it to the data
+                self.debug("Compute normalization and compression for quantity %s", quantity)
+                emulator.data_processor.compute_normalization()
+                emulator.data_processor.normalize_training_data()
+                self.debug("Normalization done for quantity %s", quantity)
+
+                emulator.data_processor.compute_compression()
+                emulator.data_processor.compress_training_data()
+
+                emulator.initialize_training() # fill basic structures so we can set errors accurately
+
+
+                
+            self.set_error()
+
+            # create the emulator state file
+            self.create_emulator_state_file()
+
+            # store the normalized training cache
+            self.store_normalized_training_cache()
+
+            # here do comminication with other ranks that the data is ready
+            for i in range(1, get_mpi_size()):
+                get_mpi_comm().send("Data is ready", dest=i, tag=24)
+            pass
+
+        else:
+            # wait for signal from rank 0
+            message = get_mpi_comm().recv(source=0, tag=24)
+            pass
+
+
+        # Uki, now all the data is ready and we can train the emulator for the different quantities
+        untrained_emulators_flag = True
+        while untrained_emulators_flag:
+            untrained_emulators_flag = self.parallel_train()
+
+
+        # here we wait for the signal from rank 0 that training is done
+        if is_main_process():
+            training_complete = False
+            while not training_complete:
+                # open emulators state file and check if all quantities are trained
+                with fasteners.InterProcessLock(self.hyperparameters['working_directory'] + self.hyperparameters['emulator_state_file'] + ".lock"):
+                    with open(self.hyperparameters['working_directory'] + self.hyperparameters['emulator_state_file'], 'rb') as f:
+                        emulator_state = pickle.load(f)
+                        training_complete = True
+                        for quantity, emulator_instance in emulator_state['quantities'].items():
+                            for i in range(len(emulator_instance['GPs'])):
+                                if emulator_instance['GPs'][i]['status'] != 2:
+                                    training_complete = False
+                                    break
+                
+                time.sleep(0.1) # wait for 0.1 seconds before checking again
+
+            for i in range(1, get_mpi_size()):
+                get_mpi_comm().send("Training done", dest=i, tag=24)
+            pass
+        else:
+            message = get_mpi_comm().recv(source=0, tag=24)
+            pass
+
+        # now we can load the weights from the emulator state file and update the emulators with the compressed data
+        # 1. load the emulator state file
+        with fasteners.InterProcessLock(self.hyperparameters['working_directory'] + self.hyperparameters['emulator_state_file'] + ".lock"):
+            with open(self.hyperparameters['working_directory'] + self.hyperparameters['emulator_state_file'], 'rb') as f:
+                emulator_state = pickle.load(f)
+
+        # 2. load the compressed data
+        with fasteners.InterProcessLock(self.hyperparameters['working_directory'] + self.hyperparameters["normalized_cache_file"] + ".lock"):
+            with open(self.hyperparameters['working_directory'] + self.hyperparameters["normalized_cache_file"], "rb") as fp:
+                data = pickle.load(fp)
+
+        # 3. update the emulators with the compressed data
         for quantity, emulator in self.emulators.items():
-            self.debug("Start training emulator for quantity %s", quantity)
-            output_data_raw = self.data_cache.get_quantities(quantity)
-
-            output_data_raw_jax = jnp.array(output_data_raw)
-
-            # load data into emulators
-            emulator.load_data(input_data_raw_jax, output_data_raw_jax)
-
-            del output_data_raw_jax
-            del output_data_raw
-
-            # compute normalization and compression and apply it to the data
-            self.debug("Compute normalization and compression for quantity %s", quantity)
-            emulator.data_processor.compute_normalization()
-            emulator.data_processor.normalize_training_data()
-            self.debug("Normalization done for quantity %s", quantity)
-
-            emulator.data_processor.compute_compression()
-            emulator.data_processor.compress_training_data()
-
+            emulator.data_processor.input_data_normalized = data['input_data_normalized']
+            emulator.data_processor.output_data_emulator = data[quantity]
+            emulator.data_processor.input_means = emulator_state["parameter_mean"]
+            emulator.data_processor.input_stds = emulator_state["parameter_std"]
+            emulator.data_processor.output_means = emulator_state['quantities'][quantity]["quantity_mean"]
+            emulator.data_processor.output_stds = emulator_state['quantities'][quantity]["quantity_std"]
+            emulator.data_processor.projection_matrix = emulator_state['quantities'][quantity]["PCA"]
+            emulator.data_processor.output_pca_means = emulator_state['quantities'][quantity]["mean_PCA"]
+            emulator.data_processor.output_pca_stds = emulator_state['quantities'][quantity]["std_PCA"]
+            
+            
             emulator.initialize_training() # fill basic structures so we can set errors accurately
+            for i, GP in enumerate(emulator.GPs):
+                GP.hyperparameters['white_noise_level'] = emulator_state['quantities'][quantity]['GPs'][i]['white_noise_level']
+                GP.kernel = emulator_state['quantities'][quantity]['GPs'][i]['kernel']
+                
+            emulator.finalize_training(new_kernel=False)
+        
+
+
+
+
+
+
+
+
+
+
+
+
+
+        # import sys 
+        # sys.exit(0)
+
+
+
+
+
+        # # Load the data from the cache.
+        # self.debug("Loading data from cache")
+        # self.data_cache.load_cache()
+
+        # self.write_to_log("Training emulator\n")
+
+        
+        # # Train the emulator.
+        # input_data_raw = self.data_cache.get_parameters()
+        # input_data_raw_jax = jnp.array(input_data_raw)
+
+        # for quantity, emulator in self.emulators.items():
+        #     self.debug("Start training emulator for quantity %s", quantity)
+        #     output_data_raw = self.data_cache.get_quantities(quantity)
+
+        #     output_data_raw_jax = jnp.array(output_data_raw)
+
+        #     # load data into emulators
+        #     emulator.load_data(input_data_raw_jax, output_data_raw_jax)
+
+        #     del output_data_raw_jax
+        #     del output_data_raw
+
+        #     # compute normalization and compression and apply it to the data
+        #     self.debug("Compute normalization and compression for quantity %s", quantity)
+        #     emulator.data_processor.compute_normalization()
+        #     emulator.data_processor.normalize_training_data()
+        #     self.debug("Normalization done for quantity %s", quantity)
+
+        #     emulator.data_processor.compute_compression()
+        #     emulator.data_processor.compress_training_data()
+
+        #     emulator.initialize_training() # fill basic structures so we can set errors accurately
             
-        self.set_error()
+        # self.set_error()
 
-        for quantity, emulator in self.emulators.items():
-            self.debug("Train GP for quantity %s", quantity)
+        # for quantity, emulator in self.emulators.items():
+        #     self.debug("Train GP for quantity %s", quantity)
 
-            emulator.finalize_training()
+        #     emulator.finalize_training()
 
             
 
-        del input_data_raw_jax
-        del input_data_raw
+        # del input_data_raw_jax
+        # del input_data_raw
 
         self.trained = True
         self.rejit_flag_emulator = True
@@ -494,13 +735,128 @@ class Emulator(BaseClass):
         # if we have a plotting directory we plot the loglikelihood
         if (self.hyperparameters['plotting_directory'] is not None) and (get_mpi_rank() == 0):
             loglikes = jnp.array(self.data_cache.get_loglikes())
-            parameters = jnp.array(self.data_cache.get_parameters())
+            parameters = jnp.array(self.data_cache.get_parameters()[0])
 
             for i in range(len(parameters[0])):
                 plot_loglikes(loglikes[:], parameters[:,i], self.input_parameters[i], self.hyperparameters['plotting_directory']+'/loglike_'+str(i)+'.png')
         pass
 
         self.increment("train")
+
+    def parallel_train(self):
+        # this function looks into the emulator state file and checks which quantities are to be trained.
+        # It then selects a quantity that is not trained yet, sets its flag to 1 and trains the emulator for this quantity.
+        # It then stores the weights to the emulator state file and sets its flag to 2. 
+        # If there are no quantities left to be trained, it returns False, otherwise True.
+
+        my_training_quantity = None
+        my_PCA_number = None
+
+        # load the emulator state file
+        with fasteners.InterProcessLock(self.hyperparameters['working_directory'] + self.hyperparameters['emulator_state_file'] + ".lock"):
+            with open(self.hyperparameters['working_directory'] + self.hyperparameters['emulator_state_file'], 'rb') as f:
+                emulator_state = pickle.load(f)
+
+            # check which quantities are to be trained
+            for quantity, emulator_instance in emulator_state['quantities'].items():
+                for i in range(len(emulator_instance['GPs'])):
+                    if emulator_instance['GPs'][i]['status'] == 0:
+                        my_training_quantity = quantity
+                        my_PCA_number = i
+                        break
+
+            self.debug("Quantity to be trained: %s on PCA component %d", my_training_quantity, my_PCA_number)
+
+            # if there is no quantity to be trained, return False
+            if my_training_quantity is None:
+                return False
+            
+            # set flag to 1
+            emulator_state['quantities'][my_training_quantity]['GPs'][my_PCA_number]['status'] = 1
+
+            # pickle the emulator state with a lock. Overwrite it
+            with open(self.hyperparameters['working_directory'] + self.hyperparameters['emulator_state_file'] , 'wb') as f:
+                pickle.dump(emulator_state, f)
+
+        # load the data from the cache.
+        self.debug("Loading data from normalized cache")
+
+        with fasteners.InterProcessLock(self.hyperparameters['working_directory'] + self.hyperparameters["normalized_cache_file"] + ".lock"):
+            with open(self.hyperparameters['working_directory'] + self.hyperparameters["normalized_cache_file"], "rb") as fp:
+                data = pickle.load(fp)
+
+        parameters = data['input_data_normalized']
+        output_data = data[my_training_quantity][:,my_PCA_number]
+        self.hyperparameters['white_noise_level'] = emulator_state['quantities'][my_training_quantity]['GPs'][my_PCA_number]['white_noise_level']
+
+        # print current memory usage
+        # import psutil
+        # self.info("Current memory usage: %f GB", psutil.virtual_memory().used/1024**3)
+
+        if not hasattr(self, 'my_test_GP'):
+            self.my_test_GP = GP("Training GP " + my_training_quantity + " dim " + str(my_PCA_number),
+                            **self.hyperparameters)
+        else:
+            self.my_test_GP.hyperparameters['white_noise_level'] = emulator_state['quantities'][my_training_quantity]['GPs'][my_PCA_number]['white_noise_level']
+            self.my_test_GP.rename("Training GP " + my_training_quantity + " dim " + str(my_PCA_number))
+
+        self.my_test_GP.load_data(parameters, output_data)
+        self.my_test_GP.train()
+
+        # store the weights to the emulator state file and set its flag to 2
+        with fasteners.InterProcessLock(self.hyperparameters['working_directory'] + self.hyperparameters['emulator_state_file'] + ".lock"):
+            with open(self.hyperparameters['working_directory'] + self.hyperparameters['emulator_state_file'], 'rb') as f:
+                emulator_state = pickle.load(f)
+
+            emulator_state['quantities'][my_training_quantity]['GPs'][my_PCA_number]['status'] = 2
+            emulator_state['quantities'][my_training_quantity]['GPs'][my_PCA_number]['kernel'] = self.my_test_GP.opt_posterior.prior.kernel
+            
+            # pickle the emulator state with a lock. Overwrite it
+            with open(self.hyperparameters['working_directory'] + self.hyperparameters['emulator_state_file'] , 'wb') as f:
+                pickle.dump(emulator_state, f)
+
+        # a = time.time()
+        jax.clear_caches()
+        # print("Time to clear caches after train: ", time.time()-a)
+
+        # remove GP from memory
+        del parameters
+        del output_data
+        
+        # self.info("Current memory usage: %f GB", psutil.virtual_memory().used/1024**3)
+
+
+        return True
+
+
+
+
+    def mpi_train(self):
+        # in the case of mpi parallelization, we need to train the emulator in a different way.
+        #
+        # Rank 0:
+        # 1. Copy the current state of the cache into a temporary cache that will be used for training.
+        # 2. Do the PCA/data compression on the temporary cache and store a compressed version of the data.
+        # 3. Create a emulator state file that holds the trained parameters of the emulator.
+        # 4. Broadcast to the other ranks that both the compressed data and the emulator state file are ready, such that they can load it and train the different emulators.
+
+        # Rank != 0:
+        # 1. Wait until the broadcast from rank 0 is received.
+        # 2. Load the emulator state file and check which quantities are to be trained. There is a flag that can either state 0: 'not trained yet', 1: 'currently training', 2: 'already trained'.
+        # 3. Select a quantity that is not trained yet, set its flag to 1 and train the emulator for this quantity.
+        # 4. Train the emulator for the quantity.
+        # 5. Store your weights to the emulator state file and set its flag to 2. Repeat until all quantities are trained.
+        # 6. If all quantities are trained, wait until you receive message from rank 0 that training is done.
+        # 7. When message is received, load the compressed data and the emulator state file and update the emulators with the compressed data.
+
+
+
+
+
+
+        return None
+
+
 
     def set_data_covmats(self, data_covmats):
         # set the data covmats for the different quantities
@@ -510,6 +866,32 @@ class Emulator(BaseClass):
 
     # @profile
     def emulate(self, parameters):
+
+        # check (if we are using MPI) whether we need to train the emulator
+        if get_mpi_rank() != 0:
+            # check if there is a message from rank 0 that we need to train the emulator
+            if get_mpi_comm().Iprobe(source=0, tag=24):
+                message = get_mpi_comm().recv(source=0, tag=24)
+                if message == "require_training":
+                    self.train()
+        else:
+            # check mailbox 
+            train_flag = False
+            for i in range(1, get_mpi_size()):
+                if get_mpi_comm().Iprobe(source=i, tag=24):
+                    message = get_mpi_comm().recv(source=i, tag=24)
+                    if message == "require_training":
+                        train_flag = True
+                    
+            if self.broadcast_training_flag:
+                train_flag = True
+                self.broadcast_training_flag = False
+            
+            if train_flag:
+                for i in range(1, get_mpi_size()):
+                    get_mpi_comm().send("require_training", dest=i, tag=24)
+                self.train()
+
         # start timer 
         self.start("emulate") 
 
@@ -1078,7 +1460,7 @@ class Emulator(BaseClass):
         if self.hyperparameters['logfile'] is None:
             return
         
-        file_name = self.hyperparameters['logfile']+'_'+str(get_mpi_rank())+'.log'
+        file_name = self.hyperparameters['working_directory'] + self.hyperparameters['logfile']+'_'+str(get_mpi_rank())+'.log'
         # check if file/directory exists, otherwise create it
         if not os.path.exists(os.path.dirname(file_name)):
             os.makedirs(os.path.dirname(file_name))

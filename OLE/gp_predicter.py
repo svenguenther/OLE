@@ -65,6 +65,8 @@ class GP_predictor(BaseClass):
 
         # default hyperparameters
         defaulthyperparameters = {
+            # working directory
+            "working_directory": './',
             # plotting directory
             "plotting_directory": None,
             # testset fraction. If we have a testset, which is not None, then we will use this fraction of the data as a testset
@@ -431,13 +433,13 @@ class GP_predictor(BaseClass):
 
         pass
 
-    def finalize_training(self):
+    def finalize_training(self, new_kernel = True):
         # Train the GP emulator.
 
         for i in range(self.num_GPs):
 
             # Train the GP.
-            self.GPs[i].train()
+            self.GPs[i].train(new_kernel=new_kernel)
 
         # if we have a plotting directory, we will run some tests
         if (
@@ -486,10 +488,10 @@ class GP_predictor(BaseClass):
 
             # check that plotting_dir/preictions/ exists
             if not os.path.exists(
-                self.hyperparameters["plotting_directory"] + "/predictions/"
+                self.hyperparameters['working_directory'] + self.hyperparameters["plotting_directory"] + "/predictions/"
             ):
                 os.makedirs(
-                    self.hyperparameters["plotting_directory"] + "/predictions/"
+                    self.hyperparameters['working_directory'] + self.hyperparameters["plotting_directory"] + "/predictions/"
                 )
 
             # plot the prediction
@@ -500,7 +502,8 @@ class GP_predictor(BaseClass):
                 err_tol,
                 self.quantity_name,
                 self.data_processor.input_data_raw[jnp.array(test_indices[i])],
-                self.hyperparameters["plotting_directory"]
+                self.hyperparameters['working_directory'] 
+                + self.hyperparameters["plotting_directory"]
                 + "/predictions/"
                 + self.quantity_name
                 + "_prediction_"
@@ -544,6 +547,8 @@ class GP(BaseClass):
             "is_sparse": False,  # we could have sparse_GP_points > 0 and is_sparse = False if sparse fails to converge
         }
 
+        self.kernel = None
+
         # The hyperparameters are a dictionary of the hyperparameters for the different quantities. The keys are the names of the quantities.
         self.hyperparameters = defaulthyperparameters
 
@@ -559,10 +564,22 @@ class GP(BaseClass):
 
         pass
 
+    def __del__(self):
+        # Destructor
+        del self.D
+        del self.opt_posterior
+        del self.kernel
+        del self.inv_Kxx
+
+
+        import gc 
+        gc.collect()
+
     def load_data(self, input_data, output_data):
         # Load the data from the data processor.
         self.recompute_kernel_matrix = True
         self.input_data = input_data
+        self.input_size = input_data.shape[1]
         self.output_data = output_data[:, None]
         del self.D
         gc.collect()
@@ -586,14 +603,14 @@ class GP(BaseClass):
 
         pass
 
-    def train(self):
+    def train(self, new_kernel = True):
         # Train the GP emulator.
 
         # Create the kernel
 
         if self.hyperparameters["kernel"] == "RBF":
 
-            kernelNoiseFree = gpx.kernels.RBF() + gpx.kernels.Linear()  # + gpx.kernels.White()
+            kernelNoiseFree = gpx.kernels.RBF(lengthscale=jnp.ones(self.input_size)) + gpx.kernels.Linear(n_dims=self.input_size)  # + gpx.kernels.White()
             # we add a linear kernel to see if it imporves performance. The idea is that the GP for points
             # far away from support becomes constant and does not give the sampler a lot of usefull information
             # the lienar kernel will at least provide a slope that is meaningfull and allws the sampler to find the
@@ -724,6 +741,9 @@ class GP(BaseClass):
             else:
                 kernel = kernelNoiseFree
 
+            if not new_kernel:
+                kernel = self.kernel
+
             meanf = gpx.mean_functions.Zero()
             prior = gpx.gps.Prior(mean_function=meanf, kernel=kernel)
 
@@ -746,52 +766,52 @@ class GP(BaseClass):
             self.history = np.array([])
             self.optimizer = ox.adam(learning_rate=lr)
             num_init = self.hyperparameters["num_iters"]
-            while not converged:
-                self.posterior, history = gpx.fit(
-                    model=self.posterior,
-                    objective=lambda p, d: -gpx.objectives.conjugate_mll(p, d),
-                    train_data=self.D,
-                    optim=self.optimizer,
-                    num_iters=num_init,
-                    safe=True,  # what does this do?
-                    key=jax.random.PRNGKey(0),
-                )
-                self.history = np.append(self.history, history)
+            if new_kernel:
+                while not converged:
+                    self.posterior, history = gpx.fit(
+                        model=self.posterior,
+                        objective=lambda p, d: -gpx.objectives.conjugate_mll(p, d),
+                        train_data=self.D,
+                        optim=self.optimizer,
+                        num_iters=num_init,
+                        safe=True,  # what does this do?
+                        key=jax.random.PRNGKey(0),
+                    )
+                    self.history = np.append(self.history, history)
 
-                # check loss history. Check if the mean loss of the last 10 interations is not decreasing compared to the mean loss of the last 10 iterations before that
-                if len(self.history) > 2*self.hyperparameters["early_stopping_window"]:
-                    mean_loss1 = np.mean(self.history[-self.hyperparameters["early_stopping_window"]:])
-                    mean_loss2 = np.mean(self.history[-2*self.hyperparameters["early_stopping_window"]:-self.hyperparameters["early_stopping_window"]])
+                    # check loss history. Check if the mean loss of the last 10 interations is not decreasing compared to the mean loss of the last 10 iterations before that
+                    if len(self.history) > 2*self.hyperparameters["early_stopping_window"]:
+                        mean_loss1 = np.mean(self.history[-self.hyperparameters["early_stopping_window"]:])
+                        mean_loss2 = np.mean(self.history[-2*self.hyperparameters["early_stopping_window"]:-self.hyperparameters["early_stopping_window"]])
 
-                    if mean_loss1 > mean_loss2-self.hyperparameters["early_stopping"]:
+                        if mean_loss1 > mean_loss2-self.hyperparameters["early_stopping"]:
+                            converged = True
+
+                    if len(self.history) > self.hyperparameters["max_num_iters"]:
+                        # give warning
+                        self.warning("GP training did not converge within max_num_iters")
                         converged = True
 
-                if len(self.history) > self.hyperparameters["max_num_iters"]:
-                    # give warning
-                    self.warning("GP training did not converge within max_num_iters")
-                    converged = True
+                    num_init *= 2
 
-                num_init *= 2
-            
             self.opt_posterior = self.posterior
 
         self._compute_inverse_kernel_matrix()
 
-        gc.collect()
-
         # some debugging output
-        if (self.hyperparameters["plotting_directory"] is not None) and (get_mpi_rank() == 0):
+        if (self.hyperparameters["plotting_directory"] is not None):
             # creat directory if not exist
             import os
 
             if not os.path.exists(
-                self.hyperparameters["plotting_directory"] + "/loss/"
+                self.hyperparameters['working_directory'] + self.hyperparameters["plotting_directory"] + "/loss/"
             ):
-                os.makedirs(self.hyperparameters["plotting_directory"] + "/loss/")
+                os.makedirs(self.hyperparameters['working_directory'] + self.hyperparameters["plotting_directory"] + "/loss/")
             loss_plot(
                 self.history,
                 self._name,
-                self.hyperparameters["plotting_directory"]
+                self.hyperparameters['working_directory'] 
+                + self.hyperparameters["plotting_directory"]
                 + "/loss/"
                 + self._name
                 + "_loss.png",
@@ -812,7 +832,8 @@ class GP(BaseClass):
                 x,
                 y,
                 std,
-                self.hyperparameters["plotting_directory"]
+                self.hyperparameters['working_directory'] 
+                + self.hyperparameters["plotting_directory"]
                 + "/loss/"
                 + self._name
                 + "_slice.png",
@@ -1108,10 +1129,10 @@ class GP(BaseClass):
 
         # test that the directory exists
         if not os.path.exists(
-            self.hyperparameters["plotting_directory"] + "/test_set_prediction/"
+            self.hyperparameters['working_directory'] + self.hyperparameters["plotting_directory"] + "/test_set_prediction/"
         ):
             os.makedirs(
-                self.hyperparameters["plotting_directory"] + "/test_set_prediction/"
+                self.hyperparameters['working_directory'] + self.hyperparameters["plotting_directory"] + "/test_set_prediction/"
             )
 
         # plot the mean and the std
@@ -1121,7 +1142,8 @@ class GP(BaseClass):
             stds,
             err_tols,
             self._name,
-            self.hyperparameters["plotting_directory"]
+            self.hyperparameters['working_directory'] 
+            + self.hyperparameters["plotting_directory"]
             + "/test_set_prediction/"
             + self._name
             + ".png",

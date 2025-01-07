@@ -73,6 +73,8 @@ class data_processor(BaseClass):
             # those might also set this parameter
             # maximal number of dimensions of the compressed data
             "max_output_dimensions": 30,
+            # working directory
+            "working_directory": './',
             # plotting directory
             "plotting_directory": None,
             # testset fraction
@@ -233,14 +235,15 @@ class data_processor(BaseClass):
         if (self.hyperparameters["plotting_directory"] is not None) and (get_mpi_rank() == 0):
             # check that the directory exists
             if not os.path.exists(
-                self.hyperparameters["plotting_directory"] + "/PCA_plots"
+                self.hyperparameters["working_directory"] + self.hyperparameters["plotting_directory"] + "/PCA_plots"
             ):
-                os.makedirs(self.hyperparameters["plotting_directory"] + "/PCA_plots")
+                os.makedirs(self.hyperparameters["working_directory"] + self.hyperparameters["plotting_directory"] + "/PCA_plots")
             variance_plots(
                 self.explained_variance,
                 "explained variance " + self.quantity_name,
                 "explained variance ",
-                self.hyperparameters["plotting_directory"]
+                self.hyperparameters["working_directory"] 
+                + self.hyperparameters["plotting_directory"]
                 + "/PCA_plots/explained_variance_"
                 + self.quantity_name
                 + ".png",
@@ -249,7 +252,8 @@ class data_processor(BaseClass):
                 1.0 - self.cumulative_explained_variance,
                 "1 - cumulative variance " + self.quantity_name,
                 "1 - cumulative variance ",
-                self.hyperparameters["plotting_directory"]
+                self.hyperparameters["working_directory"] 
+                + self.hyperparameters["plotting_directory"]
                 + "/PCA_plots/cumulative_variance_"
                 + self.quantity_name
                 + ".png",
@@ -257,7 +261,8 @@ class data_processor(BaseClass):
             eigenvector_plots(
                 eigenvectors[:, :n_components].T,
                 "Eigenvectors " + self.quantity_name,
-                self.hyperparameters["plotting_directory"]
+                self.hyperparameters["working_directory"] 
+                + self.hyperparameters["plotting_directory"]
                 + "/PCA_plots/eigenvectors_"
                 + self.quantity_name
                 + ".png",
@@ -298,19 +303,21 @@ class data_processor(BaseClass):
         # if there is a plotting directory, plot the raw output data and the normalized output data
         if (self.hyperparameters["plotting_directory"] is not None) and (get_mpi_rank() == 0):
             # check that the directory exists
-            if not os.path.exists(self.hyperparameters["plotting_directory"]):
-                os.makedirs(self.hyperparameters["plotting_directory"])
+            if not os.path.exists(self.hyperparameters["working_directory"] + self.hyperparameters["plotting_directory"]):
+                os.makedirs(self.hyperparameters["working_directory"] + self.hyperparameters["plotting_directory"])
             data_plot_raw(
                 self.output_data_raw,
                 self.quantity_name,
-                self.hyperparameters["plotting_directory"]
+                self.hyperparameters["working_directory"] 
+                + self.hyperparameters["plotting_directory"]
                 + "/raw_data_"
                 + self.quantity_name,
             )
             data_plot_normalized(
                 self.output_data_normalized,
                 self.quantity_name,
-                self.hyperparameters["plotting_directory"]
+                self.hyperparameters["working_directory"] 
+                + self.hyperparameters["plotting_directory"]
                 + "/normalized_data_"
                 + self.quantity_name,
             )
@@ -371,10 +378,10 @@ class data_processor(BaseClass):
         if (self.hyperparameters["plotting_directory"] is not None) and (get_mpi_rank() == 0):
             # check that the directory exists
             if not os.path.exists(
-                self.hyperparameters["plotting_directory"] + "/compressed_data"
+                self.hyperparameters["working_directory"] + self.hyperparameters["plotting_directory"] + "/compressed_data"
             ):
                 os.makedirs(
-                    self.hyperparameters["plotting_directory"] + "/compressed_data"
+                    self.hyperparameters["working_directory"] + self.hyperparameters["plotting_directory"] + "/compressed_data"
                 )
             for i in range(self.output_data_emulator_dim):
                 for j in range(self.input_size):
@@ -384,7 +391,8 @@ class data_processor(BaseClass):
                         "Parameter " + str(j),
                         "PCA - component " + str(i),
                         self.quantity_name,
-                        self.hyperparameters["plotting_directory"]
+                        self.hyperparameters["working_directory"] 
+                        + self.hyperparameters["plotting_directory"]
                         + "/compressed_data/"
                         + self.quantity_name
                         + "_dim_"

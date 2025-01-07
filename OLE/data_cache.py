@@ -56,6 +56,9 @@ class DataCache(BaseClass):
             "cache_size": 1000,
             # the cache file is the hdf5 file in which the cache is stored
             "cache_file": "cache.pkl",
+            "compressed_cache_file": "compressed_cache.pkl",
+            # working directory
+            "working_directory": './',
             # flag if we want to share the cache between different processes
             "share_cache": True,
             # load the cache from the cache file
@@ -109,16 +112,17 @@ class DataCache(BaseClass):
         if not self.hyperparameters["share_cache"]:
             rank = get_mpi_rank()
             self.hyperparameters["cache_file"] = self.hyperparameters["cache_file"][:-4] + "_%d.pkl" % rank
+            self.hyperparameters["compressed_cache_file"] = self.hyperparameters["compressed_cache_file"][:-4] + "_%d.pkl" % rank
 
         # if the cache file exists, load the cache from the file
         if self.hyperparameters["load_cache"]:
-            if os.path.exists(self.hyperparameters["cache_file"]):
+            if os.path.exists(self.hyperparameters["working_directory"] + self.hyperparameters["cache_file"]):
                 self.load_cache()
                 self.max_loglike = self.get_max_loglike()
         else:
             # delete old cache file
             try:
-                os.remove(self.hyperparameters["cache_file"])
+                os.remove(self.hyperparameters["working_directory"] + self.hyperparameters["cache_file"])
             except OSError:
                 pass
 
@@ -130,7 +134,7 @@ class DataCache(BaseClass):
     def add_state(self, new_state):
         # update cache
         if self.hyperparameters["load_cache"]:
-            if os.path.exists(self.hyperparameters["cache_file"]):
+            if os.path.exists(self.hyperparameters["working_directory"] + self.hyperparameters["cache_file"]):
                 self.load_cache()
 
         # check if delta loglike is exceeded
@@ -179,7 +183,7 @@ class DataCache(BaseClass):
         self.debug("Added state to cache: %s", new_state["parameters"])
 
         # if there exists a chache file, store the cache in the file
-        if os.path.exists(self.hyperparameters["cache_file"]):
+        if os.path.exists(self.hyperparameters["working_directory"] + self.hyperparameters["cache_file"]):
             self.synchronize_to_cache(new_state)
         else:
             # add a state to the cache
@@ -246,23 +250,20 @@ class DataCache(BaseClass):
         # store the cache in the hdf5 file
 
         # if MPI, we need to make sure that we have a loop to wait until the file is not locked anymore
-        with fasteners.InterProcessLock(self.hyperparameters["cache_file"] + ".lock"):
-            with open(self.hyperparameters["cache_file"], "wb") as fp:
-                pickle.dump(self.states, fp)
+        with fasteners.InterProcessLock(self.hyperparameters["working_directory"] + self.hyperparameters["cache_file"] + ".lock"):
+            with open(self.hyperparameters["working_directory"] + self.hyperparameters["cache_file"], "wb") as fp:
+                pickle.dump((self.states, 0), fp)
 
-            with open(self.hyperparameters["cache_file"], "rb") as fp:
-                old = pickle.load(fp)
-
-        self.debug("Stored cache in file: %s", self.hyperparameters["cache_file"])
+        self.debug("Stored cache in file: %s", self.hyperparameters["working_directory"] + self.hyperparameters["cache_file"])
 
     def synchronize_to_cache(self, new_state):
         # This function reads the old states from the cache file, adds the new state and stores the new states in the cache file.
         # This is useful if we want to store the cache from different processes.
 
         # if MPI, we need to make sure that we have a loop to wait until the file is not locked anymore
-        with fasteners.InterProcessLock(self.hyperparameters["cache_file"] + ".lock"):
-            with open(self.hyperparameters["cache_file"], "rb") as fp:
-                old = pickle.load(fp)
+        with fasteners.InterProcessLock(self.hyperparameters["working_directory"] + self.hyperparameters["cache_file"] + ".lock"):
+            with open(self.hyperparameters["working_directory"] + self.hyperparameters["cache_file"], "rb") as fp:
+                old, old_recently_added = pickle.load(fp)
 
             old.append(new_state)
 
@@ -289,8 +290,8 @@ class DataCache(BaseClass):
             # keep valid states
             old = [old[i] for i in valid_indices]
 
-            with open(self.hyperparameters["cache_file"], "wb") as fp:
-                pickle.dump(old, fp)
+            with open(self.hyperparameters["working_directory"] + self.hyperparameters["cache_file"], "wb") as fp:
+                pickle.dump((old, old_recently_added+1), fp)
 
             self.states = old
 
@@ -300,8 +301,38 @@ class DataCache(BaseClass):
         # if we give the deployed_hashes, we only load the states which are not in the deployed_hashes
         remove_flag = np.zeros(len(self.states), dtype=bool)
 
-        with fasteners.InterProcessLock(self.hyperparameters["cache_file"] + ".lock"):
-            with open(self.hyperparameters["cache_file"], "rb") as fp:
+        with fasteners.InterProcessLock(self.hyperparameters["working_directory"] + self.hyperparameters["cache_file"] + ".lock"):
+            with open(self.hyperparameters["working_directory"] + self.hyperparameters["cache_file"], "rb") as fp:
+                stored_states, self.recently_added = pickle.load(fp)
+
+                for state in stored_states:
+                    _hash = hash(str(state["parameters"]))
+
+                    if _hash not in self.states_hashes:
+                        self.states.append(state)
+
+                    for i, _ in enumerate(self.states_hashes):
+                        if _hash == self.states_hashes[i]:
+                            remove_flag[i] = True
+
+        # now remove the data points which are not in the cache anymore
+        for i in reversed(range(len(self.states_hashes))):
+            if not remove_flag[i]:
+                self.states.pop(i)
+
+        self.update_hashes()
+
+        self.debug("Loaded cache from file: %s", self.hyperparameters["working_directory"] + self.hyperparameters["cache_file"])
+
+    def update_hashes(self):
+        self.states_hashes = [hash(str(state["parameters"])) for state in self.states]
+
+    def load_compressed_cache(self):
+        # if we give the deployed_hashes, we only load the states which are not in the deployed_hashes
+        remove_flag = np.zeros(len(self.states), dtype=bool)
+
+        with fasteners.InterProcessLock(self.hyperparameters["working_directory"] + self.hyperparameters["compressed_cache_file"] + ".lock"):
+            with open(self.hyperparameters["working_directory"] + self.hyperparameters["compressed_cache_file"], "rb") as fp:
                 stored_states = pickle.load(fp)
 
                 for state in stored_states:
@@ -321,7 +352,4 @@ class DataCache(BaseClass):
 
         self.update_hashes()
 
-        self.debug("Loaded cache from file: %s", self.hyperparameters["cache_file"])
-
-    def update_hashes(self):
-        self.states_hashes = [hash(str(state["parameters"])) for state in self.states]
+        self.debug("Loaded cache from file: %s", self.hyperparameters["working_directory"] + self.hyperparameters["compressed_cache_file"])

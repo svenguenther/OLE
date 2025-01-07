@@ -107,6 +107,10 @@ class Logger:
         ch.setFormatter(formatter)
         self.logger.addHandler(ch)
 
+    def rename(self, name):
+        self._name = name
+        self.logger.name = name
+
     def set_logger(self, logger):
         self.logger = logger
 
