@@ -549,6 +549,8 @@ if __name__ == '__main__':
                 # output given the parameter values. This will be considered as a valid
                 # point, but with minimum likelihood, so will be rejected, resulting in
                 # the choice of a new point.
+                if cosmo.emulator is not None:
+                    cosmo.emulator.start('theory_code')
                 try:
                     data.cosmo_arguments['output']
                 except:
@@ -586,6 +588,9 @@ if __name__ == '__main__':
                     except KeyboardInterrupt:
                         raise io_mp.CosmologicalModuleError(
                             "You interrupted execution")
+                if cosmo.emulator is not None:
+                    cosmo.emulator.increment('theory_code')
+                    cosmo.emulator.print_status()
 
 
         # For each desired likelihood, compute its value against the theoretical

@@ -696,7 +696,9 @@ class Sampler(BaseClass):
         if (not self.hyperparameters['use_emulator']) or (not self.emulator.trained):
 
             self.debug("emulator not trained yet -> use theory code")
+            self.emulator.start('theory_code')
             state = self.theory.compute(state)
+            self.emulator.increment('theory_code')
             self.debug("state after theory: %s for parameters: %s", state['quantities'], state['parameters'])
             
             for likelihood in self.likelihood_collection.keys():
@@ -730,7 +732,9 @@ class Sampler(BaseClass):
 
             # check whether the emulator is good enough
             if not self.emulator.check_quality_criterium(emulator_sample_loglikes, reference_loglike=state['total_loglike'] , parameters=state['parameters']):
+                self.emulator.start('theory_code')
                 state = self.theory.compute(state)
+                self.emulator.increment('theory_code')
                 for likelihood in self.likelihood_collection.keys():
                     state = self.likelihood_collection[likelihood].loglike_state(state)
                 state['total_loglike'] = jnp.array(list(state['loglike'].values())).sum() + logprior
@@ -851,7 +855,9 @@ class Sampler(BaseClass):
         if not self.emulator.trained:
 
             self.debug("emulator not trained yet -> use theory code")
+            self.emulator.start('theory_code')
             state = self.theory.compute(state)
+            self.emulator.increment('theory_code')
             self.debug("state after theory: %s for parameters: %s", state['quantities'], state['parameters'])
         else:
             # here we need to test the emulator for its performance
@@ -867,7 +873,9 @@ class Sampler(BaseClass):
 
                 # check whether the emulator is good enough
                 if not self.emulator.check_quality_criterium(loglike_uncertainty, reference_loglike=state['total_loglike'], parameters=state['parameters']):
+                    self.emulator.start('theory_code')
                     state = self.theory.compute(state)
+                    self.emulator.increment('theory_code')
                 else:
                     # Add the point to the quality points
                     self.emulator.add_quality_point(state['parameters'])
@@ -889,7 +897,9 @@ class Sampler(BaseClass):
 
                 # check whether the emulator is good enough
                 if not self.emulator.check_quality_criterium(emulator_sample_loglikes, parameters=state['parameters']):
+                    self.emulator.start('theory_code')
                     state = self.theory.compute(state)
+                    self.emulator.increment('theory_code')
                 else:
                     # Add the point to the quality points
                     self.emulator.add_quality_point(state['parameters'])

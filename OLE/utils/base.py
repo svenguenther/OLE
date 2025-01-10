@@ -87,6 +87,14 @@ class Timer:
 class Logger:
     def __init__(self, name = None):
         self._name = name or self.__class__.__name__
+
+        # check if logger already exists. If it does, make it silent
+        if logging.getLogger(self._name).hasHandlers():
+            logging.getLogger(self._name).handlers.clear()
+            logging.getLogger(self._name).propagate = False
+
+
+        # create logger
         self.logger = logging.getLogger(self._name)
 
         # set the rank of the logger

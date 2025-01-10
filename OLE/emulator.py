@@ -20,6 +20,14 @@ import fasteners
 # set jax_enable_compilation_cache to False to avoid memory issues
 os.environ['JAX_ENABLE_X64'] = 'True'
 os.environ['JAX_ENABLE_COMPILED_PARTIAL_EVAL'] = 'True'
+os.environ['NPROC'] = '1'
+os.environ['intra_op_parallelism_threads'] = '1'
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '0'
+os.environ['OPENBLAS_NUM_THREADS'] = '1'
+#os.environ['XLA_PYTHON_CLIENT_ALLOCATOR'] = 'platform'
+os.environ['XLA_PYTHON_CLIENT_PREALLOCATE'] = 'False'
+
+
 
 
 from copy import deepcopy
@@ -460,6 +468,9 @@ class Emulator(BaseClass):
             #     "quantity1": {
             #         "GPs": [{
             #             "kernel": ,       # empty if not trained 
+            #             "white_noise_level": ,  # empty if not trained
+            #             "is_sparse": ,     # to be implemented by pdf
+            #             "inducing_points": ,     # to be implemented by pdf
             #             "status": ,},     # 0 for not trained, 1 for currently training, 2 for trained
             #           {PCA: , mean_PCA: , std_PCA: , kernel: , status: },
             #           ...
@@ -540,9 +551,6 @@ class Emulator(BaseClass):
 
 
         if is_main_process():
-            self.debug("Loading data from cache")
-            self.data_cache.load_cache()
-
             # Load the data from the cache.
             self.debug("Loading data from cache")
             self.data_cache.load_cache()
@@ -906,6 +914,8 @@ class Emulator(BaseClass):
             if self.rejit_flag_emulator: # if the emulator was updated/retrained, we rejit the emulator
                 # if there is a old jitted function, we delete it
                 if hasattr(self, 'jitted_emulation_function'):
+                    jax.clear_backends()
+                    jax.clear_caches()
                     self.jitted_emulation_function.clear_cache()
                     self.jitted_emulation_function = None
                     # del self.jitted_emulation_function
@@ -914,6 +924,7 @@ class Emulator(BaseClass):
                 self.jitted_emulation_function = jax.jit(self.emulate_jit)
                 output_state_emulator = self.jitted_emulation_function(parameters)
                 self.rejit_flag_emulator = False
+                jax.clear_caches()
             else:
                 output_state_emulator = self.jitted_emulation_function(parameters)
         else:
@@ -927,7 +938,6 @@ class Emulator(BaseClass):
         output_state['parameters'] = output_state_emulator['parameters']
 
         self.emulate_counter += 1
-        self.print_status()
 
         # end timer
         self.increment("emulate")
@@ -1346,6 +1356,8 @@ class Emulator(BaseClass):
         # if we return False, the emulator is expected to perform well and we do not need to check the quality criterium
         # if we return True, the emulator is expected to perform poorly and we need to check the quality criterium
 
+        self.print_status()
+
         # stop the likelihood counter
         if 'likelihood' in self.subtimer.keys():
             self.increment("likelihood")
@@ -1444,7 +1456,10 @@ class Emulator(BaseClass):
         return output_state
     
     def print_status(self):
-        if self.emulate_counter%self.hyperparameters['status_print_frequency'] == 0:
+        N = self.emulate_counter
+        if 'theory_code' in self.subtimer.keys():
+            N += self.subtimer['theory_code'].n
+        if N%self.hyperparameters['status_print_frequency'] == 0:
             # print the status of the emulator
             self.info("Emulator status: [" + datetime.datetime.now().strftime("%d/%m/%y %H:%M:%S") + "]")
             self.info("Number of data points in cache: %d", len(self.data_cache.states))
@@ -1453,6 +1468,25 @@ class Emulator(BaseClass):
             self.info("Number of quality check unsuccessful calls: %d", self.quality_check_unsuccessful_counter)
             self.info("Number of not tested calls: %d", self.emulate_counter - self.quality_check_unsuccessful_counter - self.quality_check_successful_counter)
             self.log_all_times(self.logger)
+            # also write the status to the log file
+            self.write_to_log("Emulator status: [" + datetime.datetime.now().strftime("%d/%m/%y %H:%M:%S") + "]\n")
+            self.write_to_log("Number of data points in cache: %d\n" % len(self.data_cache.states))
+            self.write_to_log("Number of emulation calls: %d\n" % self.emulate_counter)
+            self.write_to_log("Number of quality check successful calls: %d\n" % self.quality_check_successful_counter)
+            self.write_to_log("Number of quality check unsuccessful calls: %d\n" % self.quality_check_unsuccessful_counter)
+            self.write_to_log("Number of not tested calls: %d\n" % (self.emulate_counter - self.quality_check_unsuccessful_counter - self.quality_check_successful_counter))
+            self.write_to_log("Time spent in different parts of the code: \n")
+            for name in list(self.subtimer.keys()):
+                _ = f"Timing for {name}: total: {self.get_summed_time(name):.4f}s calls: {self.n(name)} avg: {self.get_time_avg(name):.4f}s \n"
+                self.write_to_log(_)
+
+    def log_all_times(self, logger):
+        for name in self.subtimer:
+            self.log_time(name, logger)
+
+        
+        
+        
         pass
 
     def write_to_log(self, message):

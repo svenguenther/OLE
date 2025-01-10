@@ -527,9 +527,9 @@ class GP(BaseClass):
             # Exponential decay learning rate
             "learning_rate": 0.1,
             # Number of iterations
-            "num_iters": 200, # per iteration
+            "num_iters": 400, # per iteration
             # Maximal number of iterations
-            "max_num_iters": 400,
+            "max_num_iters": 2000,
             # Early stopping criterion
             "early_stopping": 0.05,
             # Early stopping averaging window
@@ -545,6 +545,8 @@ class GP(BaseClass):
             # number of sparse GP points
             "sparse_GP_points": 0,
             "is_sparse": False,  # we could have sparse_GP_points > 0 and is_sparse = False if sparse fails to converge
+            # verbose of the training progress
+            "training_verbose": True,
         }
 
         self.kernel = None
@@ -691,8 +693,8 @@ class GP(BaseClass):
                         train_data=self.D,
                         optim=ox.adamw(learning_rate=lr),
                         num_iters=num_init,
-                        safe=True,
                         key=jax.random.PRNGKey(0),
+                        verbose=self.hyperparameters["training_verbose"],
                     )
 
                     del obj
@@ -774,8 +776,8 @@ class GP(BaseClass):
                         train_data=self.D,
                         optim=self.optimizer,
                         num_iters=num_init,
-                        safe=True,  # what does this do?
                         key=jax.random.PRNGKey(0),
+                        verbose=self.hyperparameters["training_verbose"],
                     )
                     self.history = np.append(self.history, history)
 

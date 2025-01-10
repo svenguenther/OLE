@@ -293,6 +293,8 @@ class DataCache(BaseClass):
             with open(self.hyperparameters["working_directory"] + self.hyperparameters["cache_file"], "wb") as fp:
                 pickle.dump((old, old_recently_added+1), fp)
 
+            self.recently_added = old_recently_added + 1
+
             self.states = old
 
             self.max_loglike = self.get_max_loglike()
