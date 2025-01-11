@@ -35,6 +35,17 @@ def check_cache_and_compute(self, params_values_dict,
         self._current_state = {'params': {}, 'derived': {}}
         return True
     
+    # This is a flag which is used when we want to compute the delta_loglikelihood for the emulator
+    if self.skip_theory_state_from_emulator is not None:
+        # here we are in the emulator and we need to use the emulator state
+        state = self.skip_theory_state_from_emulator
+        self.skip_theory_state_from_emulator = None
+        self._current_state = state
+        return True
+
+    # start timer for likelihood computation/oversampling
+    if self.emulator is not None:
+        self.emulator.increment("likelihood")
 
     
     # Try to build emulator from saved cobaya state and cache
@@ -79,13 +90,7 @@ def check_cache_and_compute(self, params_values_dict,
 
 
     start = time.time()
-    # This is a flag which is used when we want to compute the delta_loglikelihood for the emulator
-    if self.skip_theory_state_from_emulator is not None:
-        # here we are in the emulator and we need to use the emulator state
-        state = self.skip_theory_state_from_emulator
-        self.skip_theory_state_from_emulator = None
-        self._current_state = state
-        return True
+
 
     if self._input_params_extra:
         params_values_dict.update(
@@ -147,6 +152,10 @@ def check_cache_and_compute(self, params_values_dict,
 
         if not successful_emulation:
             self.log.debug("Computing new state")
+
+            if self.emulator is not None:
+                self.emulator.start("theory_code")
+
             state = {"params": params_values_dict,
                         "dependency_params": dependency_params,
                         "derived": {} if want_derived else None}
@@ -180,6 +189,9 @@ def check_cache_and_compute(self, params_values_dict,
                 self.timer.increment(self.log)
 
             if self.emulator is not None:
+                self.emulator.increment("theory_code")
+                self.emulator.print_status()
+
                 # add the new state to the emulator
                 emulator_state = translate_cobaya_state_to_emulator_state(state)
 
@@ -208,10 +220,7 @@ def check_cache_and_compute(self, params_values_dict,
         state["params"][key] = float(value)
 
     # make this state the current one
-    try: # we have to have try except block because CAMB cannot be deepcopyied since its FORTAN @.@
-        _ = copy.deepcopy(state)
-    except:
-        _ = state
+    _ = copy.deepcopy(state) # deepcopy to keep it in the cache :)
 
     self._states.appendleft(_)
     self._current_state = state
@@ -245,6 +254,13 @@ def check_cache_and_compute(self, params_values_dict,
 
     stop = time.time()
     self.log.debug("Time for check_cache_and_compute: %f", stop-start)
+
+
+    # start timer for likelihood computation/oversampling
+    if self.emulator is not None:
+        self.emulator.start("likelihood")
+
+
     return True
 
 

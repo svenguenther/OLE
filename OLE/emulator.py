@@ -25,7 +25,7 @@ os.environ['intra_op_parallelism_threads'] = '1'
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '0'
 os.environ['OPENBLAS_NUM_THREADS'] = '1'
 #os.environ['XLA_PYTHON_CLIENT_ALLOCATOR'] = 'platform'
-os.environ['XLA_PYTHON_CLIENT_PREALLOCATE'] = 'False'
+#os.environ['XLA_PYTHON_CLIENT_PREALLOCATE'] = 'False' # This has a big impact on the runtime of the emulator!
 
 
 
@@ -171,6 +171,10 @@ class Emulator(BaseClass):
             # 'test_stochastic', do not test the emulator
 
             'testing_strategy': 'test_stochastic',
+
+            # it can be useful to check every now and then the cache for new points in the late stage of the run. In particular, if we want a very very high R-1, we need to sychronize the emulators.
+            # Thus, every 'check_cache_for_new_points' consecutive successful emulator calls, we check the cache for new points.
+            'check_cache_for_new_points': 1000,
 
             # number of points to test early
             'test_early_points': 1000,
@@ -942,9 +946,6 @@ class Emulator(BaseClass):
         # end timer
         self.increment("emulate")
 
-        # start timer for likelihood computation/oversampling
-        self.start("likelihood")
-
         return output_state
 
     def emulate_jit(self, parameters):
@@ -1356,11 +1357,14 @@ class Emulator(BaseClass):
         # if we return False, the emulator is expected to perform well and we do not need to check the quality criterium
         # if we return True, the emulator is expected to perform poorly and we need to check the quality criterium
 
-        self.print_status()
+        # every now and then its nice to check if the cache did change and if new data points are available. In particular in the very late stage of the run
+        if (self.continuous_successful_calls+1) % self.hyperparameters['check_cache_for_new_points'] == 0:
+            if self.data_cache.check_for_new_points():
+                self.debug("New points in cache. Quality check required.")
+                self.update()
+                
 
-        # stop the likelihood counter
-        if 'likelihood' in self.subtimer.keys():
-            self.increment("likelihood")
+        self.print_status()
 
         # if we do not require a quality check, we return False
         if self.hyperparameters['testing_strategy'] == 'test_none':
@@ -1388,7 +1392,7 @@ class Emulator(BaseClass):
                 if self.groundlevel_testing_prob == None:
                     self.groundlevel_testing_prob = 1.0
                 if ('likelihood_testing' in self.subtimer.keys()) and (self.emulate_counter<20):
-                    self.groundlevel_testing_prob = self.subtimer['likelihood'].time_sum / (self.subtimer['likelihood_testing'].time_sum) * self.hyperparameters['test_stochastic_testing_time_fraction']
+                    self.groundlevel_testing_prob = 1 / self.hyperparameters['N_quality_samples'] * self.hyperparameters['test_stochastic_testing_time_fraction']
                 if self.emulate_counter==20: 
                     self.debug("Groundlevel testing probability set to %f", self.groundlevel_testing_prob)
                     self.write_to_log("Groundlevel testing probability set to " + str(self.groundlevel_testing_prob) + "\n")
@@ -1400,18 +1404,18 @@ class Emulator(BaseClass):
                 return False
 
 
-        # The idea is that we collect all points which were checked by the quality criterium and then check whether the new point is within the convex hull of the checked points.
-        input_data = jnp.array([[value[0] for key, value in parameters.items() if key in self.input_parameters]])
-
-        # normalize the input data
-        quantity = list(self.emulators.keys())[0]
-        normalized_input_data = self.emulators[quantity].data_processor.normalize_input_data(input_data)
-
         # check whether the normalized input data is within a certain radius of the checked points
         if len(self.quality_points) == 0:
             self.debug("No quality points yet. Quality check required.")
             return True
         else:
+            # The idea is that we collect all points which were checked by the quality criterium and then check whether the new point is within the convex hull of the checked points.
+            input_data = jnp.array([[value[0] for key, value in parameters.items() if key in self.input_parameters]])
+
+            # normalize the input data
+            quantity = list(self.emulators.keys())[0]
+            normalized_input_data = self.emulators[quantity].data_processor.normalize_input_data(input_data)
+            
             # calculate the distance between the normalized input data and the checked points
             distances = jnp.linalg.norm(normalized_input_data - jnp.array(self.quality_points), axis=-1)
 
@@ -1502,7 +1506,6 @@ class Emulator(BaseClass):
             # add timestamp to message
             message = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()) + " " + message
             logfile.write(message)
-
         pass
 
     def write_parameter_dict_to_log(self, parameters):

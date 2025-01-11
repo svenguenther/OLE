@@ -131,6 +131,20 @@ class DataCache(BaseClass):
     def initialize(self, ini_state):
         self.states.append(ini_state)
 
+    def check_for_new_points(self):
+        # this function checks if the cache changed since the last call
+        old_hash = self.cache_hash
+
+        # load the cache from the file
+        self.load_cache()
+
+        # check if the cache changed
+        if old_hash != self.cache_hash:
+            return True
+        else:
+            return False
+
+
     def add_state(self, new_state):
         # update cache
         if self.hyperparameters["load_cache"]:
@@ -328,6 +342,7 @@ class DataCache(BaseClass):
 
     def update_hashes(self):
         self.states_hashes = [hash(str(state["parameters"])) for state in self.states]
+        self.cache_hash = hash(str(self.states_hashes))
 
     def load_compressed_cache(self):
         # if we give the deployed_hashes, we only load the states which are not in the deployed_hashes
