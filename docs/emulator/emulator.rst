@@ -18,10 +18,13 @@ These settings are independent of the sampling method.
    * - ``cache_size``
      - ``1000``
      - Maximum size of stored training data points. If more data points are to be added, the one with the smallest loglikelihood is removed.
+   * - ``min_data_points``
+     - ``60``
+     - Number of minimal states in the cache before the emulator can be trained. This is an important parameter. If it is selected too small, the emulator will require too many retrainings. If too large, the initial data collection phase of OLE is unnecessary long.
    * - ``cache_file``
      - ``cache.pkl``
-     - File in which the cache is going to be stored in.
-   * - ``shared_cache``
+     - File in which the cache is going to be stored in. The path will be appended to the ``working_directory``.
+   * - ``share_cache``
      - ``True``
      - If this flag is set to ``True`` the cache is shared between all chains and processes. This is useful if you want to run the sampler in parallel. If set to ``False`` each chain has its own cache. Shared cache allows for faster training of the emulator. However, biases of the emulator can be shared between chains. If each emulator uses its own cache, this can lead to a minimal R-1 (due to the emulation bias). Actually, thts a nice estimate of the emulation bias :)
    * - ``load_cache``
@@ -48,7 +51,7 @@ These parameters are used to specify the PCA compression of the data.
      - default
      - description
    * - ``min_variance_per_bin``
-     - ``1e-4``
+     - ``5e-5``
      - The level of compression of each observable is determined by the number of PCA components. Therefore, we increase the number of PCA components until the explained variance per bin times the bin size exceeds the parameters value. The value of ``1e-4`` can be interpreted in a way that for each observable the systematic uncertainty due to insufficient projection of the PCA will lead to a relative error (of the normalized observables) of ``1e-2``. Thus, it is a maximal achievable precision of the emulator. If it is selected too large an error message appears that indicates possible biases. Here we can directly trade between speed and accuracy. For highly correlated quantities it is adviseable to reduce this number by 1-2 magnitudes! This is an important parameter.
    * - ``max_output_dimensions``
      - ``30``
@@ -80,22 +83,25 @@ It also deals with the possible compression of data by sparse GPs.
      - ``0.1``
      - Learning rate for ADAM optimizer when fitting the GP parameters. Note that sparse GP typically require a smaller learning rate than ordinary ones
    * - ``num_iters``
-     - ``100``
-     - Proposed number of training epochs. If we see that the loss is still falling (more than ``early_stopping`` within two batches of ``early_stopping_window`` iterations)
+     - ``None``
+     - Proposed number of training epochs. If we see that the loss is still falling (more than ``early_stopping`` within two batches of ``early_stopping_window`` iterations). If not set, it will be determined by the number of datapoints (see 'num_epochs_per_dp').
    * - ``max_num_iters``
-     - ``400``
-     - Maximal training epochs if early stopping is not triggered. Should not be reached. Produces a warning when exceeded!
+     - ``None``
+     - Maximal training epochs if early stopping is not triggered. Should not be reached. Produces a warning when exceeded! If not set, it will be determined by the number of datapoints (see 'num_epochs_per_dp').
+   * - ``num_epochs_per_dp``
+     - 30
+     - Sets ``num_iters`` by multiplying the number of data points with this factor if ``num_iters`` is not set. 
+   * - ``max_num_epochs_per_dp``
+     - 120
+     - Sets ``max_num_iters`` by multiplying the number of data points with this factor if ``max_num_iters`` is not set. 
    * - ``early_stopping``
      - ``0.05``
      - Early stopping criterium. See ``num_iters``.
    * - ``early_stopping_window``
      - ``10``
      - Window for early stopping. See ``num_iters``.
-   * - ``min_data_points``
-     - ``80``
-     - Number of minimal states in the cache before the emulator can be trained. This is an important parameter. If it is selected too small, the emulator will require too many retrainings. If too large, the initial data collection phase of OLE is unnecessary long.
    * - ``kernel_fitting_frequency``
-     - ``20``
+     - ``40``
      - Frequency of how many new data points are added to the cache until a new compression is computed and the parameters of the GP are fitted again. Since this step is rather computational expensive we do not want to refit every step. Note however, that every new point in the cache will be utilized in the prediction even if the kernels are not refitted!
    * - ``sparse_GP_points``
      - ``0``
@@ -134,7 +140,7 @@ Uncertainty qualification related to the precision criterium of the emulator and
      - ``None``
      - See ``testing_strategy``.
    * - ``test_stochastic_testing_time_fraction``
-     - ``0.1``
+     - ``0.15``
      - See ``testing_strategy``.
    * - ``max_sigma``   
      - ``20``
@@ -142,9 +148,6 @@ Uncertainty qualification related to the precision criterium of the emulator and
    * - ``N_quality_samples``   
      - ``5``
      - Number of samples which are drawn from the emulator to estimate the performance of the emulator. The runtime is about linear in that parameter! From this number of samples we compute the mean loglikelihood $m$  and its standard deviation $\sigma_m$. In general we want the emulator to be very precise at the best fit point with its loglikelihood $b$ and less accurate for points more away. We accept the prediction of the emulator if $\sigma_m < \mathrm{quality.threshold.constant} +  \mathrm{quality.threshold.linear}*(b-m) +  \mathrm{quality.threshold.quadratic} * (b-m)^2 $
-   * - ``DEPRECATED: tail_cut_fraction``   
-     - ``0.2``
-     - The distribution of the sampled loglikes is found to be non-gaussian. However, by cutting the low end tail, we find sufficient estimates for the mean and standard deviation. This parameter specifies the fraction of the tail that is cut. 
    * - ``quality_threshold_constant``
      - ``0.1``
      - See ``N_quality_samples``
@@ -169,6 +172,15 @@ Other:
    * - parameter
      - default
      - description
+   * - ``working_directory``
+     - ``./``
+     - This will be the default directory in which all emulator related files are stored. The cache file, the emulator file, the training data and the log file.
+   * - ``emulator_state_file``
+     - ``emulator_state.pkl``
+     - This is the file the current state of the emulator is stored in. This involves normalization, PCA and GP-kernel parameters.
+   * - ``normalized_cache_file``
+     - ``normalized_cache.pkl``
+     - In this file the normalized training data are stored in by rank 0.
    * - ``load_initial_state``
      - ``False``
      - If flag is set to ``True`` the state from which the emulator is initialized is loaded from an already existing cache file. Otherwise the emulator is initialized once the theory code was run for the first time. By setting this to ``True`` and setting ``test_emulator`` to ``False``, one can use the emulator without calling the theory code at all.
@@ -179,7 +191,7 @@ Other:
      - ``True``
      - Flag if we want to use 'jax.jit' to accelerate the emulator by just-in-time compilation.
    * - ``jit_threshold``
-     - ``10``
+     - ``20``
      - Using 'jit' gives a small overhead due to compiling the code. In the early phase when there are a lot of new data points it can be ineffcient to do that every time. Thus, we can wait for a certain number of successful emulator calls until we jit the emulator.
 
 
@@ -206,4 +218,7 @@ Debugging. Very recommended when investigating a new problem:
      - Every ``status_print_frequency`` runs the status of the emulator will be printed.   
    * - ``debug``
      - ``False``
-     - If set to ``True`` the emulator will print out a lot of debugging information. This is very helpful when investigating a new problem.
+     - If set to ``True`` the emulator will print out a lot of debugging information. This is very helpful when investigating a new problem.   
+   * - ``training_verbose``
+     - ``True``
+     - If set to ``True`` the emulator will print a training bar. For clusters it is recommended to set this to ``False``.

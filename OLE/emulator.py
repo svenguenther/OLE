@@ -6,9 +6,10 @@ It is aware of the quanities which are to be emulated and their dimensionalities
 It creates and accesses the data cache and creates the individual emulators for the different quantities.
 
 """
+import os
+# os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"
 
 import numpy as np
-import os
 import pickle
 import time
 import warnings
@@ -16,16 +17,14 @@ import logging
 import jax.numpy as jnp
 import jax
 import fasteners
+import psutil
+import gc
 
 # set jax_enable_compilation_cache to False to avoid memory issues
 os.environ['JAX_ENABLE_X64'] = 'True'
-os.environ['JAX_ENABLE_COMPILED_PARTIAL_EVAL'] = 'True'
 os.environ['NPROC'] = '1'
-os.environ['intra_op_parallelism_threads'] = '1'
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '0'
 os.environ['OPENBLAS_NUM_THREADS'] = '1'
-#os.environ['XLA_PYTHON_CLIENT_ALLOCATOR'] = 'platform'
-#os.environ['XLA_PYTHON_CLIENT_PREALLOCATE'] = 'False' # This has a big impact on the runtime of the emulator!
 
 
 
@@ -96,7 +95,7 @@ class Emulator(BaseClass):
             'kernel': 'RBF',
 
             # kernel fitting frequency. Every n-th state the kernel parameters are fitted.
-            'kernel_fitting_frequency': 20,
+            'kernel_fitting_frequency': 40,
             'test_noise_levels': 100,
             # the number of data points in cache before the emulator is to be trained
             'min_data_points': 80,
@@ -117,11 +116,6 @@ class Emulator(BaseClass):
             # numer of test samples to determine the quality of the emulator
             'N_quality_samples': 5,
 
-            # tail cut fraction for the N_quality_samples. Since the loglike is chisquare distributed we need to cut the tail to get a good estimate of the std. We will do this by cutting at least 1 data point but in general a certain farction of it.
-            'tail_cut_fraction': 0.2, # deprecated
-
-
-
             # path to a directory with data covmats to do better normalization. If given, the emulator will search for data covmats in this directoy and if one is found, it will be used for normalization
             'data_covmat_directory': None,
             'white_noise_ratio' : 1., 
@@ -136,7 +130,7 @@ class Emulator(BaseClass):
 
             # only relevant for cobaya
             'cobaya_state_file': None, # TODO: put this somewhere else. This is only used in the cobaya wrapper
-            'jit_threshold': 10, # number of samples to be emulated before we jit the emulator to accelerate it TODO: put this somewhere else
+            'jit_threshold': 20, # number of samples to be emulated before we jit the emulator to accelerate it TODO: put this somewhere else
 
             # learn about the actual emulation task to estimate 'quality_threshold_quadratic'.
             'N_sigma': 4,
@@ -182,7 +176,7 @@ class Emulator(BaseClass):
             # stocaistic testing parameters
             'test_stochastic_scale': 40, # sclae of the exponential testing ratio
             'test_stochastic_rate': None, # minimal rate of testing, even after the exponential testing rate is reached. if not set, it will be estimated by meassureing time of testing and the emulation time.
-            'test_stochastic_testing_time_fraction': 0.1, # fraction of the time which is used for testing
+            'test_stochastic_testing_time_fraction': 0.15, # fraction of the time which is used for testing
 
             'working_directory': './',
             'emulator_state_file': 'emulator_state.pkl',
@@ -750,7 +744,7 @@ class Emulator(BaseClass):
             parameters = jnp.array(self.data_cache.get_parameters()[0])
 
             for i in range(len(parameters[0])):
-                plot_loglikes(loglikes[:], parameters[:,i], self.input_parameters[i], self.hyperparameters['plotting_directory']+'/loglike_'+str(i)+'.png')
+                plot_loglikes(loglikes[:], parameters[:,i], self.input_parameters[i], self.hyperparameters['working_directory'] + self.hyperparameters['plotting_directory']+'/loglike_'+str(i)+'.png')
         pass
 
         self.increment("train")
@@ -924,7 +918,9 @@ class Emulator(BaseClass):
                     self.jitted_emulation_function = None
                     # del self.jitted_emulation_function
                     # clear memory
+                    jax.clear_caches()
                     jax.clear_backends()
+                    gc.collect()
                 self.jitted_emulation_function = jax.jit(self.emulate_jit)
                 output_state_emulator = self.jitted_emulation_function(parameters)
                 self.rejit_flag_emulator = False
@@ -1097,10 +1093,16 @@ class Emulator(BaseClass):
             if self.rejit_flag_sampling: # if the emulator was updated/retrained, we rejit the emulator
 
                 if hasattr(self, 'jitted_sampling_function'):
+                    # clear memory
+                    jax.clear_backends()
+                    jax.clear_caches()
                     self.jitted_sampling_function.clear_cache()
+                    self.jitted_sampling_function = None
                     del self.jitted_sampling_function
                     # clear memory
                     jax.clear_backends()
+                    jax.clear_caches()
+                    gc.collect()
 
                 self.jitted_sampling_function = jax.jit(self.emulate_samples_jit)
                 output_states_emulator, RNGkey = self.jitted_sampling_function(parameters, RNGkey,noise)

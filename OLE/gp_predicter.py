@@ -526,12 +526,19 @@ class GP(BaseClass):
             "kernel": "RBF",
             # Exponential decay learning rate
             "learning_rate": 0.1,
-            # Number of iterations
-            "num_iters": 400, # per iteration
+
+            # Number of iterations # None
+            "num_iters": None, # per default it will be deduced from the number of data points, but if set will be overwritten
             # Maximal number of iterations
-            "max_num_iters": 2000,
+            "max_num_iters": None, # per default it will be deduced from the number of data points, but if set will be overwritten
+
+            # initial number of epochs per datapoint
+            "num_epochs_per_dp": 30,
+            # maximal number of epochs per datapoint
+            "max_num_epochs_per_dp": 120,
+
             # Early stopping criterion
-            "early_stopping": 0.05,
+            "early_stopping": 0.1,
             # Early stopping averaging window
             "early_stopping_window": 10,
             # plotting directory
@@ -587,6 +594,12 @@ class GP(BaseClass):
         gc.collect()
         self.D = gpx.Dataset(self.input_data, self.output_data)
         self.test_D = None
+
+        # set the number of iterations
+        if self.hyperparameters["num_iters"] is None:
+            self.hyperparameters["num_iters"] = int(self.D.n * self.hyperparameters["num_epochs_per_dp"])
+        if self.hyperparameters["max_num_iters"] is None:
+            self.hyperparameters["max_num_iters"] = int(self.D.n * self.hyperparameters["max_num_epochs_per_dp"])
 
         # if we have a test fraction, then we will split the data into a training and a test set
         if (self.hyperparameters["testset_fraction"] is not None) and (get_mpi_rank() == 0):

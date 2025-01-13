@@ -7,6 +7,7 @@
 import importlib
 import importlib.util
 import sys
+import os
 
 # Since we would like to use hte cobaya intrinsic 'boltzmannbase' theory, we need to adapt the source code of the cobaya intrinsic 'boltzmannbase' theory to use the OLE theory interface.
 # 
@@ -106,28 +107,32 @@ info = {
                 'ignore_obsolete': True,
 
                 'emulator_settings': {
-                    'min_data_points': 80,
+                    # directory to store the emulator files
+                    'working_directory': './chains_emulator/',
 
-                    'output_directory': 'chains_emulator/output',
-                    'min_variance_per_bin': 1e-4,
-
-                    # name of the cache file
-                    'cache_file': './chains_emulator/cache.pkl',
                     # load the cache from previous runs if possible. If set to false, the cache is overwritten.
                     'load_cache': True,
+                    'share_cache': True,
 
                     # accuracy parameters for loglike:
-                    'quality_threshold_constant': 0.5,
-                    'quality_threshold_linear': 0.1,
+                    'quality_threshold_constant': 0.1,
+                    'quality_threshold_linear': 0.01,
 
+                    # number of sampled parameters. Here we have 6 cosmological parameters and 21 Planck parameters
+                    'dimensionality': 27,
+                    'status_print_frequency': 20,
+                    
                     # number of quality states to estimate from
                     'N_quality_samples': 5,
 
-                    # plotting directory
-                    # 'plotting_directory': './chains_emulator/plots',
+                    # plotting directory. Uncomment to create plots.
+                    # 'plotting_directory': 'plots',
                     # 'testset_fraction': 0.1,
 
-                    'logfile': 'chains_emulator/logfile',
+                    # name of the logfile
+                    'logfile': 'logfile',
+
+                    # 'debug': True,
 
                     # veto to predict following quantities. 
                     # The emulator does not know intrinsicially which parameters are expected to be computed since it is build based upon a general cobaya state.
@@ -146,7 +151,7 @@ info = {
             'h': {'latex': 'h',
                 'prior': {'max': 1.0, 'min': 0.4},
                 'proposal': 0.01,     
-                'ref': {'dist': 'norm', 'loc': 0.699, 'scale': 0.001}
+                'ref': {'dist': 'norm', 'loc': 0.68104431, 'scale': 0.01}
                 },
             'clamp': {'derived': 'lambda A_s, tau_reio: '
                                 '1e9*A_s*np.exp(-2*tau_reio)',
@@ -155,45 +160,47 @@ info = {
                     'latex': '\\log(10^{10} A_\\mathrm{s})',
                     'prior': {'max': 3.257, 'min': 2.837},
                     'proposal': 0.02,   
-                    'ref': {'dist': 'norm', 'loc': 3.046, 'scale': 0.002}
+                    'ref': {'dist': 'norm', 'loc': 3.0486233, 'scale': 0.02}
                     },
             'n_s': {'latex': 'n_\\mathrm{s}',
                     'prior': {'max': 1.0235, 'min': 0.9095},
                     'proposal': 0.004,    
-                    'ref': {'dist': 'norm', 'loc': 0.967, 'scale': 0.0004}
+                    'ref': {'dist': 'norm', 'loc': 0.96854107, 'scale': 0.004}
                     },
             'omega_b': {'latex': '\\Omega_\\mathrm{b} h^2',
                         'prior': {'max': 0.02452, 'min': 0.02032},
                         'proposal': 0.0002,
-                        'ref': {'dist': 'norm','loc': 0.0225,'scale': 0.00002}
+                        'ref': {'dist': 'norm','loc': 0.022191874,'scale': 0.0002}
                         },
             'omega_cdm': {'latex': '\\omega_\\mathrm{cdm} ',
                         'prior': {'max': 0.1329, 'min': 0.1057},
                         'proposal': 0.003,
-                        'ref': {'dist': 'norm', 'loc': 0.123, 'scale': 0.003}
+                        'ref': {'dist': 'norm', 'loc': 0.11886091, 'scale': 0.003}
                         },
             'sigma8': {'latex': '\\sigma_8'},
             'tau_reio': {'latex': '\\tau_\\mathrm{reio}',
                         'prior': {'max': 0.08449, 'min': 0.0276},
                         'proposal': 0.01,   #053075671
-                        'ref': {'dist': 'norm', 'loc': 0.058, 'scale': 0.001}
+                        'ref': {'dist': 'norm', 'loc': 0.059658148, 'scale': 0.01}
                         },
         },
     "sampler": { 
         "mcmc": {
             "drag":False,
             "learn_proposal": True,
-            #"oversample_power": 0.0,
+            # oversampling is an interesting topic. When using the emulator it is nice to have oversampling during the initial burn-in phase.
+            # However, in the later stages (actually the time consuming ones), the runtime will be dominated by the runtime of the likelihood. In those cases we lose efficiency by oversampling.
+            "oversample_power": 0.0, 
             "proposal_scale":2.1,
             "Rminus1_stop": 0.01,
             "max_tries": 24000,
-            #"covmat": os.path.expanduser("./lcdm.covmat"),
+            "covmat": os.path.expanduser("./lcdm.covmat"),
             },
         },
         'output': 'chains_emulator/test_class',
         'debug': False,
-        'force': True,
-        'resume':False,
+        'force': False,
+        'resume':True,
         }
 
 
