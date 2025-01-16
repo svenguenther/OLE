@@ -33,7 +33,6 @@ dependencies = [
 "emcee",
 "matplotlib",
 "scikit-learn",
-"mpi4py",
 ]
 
 [project.optional-dependencies]
@@ -45,6 +44,10 @@ docs = [
 "myst-parser==2.0.0",
 "numpy",
 "matplotlib"
+]
+
+MPI = [
+"mpi4py",
 ]
 
 [tool.flit.module]

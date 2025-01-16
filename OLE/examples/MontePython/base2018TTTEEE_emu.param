@@ -16,7 +16,6 @@
 
 #------Experiments to test (separated with commas)-----
 
-# data.experiments=['Planck_highl_TTTEEE'] #, 'Planck_lowl_EE', 'Planck_lowl_TT']
 data.experiments=['Planck_highl_TTTEEE', 'Planck_lowl_EE', 'Planck_lowl_TT']
 
 #------ Settings for the over-sampling.
@@ -143,21 +142,26 @@ data.write_step=5
 #------ Emulator parameters ----
 data.emulator_settings['min_data_points'] = 80
 
-# Cache settings
+# load the cache from previous runs if possible. If set to false, the cache is overwritten.
 data.emulator_settings['load_cache'] = True
-data.emulator_settings['cache_file'] = './chains/cache.pkl'
+data.emulator_settings['share_cache'] = True
+
+# directory to store the emulator files
+data.emulator_settings['working_directory'] = './MontePython_test_Planck2018'
 
 
-# data.emulator_settings['plotting_directory'] = './plots_spt_clang_nuts'
+# plotting directory. Uncomment to create plots.
+# data.emulator_settings['plotting_directory'] = 'OLE_plots'
 # data.emulator_settings['testset_fraction'] = 0.1
 
-data.emulator_settings['logfile'] = './log.txt'
+data.emulator_settings['logfile'] = 'logfile'
 
-data.emulator_settings['min_variance_per_bin'] = 1e-6 #1e-4
+data.emulator_settings['min_variance_per_bin'] = 1e-4
 
 data.emulator_settings['skip_emulation_quantities'] = ['bb','tp','pp','T_cmb', 'ell']
 
-data.emulator_settings['quality_threshold_constant'] = 0.5
-data.emulator_settings['quality_threshold_linear'] = 0.1
+# accuracy parameters for loglike:
+data.emulator_settings['quality_threshold_constant'] = 0.1
+data.emulator_settings['quality_threshold_linear'] = 0.01
 data.emulator_settings['N_sigma'] = 4.0
 data.emulator_settings['dimensionality'] = 27
