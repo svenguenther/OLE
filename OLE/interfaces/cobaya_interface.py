@@ -220,7 +220,10 @@ def check_cache_and_compute(self, params_values_dict,
         state["params"][key] = float(value)
 
     # make this state the current one
-    _ = copy.deepcopy(state) # deepcopy to keep it in the cache :)
+    try:
+        _ = copy.deepcopy(state) # deepcopy to keep it in the cache :)
+    except:
+        _ = state # we do this try because of CAMB FORTRAN things
 
     self._states.appendleft(_)
     self._current_state = state

@@ -33,7 +33,6 @@ dependencies = [
 "emcee",
 "matplotlib",
 "scikit-learn",
-"psutil",
 ]
 
 [project.optional-dependencies]

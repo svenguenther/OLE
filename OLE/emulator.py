@@ -17,7 +17,6 @@ import logging
 import jax.numpy as jnp
 import jax
 import fasteners
-import psutil
 import gc
 
 # set jax_enable_compilation_cache to False to avoid memory issues
@@ -273,7 +272,8 @@ class Emulator(BaseClass):
                 max_sigma = self.hyperparameters['max_sigma']
                 dimensionality = self.hyperparameters['dimensionality']
                 self.maximal_delta_loglike = -1.53901996e-03 * dimensionality**2 + 3.46998485e-01  * max_sigma**2 + 5.55189162e-02 * dimensionality * max_sigma + 6.39086834e-01 * dimensionality + 2.36251372e+00 * max_sigma + -5.14787690e+00
-
+                if self.hyperparameters['max_sigma'] == 0:
+                    self.maximal_delta_loglike = 0 # this is just a debug thing. If we set max_sigma to 0, we do not want to use the emulator at all.    
 
         # if we have a data_covmat_directory we search for the data covmat in this directory
         self.data_covmats = {quantity_name: None for quantity_name in ini_state['quantities'].keys()}
@@ -351,6 +351,7 @@ class Emulator(BaseClass):
         # start timer
         self.start("add_state")
 
+
         # new state
         new_state = deepcopy(state)
 
@@ -360,7 +361,11 @@ class Emulator(BaseClass):
                 del new_state['parameters'][key]
 
         # Add a state to the emulator. This means that the state is added to the data cache and the emulator is retrained.
-        state_added = self.data_cache.add_state(new_state)
+        # when debugging the emulator, we do not want further data points
+        if (self.hyperparameters['max_sigma'] == 0.0) and self.trained:
+            state_added = False
+        else:
+            state_added = self.data_cache.add_state(new_state)
 
         if state_added:
             # write to log that the state was added
@@ -796,8 +801,6 @@ class Emulator(BaseClass):
         self.hyperparameters['white_noise_level'] = emulator_state['quantities'][my_training_quantity]['GPs'][my_PCA_number]['white_noise_level']
 
         # print current memory usage
-        # import psutil
-        # self.info("Current memory usage: %f GB", psutil.virtual_memory().used/1024**3)
 
         if not hasattr(self, 'my_test_GP'):
             self.my_test_GP = GP("Training GP " + my_training_quantity + " dim " + str(my_PCA_number),
@@ -829,7 +832,6 @@ class Emulator(BaseClass):
         del parameters
         del output_data
         
-        # self.info("Current memory usage: %f GB", psutil.virtual_memory().used/1024**3)
 
 
         return True
@@ -1309,7 +1311,7 @@ class Emulator(BaseClass):
             #loglikesNew = loglikes[1:]
             variances_loglikes = ( loglikes - mean_loglike )**2
             std_loglike = jnp.sqrt(jnp.median(variances_loglikes))
-            
+
 
         else:
             std_loglike = loglikes[0]
