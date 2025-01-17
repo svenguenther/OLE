@@ -595,6 +595,8 @@ if __name__ == '__main__':
 
         # For each desired likelihood, compute its value against the theoretical
         # model
+        if cosmo.emulator is not None:
+            cosmo.emulator.start('likelihood')
         loglike = 0
         # This flag holds the information whether a fiducial model was written. In
         # this case, the log likelihood returned will be '1j', meaning the
@@ -618,6 +620,9 @@ if __name__ == '__main__':
                 flag_wrote_fiducial += 1
         if data.command_line.display_each_chi2:
             print("-> Total:  loglkl=",loglike,",  chi2eff=",-2.*loglike)
+
+        if cosmo.emulator is not None:
+            cosmo.emulator.increment('likelihood')
 
         # Compute the derived parameters if relevant
         if data.get_mcmc_parameters(['derived']) != []:
