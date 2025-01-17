@@ -4,7 +4,6 @@ import numpy as np
 import datetime
 import os
 import gc
-import cv2
 
 event_dict = {'likelihood': 'likelihood evaluation', 'theory_code': 'CLASS', 'add_state': 'Cache interaction', 'train': 'train emulator', 'emulate_samples': 'sample testing states', 'likelihood_testing':'run likelihood for testing', 'emulate':'evaluate emulator', 'update': 'updating emulator'}
 
@@ -646,7 +645,7 @@ def make_1d_cache_video(logfile_paths, parameter, plot_dir='./temp_directory_for
     delta_loglike = -1.53901996e-03 * dim**2 + 3.46998485e-01  * sigma**2 + 5.55189162e-02 * dim * sigma + 6.39086834e-01 * dim + 2.36251372e+00 * sigma + -5.14787690e+00
 
     # compute delta_loglike
-
+    import cv2
     # append all events from all logfiles
     for i, logfile_path in enumerate(logfile_paths):
 
@@ -754,7 +753,7 @@ def plot_2d_cache_video(i, all_events, parameter1, parameter2, delta_loglike, fi
     N_total = 0
     N_cache = 0
 
-
+    import cv2
     for event in all_events[:i]:
         N_total += 1
         # check if we are before or aftr first training
@@ -946,7 +945,19 @@ def make_2d_cache_video(logfile_paths, parameter1, parameter2, plot_dir='./temp_
         for frame in frames:
             os.remove(frame)
 
-def plot_errors_in_max_sigma_equals_zero_mode(logfile_paths, plot_dir='./', quality_constant=0.1, quality_linear=0.01, quality_quadratic=0.001, min_index=0, max_index=-1):
+def plot_errors_in_max_sigma_equals_zero_mode(logfile_paths, plot_dir='./', quality_constant=0.1, quality_linear=0.01, quality_quadratic=0.001, min_index=0, max_index=-1, dim=None, N_sigma=None):
+
+    # set quadratic term if dim and N_sigma are given
+    if dim is not None and N_sigma is not None:
+        from scipy.stats import chi2
+        p_val = chi2.cdf(N_sigma**2, 1)
+        accuracy_loglike = chi2.ppf(p_val, dim)/2
+        quality_quadratic = (quality_constant + quality_linear*accuracy_loglike)/accuracy_loglike**2
+        print("Quality quadratic: ", quality_quadratic)
+
+
+
+
     # append all events from all logfiles
     for i, logfile_path in enumerate(logfile_paths):
 
@@ -999,6 +1010,15 @@ def plot_errors_in_max_sigma_equals_zero_mode(logfile_paths, plot_dir='./', qual
 
     acc_flag = std_loglike < acc_std
 
+    # make plot std_loglike vs acc_std
+    fig,ax = plt.subplots(1,1,figsize=(10,5))
+    ax.scatter(std_loglike, acc_std)
+    ax.plot([0, max(std_loglike)], [0, max(std_loglike)], color='black', linestyle='--')
+    ax.set_xlabel("std_loglike")
+    ax.set_ylabel("acc_std")
+    plt.tight_layout()
+    plt.savefig(plot_dir + "std_loglike_vs_acc_std.png")
+
     # add acc_flag to event
     for i,event in enumerate(not_using_events):
         event['acc_flag'] = acc_flag[i]
@@ -1029,15 +1049,24 @@ def plot_errors_in_max_sigma_equals_zero_mode(logfile_paths, plot_dir='./', qual
 
     inv_acc_flag = [not _ for _ in acc_flag]
 
+    norm_devs = np.array([event['reference_loglike'] - event['not_adding_event']['loglike'] for event in all_events])/std_loglike
+
     # now do the same plot but scale the x-axis by the std_loglike
     fig,ax = plt.subplots(1,1,figsize=(10,5))
+    mean = np.mean(norm_devs)
+    std = np.std(norm_devs[abs(norm_devs)<50.0])
+    print(max(norm_devs))
+    print(std)
     ax.scatter([event['reference_loglike'] - event['not_adding_event']['loglike'] for event in all_events if event['acc_flag']]/std_loglike[acc_flag], [event['not_adding_event']['loglike'] for event in all_events if event['acc_flag']], label="Difference in loglike between not_using_event and not_adding_event")
     ax.scatter([event['reference_loglike'] - event['not_adding_event']['loglike'] for event in all_events if not event['acc_flag']]/std_loglike[inv_acc_flag], [event['not_adding_event']['loglike'] for event in all_events if not event['acc_flag']], label="Difference in loglike between not_using_event and not_adding_event")
     ax.axvline(0, color='black', linestyle='--')
+    ax.axvline(mean, color='red', linestyle='--')
+    ax.axvline(mean-std, color='red', linestyle='--')
+    ax.axvline(mean+std, color='red', linestyle='--')
     ax.set_ylabel("True loglike")
     ax.set_xlabel("Difference in loglike scaled by std_loglike")
     ax.set_ylim(max([event['not_adding_event']['loglike'] for event in all_events])+10, max([event['not_adding_event']['loglike'] for event in all_events])+10-delta_loglike)
-    ax.set_xlim(-5,5)
+    ax.set_xlim(-10,10)
     plt.tight_layout()
 
     plt.savefig(plot_dir + "errors_in_max_sigma_equals_zero_mode_scaled_by_std_loglike.png")
