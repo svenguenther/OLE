@@ -68,11 +68,11 @@ class data_processor(BaseClass):
 
         defaulthyperparameters = {
             # explained variance cutoff is the minimum explained variance which is required for the PCA compression. Once this value is reached, the PCA compression is stopped.
-            "min_variance_per_bin": 1e-4,
+            "min_variance_per_bin": 1e-5,
             # this should also inform the error of the GPs to remain consistent. Or alternatively since we specify error params,
             # those might also set this parameter
             # maximal number of dimensions of the compressed data
-            "max_output_dimensions": 30,
+            "max_output_dimensions": 40,
             # working directory
             "working_directory": './',
             # plotting directory
