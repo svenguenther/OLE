@@ -533,9 +533,9 @@ class GP(BaseClass):
             "max_num_iters": None, # per default it will be deduced from the number of data points, but if set will be overwritten
 
             # initial number of epochs per datapoint
-            "num_epochs_per_dp": 30,
+            "num_epochs_per_dp": 2,
             # maximal number of epochs per datapoint
-            "max_num_epochs_per_dp": 120,
+            "max_num_epochs_per_dp": 40,
 
             # Early stopping criterion
             "early_stopping": 0.1,
