@@ -98,10 +98,11 @@ info = {
                     "non linear": "halofit",
                     "lensing":"yes",
                     "compute damping scale":"yes",
-                    #'N_ncdm' : 1,
-                    #'m_ncdm' : 0.06,
-                    #'T_ncdm' : 0.71611,
-                    "N_ur": 3.044,
+                    'N_ncdm' : 1,
+                    'm_ncdm' : 0.06,
+                    'T_ncdm' : 0.71611,
+                    'N_ur': 2.0328,
+                    # "N_ur": 3.044,
                 },
                 'emulate' : True, 
                 'ignore_obsolete': True,
@@ -116,14 +117,10 @@ info = {
 
                     # accuracy parameters for loglike:
                     'quality_threshold_constant': 0.1,
-                    'quality_threshold_linear': 0.01,
+                    'quality_threshold_linear': 0.05,
 
                     # number of sampled parameters. Here we have 6 cosmological parameters and 21 Planck parameters
                     'dimensionality': 27,
-                    'status_print_frequency': 20,
-                    
-                    # number of quality states to estimate from
-                    'N_quality_samples': 5,
 
                     # plotting directory. Uncomment to create plots.
                     # 'plotting_directory': 'plots',
@@ -131,8 +128,6 @@ info = {
 
                     # name of the logfile
                     'logfile': 'logfile',
-
-                    # 'debug': True,
 
                     # veto to predict following quantities. 
                     # The emulator does not know intrinsicially which parameters are expected to be computed since it is build based upon a general cobaya state.
@@ -151,7 +146,7 @@ info = {
             'h': {'latex': 'h',
                 'prior': {'max': 1.0, 'min': 0.4},
                 'proposal': 0.01,     
-                'ref': {'dist': 'norm', 'loc': 0.68104431, 'scale': 0.01}
+                'ref': {'dist': 'norm', 'loc': 0.68104431, 'scale': 0.001}
                 },
             'clamp': {'derived': 'lambda A_s, tau_reio: '
                                 '1e9*A_s*np.exp(-2*tau_reio)',
@@ -160,28 +155,28 @@ info = {
                     'latex': '\\log(10^{10} A_\\mathrm{s})',
                     'prior': {'max': 3.257, 'min': 2.837},
                     'proposal': 0.02,   
-                    'ref': {'dist': 'norm', 'loc': 3.0486233, 'scale': 0.02}
+                    'ref': {'dist': 'norm', 'loc': 3.0486233, 'scale': 0.002}
                     },
             'n_s': {'latex': 'n_\\mathrm{s}',
                     'prior': {'max': 1.0235, 'min': 0.9095},
                     'proposal': 0.004,    
-                    'ref': {'dist': 'norm', 'loc': 0.96854107, 'scale': 0.004}
+                    'ref': {'dist': 'norm', 'loc': 0.96854107, 'scale': 0.0004}
                     },
             'omega_b': {'latex': '\\Omega_\\mathrm{b} h^2',
                         'prior': {'max': 0.02452, 'min': 0.02032},
                         'proposal': 0.0002,
-                        'ref': {'dist': 'norm','loc': 0.022191874,'scale': 0.0002}
+                        'ref': {'dist': 'norm','loc': 0.022191874,'scale': 0.00002}
                         },
             'omega_cdm': {'latex': '\\omega_\\mathrm{cdm} ',
                         'prior': {'max': 0.1329, 'min': 0.1057},
                         'proposal': 0.003,
-                        'ref': {'dist': 'norm', 'loc': 0.11886091, 'scale': 0.003}
+                        'ref': {'dist': 'norm', 'loc': 0.11886091, 'scale': 0.0003}
                         },
             'sigma8': {'latex': '\\sigma_8'},
             'tau_reio': {'latex': '\\tau_\\mathrm{reio}',
                         'prior': {'max': 0.08449, 'min': 0.0276},
                         'proposal': 0.01,   #053075671
-                        'ref': {'dist': 'norm', 'loc': 0.059658148, 'scale': 0.01}
+                        'ref': {'dist': 'norm', 'loc': 0.059658148, 'scale': 0.001}
                         },
         },
     "sampler": { 

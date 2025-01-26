@@ -35,6 +35,8 @@ class SubTimer:
         return time.time() - self._first_time
     
     def get_time_avg(self):
+        if self.n == 0:
+            return 0
         return self.time_sum / self.n
     
     def increment(self):

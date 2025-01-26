@@ -44,33 +44,32 @@ my_likelihood_collection = {'candl': my_likelihood}
 
 emulator_settings = {
     # the number of data points in cache before the emulator is to be trained
-    'min_data_points': 80,
+    'min_data_points': 100,
 
     # name of the cache file
-    'cache_file': './output_clang_act_nuts/cache.pkl',
+    'working_directory': './output_clang_act_nuts/',
     # load the cache from previous runs if possible. If set to false, the cache is overwritten.
     'load_cache': True,
 
     # accuracy parameters for loglike:
-    'quality_threshold_constant': 1.0,
+    'quality_threshold_constant':0.1,
     'quality_threshold_linear': 0.1,
-
-    # related so sampler
-    'min_variance_per_bin': 1e-6,
-    'num_iters': 300,
 
     # cache criteria
     'dimensionality': 7,
     'N_sigma': 4.0,
 
+    'testing_strategy': 'test_all',
+    
     # 'plotting_directory': './output_clang_act_nuts/plots_sampler_clang_nuts',
     # 'testset_fraction': 0.1,
-    'logfile': './output_clang_act_nuts/log',
+    'logfile': 'log',
 
     # 'compute_data_covmat': True,
     'data_covmat_directory': './act_data_covmats',
 
     # 'jit': False,
+    'debug': False,
 
 }
 
@@ -95,6 +94,9 @@ sampling_settings = {
     # M adapt # burn-in of NUTS
     'M_adapt': 200,
     'minimize_nuisance_parameters': True,
+
+    # covmat
+    # 'covmat' : './lcdm.covmat',
 }
 
 
@@ -135,8 +137,7 @@ my_sampler.initialize(theory=my_theory,
                       emulator_settings = emulator_settings,
                       likelihood_collection_settings = my_likelihood_collection_settings,
                       theory_settings = theory_settings,
-                      sampling_settings = sampling_settings,
-                    #   debug = True
+                      sampling_settings = sampling_settings
                       )
 
 # Note the total run steps are   (nsteps * nwalkers * MPI_size)
