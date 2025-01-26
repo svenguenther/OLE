@@ -545,7 +545,7 @@ class Sampler(BaseClass):
 
         # compute the total loglike
         logprior = self.compute_logprior(state)
-        state['total_loglike'] = jnp.array(list(state['loglike'].values())).sum() + logprior
+        state['total_loglike'] = jnp.array([jnp.array(list(state['loglike'].values())).sum() + logprior])
             
 
         self.debug("Test pipeline:")
@@ -705,7 +705,7 @@ class Sampler(BaseClass):
                 state = self.likelihood_collection[likelihood].loglike_state(state)
             self.debug("loglikes after theory: %s for parameters: %s", state['loglike'], state['parameters'])
 
-            state['total_loglike'] = jnp.array(list(state['loglike'].values())).sum() + logprior
+            state['total_loglike'] = jnp.array([jnp.array(list(state['loglike'].values())).sum() + logprior])
             if self.hyperparameters['use_emulator']:
                 self.emulator.add_state(state)
         else:
@@ -718,26 +718,26 @@ class Sampler(BaseClass):
                 state = self.likelihood_collection[likelihood].loglike_state(state)
             self.debug("loglike after theory: %s for parameters: %s", state['loglike'], state['parameters'])
 
-            state['total_loglike'] = jnp.array(list(state['loglike'].values())).sum() + logprior
+            state['total_loglike'] = jnp.array([jnp.array(list(state['loglike'].values())).sum() + logprior])
             self.debug("emulator prediction: %s", state['quantities'])
             
             # here we need to test the emulator for its performance
-            emulator_sample_states, RNGkey = self.emulator.emulate_samples(state['parameters'], RNGkey=RNGkey,noise=0)
+            emulator_sample_states, RNGkey = self.emulator.emulate_samples(state['parameters'], RNGkey=RNGkey,noise=0.0)
             emulator_sample_loglikes = jnp.zeros(len(emulator_sample_states))
             for i, emulator_sample_state in enumerate(emulator_sample_states):
                 for likelihood in self.likelihood_collection.keys():
                     emulator_sample_state = self.likelihood_collection[likelihood].loglike_state(emulator_sample_state)
-                emulator_sample_state['total_loglike'] = jnp.array(list(emulator_sample_state['loglike'].values())).sum() + logprior
+                emulator_sample_state['total_loglike'] = jnp.array([jnp.array(list(emulator_sample_state['loglike'].values())).sum() + logprior])
                 emulator_sample_loglikes = emulator_sample_loglikes.at[i].set(jnp.array(list(emulator_sample_state['loglike'].values())).sum() + logprior)
 
             # check whether the emulator is good enough
-            if not self.emulator.check_quality_criterium(emulator_sample_loglikes, reference_loglike=state['total_loglike'] , parameters=state['parameters']):
+            if not self.emulator.check_quality_criterium(emulator_sample_loglikes, reference_loglike=state['total_loglike'][0] , parameters=state['parameters']):
                 self.emulator.start('theory_code')
                 state = self.theory.compute(state)
                 self.emulator.increment('theory_code')
                 for likelihood in self.likelihood_collection.keys():
                     state = self.likelihood_collection[likelihood].loglike_state(state)
-                state['total_loglike'] = jnp.array(list(state['loglike'].values())).sum() + logprior
+                state['total_loglike'] = jnp.array([jnp.array(list(state['loglike'].values())).sum() + logprior])
                 self.emulator.add_state(state)
             else:
                 # Add the point to the quality points
@@ -758,7 +758,7 @@ class Sampler(BaseClass):
             _ = "Logposterior: "+ str(state['total_loglike']) + ' at ' + " ".join([str(key) + ": " + str(value[0]) for key, value in state['parameters'].items()]) + "\n"
             self.write_to_log(_)
 
-        return state['total_loglike']
+        return state['total_loglike'][0]
     
     def compute_loglike_uncertainty_for_differentiable_likelihood_from_normalized_parameters(self, parameters, include_error_tolerance=False):
         """
@@ -861,18 +861,18 @@ class Sampler(BaseClass):
             self.debug("state after theory: %s for parameters: %s", state['quantities'], state['parameters'])
         else:
             # here we need to test the emulator for its performance
-            emulator_sample_states, RNGkey = self.emulator.emulate_samples(state['parameters'],RNGkey=RNGkey , noise=0)
+            emulator_sample_states, RNGkey = self.emulator.emulate_samples(state['parameters'],RNGkey=RNGkey , noise=0.0)
 
             # here we do tests. If the likelihood collection is differentiable, we fo not need to sample
             if self.emulator.likelihood_collection_differentiable:
                 state = self.emulator.emulate(state['parameters'])
                 for likelihood in self.likelihood_collection.keys():
                     state = self.likelihood_collection[likelihood].loglike_state(state)
-                state['total_loglike'] = jnp.array(list(state['loglike'].values())).sum()+self.compute_logprior(state)
+                state['total_loglike'] = jnp.array([jnp.array(list(state['loglike'].values())).sum()+self.compute_logprior(state)])
                 loglike_uncertainty = jnp.array([self.compute_loglike_uncertainty_for_differentiable_likelihood_from_normalized_parameters(state['parameters'])])
 
                 # check whether the emulator is good enough
-                if not self.emulator.check_quality_criterium(loglike_uncertainty, reference_loglike=state['total_loglike'], parameters=state['parameters']):
+                if not self.emulator.check_quality_criterium(loglike_uncertainty, reference_loglike=state['total_loglike'][0], parameters=state['parameters']):
                     self.emulator.start('theory_code')
                     state = self.theory.compute(state)
                     self.emulator.increment('theory_code')
@@ -887,7 +887,7 @@ class Sampler(BaseClass):
 
             else:
                 # here we need to test the emulator for its performance
-                emulator_sample_states, RNGkey = self.emulator.emulate_samples(state['parameters'],RNGkey=RNGkey , noise=1)
+                emulator_sample_states, RNGkey = self.emulator.emulate_samples(state['parameters'],RNGkey=RNGkey , noise=0.0)
 
                 emulator_sample_loglikes = jnp.zeros(len(emulator_sample_states))
                 for i, emulator_sample_state in enumerate(emulator_sample_states):
@@ -941,7 +941,7 @@ class Sampler(BaseClass):
             local_state = self.likelihood_collection[key].loglike_state(local_state)
 
         logprior = self.compute_logprior(local_state)
-        local_state['total_loglike'] = jnp.array(list(local_state['loglike'].values())).sum() + logprior
+        local_state['total_loglike'] = jnp.array([jnp.array(list(local_state['loglike'].values())).sum() + logprior])
 
         if type(local_state['total_loglike']) != jax._src.interpreters.ad.JVPTracer:
             _ = "Logposterior: "+ str(local_state['loglike']) + ' at ' + " ".join([str(key) + ": " + str(value[0]) for key, value in local_state['parameters'].items()]) + "\n"
@@ -1015,9 +1015,9 @@ class Sampler(BaseClass):
                 state = self.likelihood_collection[likelihood].loglike_state(state)
             self.debug("loglike after theory: %s for parameters: %s", state['loglike'], state['parameters'])
 
-            state['total_loglike'] = jnp.array(list(state['loglike'].values())).sum() + logprior
+            state['total_loglike'] = jnp.array([jnp.array(list(state['loglike'].values())).sum() + logprior])
             self.debug("emulator prediction: %s", state['quantities'])
-            return state['total_loglike']
+            return state['total_loglike'][0]
         
         def full_logprior(state):
             logprior = self.compute_logprior_with_border(state)
@@ -1030,21 +1030,21 @@ class Sampler(BaseClass):
             for likelihood in self.likelihood_collection.keys():
                 state = self.likelihood_collection[likelihood].loglike_state(state)
 
-            state['total_loglike'] = jnp.array(list(state['loglike'].values())).sum() + logprior
+            state['total_loglike'] = jnp.array([jnp.array(list(state['loglike'].values())).sum() + logprior])
 
-            return state['total_loglike']
+            return state['total_loglike'][0]
         
-        state['total_loglike'] = lax.cond(logprior < -1e20, full_logprior, full_loglike, state)
+        state['total_loglike'] = jnp.array([lax.cond(logprior < -1e20, full_logprior, full_loglike, state)])
 
         parameters = self.transform_parameters_into_normalized_eigenspace(parameters)
 
         self.increment("emulate_logposterior_from_parameters_differentiable")
         
-        if type(state['total_loglike']) != jax._src.interpreters.ad.JVPTracer:
+        if type(state['total_loglike'][0]) != jax._src.interpreters.ad.JVPTracer:
             _ = "Logposterior: "+ str(state['total_loglike']) + ' at ' + " ".join([str(key) + ": " + str(value[0]) for key, value in state['parameters'].items()]) + "\n"
             self.write_to_log(_)
 
-        return state['total_loglike']
+        return state['total_loglike'][0]
 
     # This function emulates the loglikelihoods for given parameters.
     def emulate_loglikelihood_from_parameters_differentiable(self, parameters):
@@ -1080,16 +1080,16 @@ class Sampler(BaseClass):
         state = self.emulator.emulate_jit(state['parameters'])
         for likelihood in self.likelihood_collection.keys():
             state = self.likelihood_collection[likelihood].loglike_state(state)
-        state['total_loglike'] = jnp.array(list(state['loglike'].values())).sum()
-        self.debug("loglike after theory: %f for parameters: %s", state['total_loglike'], state['parameters'])
+        state['total_loglike'] = jnp.array([jnp.array(list(state['loglike'].values())).sum()])
+        self.debug("loglike after theory: %f for parameters: %s", state['total_loglike'][0], state['parameters'])
 
         self.increment("emulate_loglikelihood_from_parameters_differentiable")
 
-        if type(state['total_loglike']) != jax._src.interpreters.ad.JVPTracer:
-            _ = "Logposterior: "+ str(state['total_loglike']) + ' at ' + " ".join([str(key) + ": " + str(value[0]) for key, value in state['parameters'].items()]) + "\n"
+        if type(state['total_loglike'][0]) != jax._src.interpreters.ad.JVPTracer:
+            _ = "Logposterior: "+ str(state['total_loglike'][0]) + ' at ' + " ".join([str(key) + ": " + str(value[0]) for key, value in state['parameters'].items()]) + "\n"
             self.write_to_log(_)
         
-        return state['total_loglike']
+        return state['total_loglike'][0]
 
 
     def sample_emulate_logposterior_from_normalized_parameters_differentiable(self, parameters, N=1, RNGkey=jax.random.PRNGKey(int(time.time())), noise = 0.):
@@ -1170,8 +1170,8 @@ class Sampler(BaseClass):
             state = states[i]
             for likelihood in self.likelihood_collection.keys():
                 state = self.likelihood_collection[likelihood].loglike_state(state)
-            state['total_loglike'] = jnp.array(list(state['loglike'].values())).sum() + logprior
-            loglikes = loglikes.at[i].set(state['total_loglike'])
+            state['total_loglike'] = jnp.array([jnp.array(list(state['loglike'].values())).sum() + logprior])
+            loglikes = loglikes.at[i].set(state['total_loglike'][0])
 
         self.increment("sample_emulate_logposterior_from_parameters_differentiable")
 
@@ -1190,7 +1190,7 @@ class Sampler(BaseClass):
         res = self.emulate_logposterior_from_normalized_parameters_differentiable(parameters)
         return res
     
-    def sample_emulate_total_logposterior_from_normalized_parameters_differentiable(self, parameters, noise = 0):
+    def sample_emulate_total_logposterior_from_normalized_parameters_differentiable(self, parameters, noise = 0.0):
         """
         This function samples the total loglikelihood for given normalized parameters from the emulator in order to test its performance.
         """
@@ -1198,7 +1198,7 @@ class Sampler(BaseClass):
         res = [_.sum() for _ in self.sample_emulate_logposterior_from_normalized_parameters_differentiable(parameters, N=N , noise = noise)]
         return res
     
-    def sample_emulate_total_logposterior_from_parameters_differentiable(self, parameters, noise = 0):
+    def sample_emulate_total_logposterior_from_parameters_differentiable(self, parameters, noise = 0.0):
         """
         This function samples the total loglikelihood for given parameters from the emulator in order to test its performance.
         """

@@ -158,13 +158,17 @@ class MinimizeSampler(Sampler):
                 self.max_loglike = self.max_loglikes[idx]
 
                 # check performance by sampling the likelihood at the bestfit
+                self.emulator.start("emulate")
+                self.emulator.increment('emulate')
+                self.emulator.start("likelihood_testing")
                 if self.use_emulator:
                     # go throught the likelihoods and check if all of them are differentiable
-                    if self.emulator.likelihood_collection_differentiable:
-                        self.uncertainty = self.compute_loglike_uncertainty_for_differentiable_likelihood_from_normalized_parameters(self.res.x)
-                    else:
-                        loglikes_withNoise = self.sample_emulate_total_logposterior_from_parameters_differentiable(self.bestfit,noise = 1.)
-                        self.uncertainty = np.std(loglikes_withNoise)
+                    # if self.emulator.likelihood_collection_differentiable:
+                    #     self.uncertainty = self.compute_loglike_uncertainty_for_differentiable_likelihood_from_normalized_parameters(self.res.x)
+                    # else:
+                    #     loglikes_withNoise = self.sample_emulate_total_logposterior_from_parameters_differentiable(self.bestfit,noise = 1.)
+                    loglikes_withNoise = self.sample_emulate_total_logposterior_from_parameters_differentiable(self.bestfit)
+                    self.uncertainty = np.std(loglikes_withNoise)
                 else:
                     self.uncertainty = 0.0            
 
@@ -174,7 +178,7 @@ class MinimizeSampler(Sampler):
                     # update with constant parametesr
                     parameters.update({key: jnp.array([self.parameter_dict_constant[key]['value']]) for key in self.parameter_dict_constant.keys()})
                     
-                    minimum_checked = self.emulator.check_quality_criterium(jnp.array([self.uncertainty]), reference_loglike=self.max_loglike, parameters=parameters)
+                    minimum_checked = self.emulator.check_quality_criterium(jnp.array(loglikes_withNoise), reference_loglike=self.max_loglike, parameters=parameters)
                     if not minimum_checked:
 
                         if counter == 1:
@@ -183,10 +187,8 @@ class MinimizeSampler(Sampler):
                             state = self.theory.compute(state)
                             for likelihood in self.likelihood_collection.keys():
                                 state = self.likelihood_collection[likelihood].loglike_state(state)
-                            state['total_loglike'] = jnp.array(list(state['loglike'].values())).sum() + self.compute_logprior(state)
+                            state['total_loglike'] = jnp.array([jnp.array(list(state['loglike'].values())).sum() + self.compute_logprior(state)])
                             added_flag, _ = self.emulator.add_state(state)
-                            print('self.emulator.rejit_flag_likelihood_error')
-                            print(self.emulator.rejit_flag_likelihood_error)
                             if not added_flag:
                                 self.info("Could not add state to emulator! Check if we prevent this state to be added. Accepting large error and continuing with minimization")
                                 minimum_checked = True
