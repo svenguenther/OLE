@@ -340,6 +340,23 @@ class data_processor(BaseClass):
             )
 
         return output_data_raw
+    
+    def normalize_data(self, output_data_raw):
+        # normalize the data
+        if (
+            self.hyperparameters["normalize_by_full_covmat"]
+            and self.data_covmat is not None
+        ):
+            output_data_normalized = jnp.dot(
+                jnp.linalg.inv(self.data_covmat), (output_data_raw - self.output_means).T
+            ).T
+        else:
+            safe_output_stds = jnp.where(self.output_stds == 0.0, 1.0, self.output_stds)
+            output_data_normalized = (
+                output_data_raw - self.output_means
+            ) / safe_output_stds
+
+        return output_data_normalized
 
     def denormalize_std(self, output_std_normalized):
         # denormalize the data
@@ -352,6 +369,20 @@ class data_processor(BaseClass):
             output_std_raw = output_std_normalized * self.output_stds
 
         return output_std_raw
+    
+    def normalize_std(self, output_std_raw):
+        # normalize the data
+        if (
+            self.hyperparameters["normalize_by_full_covmat"]
+            and self.data_covmat is not None
+        ):
+            output_std_normalized = jnp.dot(
+                jnp.linalg.inv(self.data_covmat), output_std_raw.T
+            ).T
+        else:
+            output_std_normalized = output_std_raw / self.output_stds
+
+        return output_std_normalized
 
     # data compression
     def compress_training_data(self):
@@ -402,6 +433,18 @@ class data_processor(BaseClass):
                     )
 
         pass
+
+    def compress_data(self, output_data_normalized):
+        # project the output data onto the projection matrix
+        output_data_emulator = jnp.dot(
+                    output_data_normalized, self.projection_matrix
+                )
+
+        output_data_emulator = (
+            output_data_emulator - self.output_pca_means
+        ) / self.output_pca_stds
+
+        return output_data_emulator
 
     # The following functions are used to process the output data of the emulator outside the training process
     def decompress_data(self, output_data_emulator):

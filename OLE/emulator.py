@@ -37,7 +37,7 @@ from functools import partial
 
 from OLE.utils.base import BaseClass
 from OLE.utils.mpi import *
-from OLE.data_cache import DataCache
+from OLE.data_cache import DataCache, TestCache
 from OLE.gp_predicter import GP_predictor, GP
 from OLE.likelihood import Likelihood
 
@@ -125,7 +125,7 @@ class Emulator(BaseClass):
 
             # plotting directory
             'plotting_directory': None,
-            'testset_fraction': 0.1,
+            'testset_fraction': None,
 
             # only relevant for cobaya
             'cobaya_state_file': None, # TODO: put this somewhere else. This is only used in the cobaya wrapper
@@ -156,6 +156,14 @@ class Emulator(BaseClass):
             'quality_threshold_linear': 0.05,
             'quality_threshold_quadratic': 0.0001,
 
+            # in the early stage of the run, we might be in some burn-in phase. During this period it is not required to have too high quality. 
+            # Thus, we can set a lower quality threshold for the early stage of the run.
+            # We determine the end of burn-in when the event of "not using OLE, because loglikes are too far away from best-fit" did not happen for "burn_in_trigger" times.
+            'burn_in_trigger': 100,
+            'quality_threshold_constant_early': 1.0,
+            'quality_threshold_linear_early': 0.3,
+            'quality_threshold_quadratic_early': 0.001,
+
             # testing_strategy: 
             # 'test_all', (default) test always all points
             # 'test_early', test all points until the first 'test_early_points' points were consecutively successful. Stop testing afterwards.
@@ -177,9 +185,19 @@ class Emulator(BaseClass):
             'test_stochastic_rate': None, # minimal rate of testing, even after the exponential testing rate is reached. if not set, it will be estimated by meassureing time of testing and the emulation time.
             'test_stochastic_testing_time_fraction': 0.15, # fraction of the time which is used for testing
 
+            # update when more than 10 new points are added
+            'correlation_matrix_update_threshold': 10,
+
+            # if the std correction factor is below this threshold, we update the std correction factor
+            'std_correction_factor_update_threshold': 10,
+
+            # full testing time (this involves checking the emulator by running the full simulation code)
+            'full_test_time_fraction': 0.1,
+
             'working_directory': './',
             'emulator_state_file': 'emulator_state.pkl',
             'normalized_cache_file': 'normalized_cache.pkl',
+            'test_cache_file': 'test_cache.pkl',
         }
 
         # The hyperparameters are a dictionary of the hyperparameters for the different quantities. The keys are the names of the quantities.
@@ -199,8 +217,18 @@ class Emulator(BaseClass):
         else:
             self.ini_state = ini_state
 
+        # Build test cache
+        self.test_cache = TestCache(**self.hyperparameters)
+
         # Initialize the emulator with an initial state. In this state the parameters and the quantitites which are to be emulated are defined. They also come with an example value to determine the dimensionality of the quantities.
         ini_state = self.ini_state
+
+        # This flag indicates whether we are running a full test. This is used to determine whether we should test the emulator or not.
+        self.running_full_test = False
+
+        # during the testing we see that our error estimate tends to be slightly off. 
+        # Thus, we can correct the error estimate by a factor. This factor is the error correction factor. It is determined by the std of the loglike of the test set.
+        self.std_correction_factor = 1.0
 
         # if there is a input_parameters list in the kwargs, we use this list to determine the order of the input parameters
         if 'input_parameters' in kwargs:
@@ -263,7 +291,8 @@ class Emulator(BaseClass):
 
             # at this point the (constant + linear) term is equal to the quadratic term
             self.hyperparameters['quality_threshold_quadratic'] = (self.hyperparameters['quality_threshold_constant'] + self.hyperparameters['quality_threshold_linear']*accuracy_loglike)/accuracy_loglike**2
-
+            self.hyperparameters['quality_threshold_quadratic_early'] = (self.hyperparameters['quality_threshold_constant_early'] + self.hyperparameters['quality_threshold_linear_early']*accuracy_loglike)/accuracy_loglike**2
+            
             self.debug("Quality threshold quadratic: %f", self.hyperparameters['quality_threshold_quadratic'])
 
 
@@ -274,6 +303,10 @@ class Emulator(BaseClass):
                 self.maximal_delta_loglike = -1.53901996e-03 * dimensionality**2 + 3.46998485e-01  * max_sigma**2 + 5.55189162e-02 * dimensionality * max_sigma + 6.39086834e-01 * dimensionality + 2.36251372e+00 * max_sigma + -5.14787690e+00
                 if self.hyperparameters['max_sigma'] == 0:
                     self.maximal_delta_loglike = 0 # this is just a debug thing. If we set max_sigma to 0, we do not want to use the emulator at all.    
+
+        # set burn-in flag to true initially
+        self.burn_in_flag = True
+        self.counter_burn_in = 0
 
         # if we have a data_covmat_directory we search for the data covmat in this directory
         self.data_covmats = {quantity_name: None for quantity_name in ini_state['quantities'].keys()}
@@ -343,14 +376,66 @@ class Emulator(BaseClass):
             self.train()
 
         self.broadcast_training_flag = False # flag for rank 0 if it demands a training
+
+        self.test_output_state = None
         
         pass
+
+    def update_correlation_matrix(self):
+        # check if we have at least 10 data points in the test cache
+
+        total_GPs = 0
+        data = {}
+        if len(self.test_cache.states) >= self.hyperparameters['correlation_matrix_update_threshold']:
+            for quantity, emulator in self.emulators.items():
+                total_GPs += len(emulator.GPs)
+
+                # load the data
+                data[quantity] = jnp.array(self.test_cache.get_quantities(quantity)[0])
+
+                # normalize the data
+                data[quantity] = emulator.data_processor.normalize_data(data[quantity])
+
+                # compress the data
+                data[quantity] = emulator.data_processor.compress_data(data[quantity])
+
+            full_data = jnp.concatenate([data[quantity] for quantity in self.emulators.keys()], axis=1)
+
+            # compute the correlation matrix
+            self.correlation_matrix = jnp.corrcoef(full_data, rowvar=False)
+
+        if len(self.test_cache.states) >= self.hyperparameters['std_correction_factor_update_threshold']:
+            # here we want to load the std of the loglike of the test cache, the mean_loglike and the total_loglike
+            std_loglike = jnp.array([state['std_loglike'] for state in self.test_cache.states])
+            total_loglike = jnp.array([state['total_loglike'][0] for state in self.test_cache.states])
+            mean_loglike = jnp.array([state['mean_loglike'] for state in self.test_cache.states])
+
+            # compute deviation of the loglike from the mean
+            dev = (total_loglike - mean_loglike)/std_loglike
+
+            # remove 10% outlier on top and bottom
+            dev = jnp.sort(dev)
+            dev = dev[int(0.1*len(dev)):int(0.9*len(dev))]
+
+            mean = jnp.mean(dev)
+            std = jnp.std(dev)
+
+            self.debug("Mean of loglike deviation: %f", mean)
+            self.debug("Std of loglike deviation: %f", std)
+
+            self.write_to_log("Mean of loglike deviation: %f\n" % mean)
+            self.write_to_log("Std of loglike deviation: %f\n" % std)
+
+            self.std_correction_factor = 1.0/std
+
+        return True
+
+
 
     # @profile
     def add_state(self, state):
         # start timer
         self.start("add_state")
-
 
         # new state
         new_state = deepcopy(state)
@@ -359,6 +444,22 @@ class Emulator(BaseClass):
         for key in list(state['parameters'].keys()):
             if key not in self.input_parameters:
                 del new_state['parameters'][key]
+
+        # check if we are in the full test mode. Actually for example in the differentiable pipeline case, there is n full tet here.
+        if self.running_full_test:
+            self.increment("add_state")            
+            new_state['std_loglike'] = self.test_std_loglike
+            new_state['mean_loglike'] = self.test_mean_loglike
+            if self.test_output_state is None:
+                self.emulate(state['parameters'])
+            new_state['emulator_state'] = self.test_output_state
+            new_state['error_scale'] = self.std_correction_factor
+            self.test_output_state = None
+            self.test_cache.add_state(new_state)
+            self.running_full_test = False
+            self.update_correlation_matrix()
+            self.increment("full_test")
+            return False, False
 
         # Add a state to the emulator. This means that the state is added to the data cache and the emulator is retrained.
         # when debugging the emulator, we do not want further data points
@@ -611,6 +712,7 @@ class Emulator(BaseClass):
         while untrained_emulators_flag:
             untrained_emulators_flag = self.parallel_train()
 
+        self.test_cache.remove_all_states()
 
         # here we wait for the signal from rank 0 that training is done
         if is_main_process():
@@ -628,6 +730,7 @@ class Emulator(BaseClass):
                                     break
                 
                 time.sleep(0.1) # wait for 0.1 seconds before checking again
+
 
             for i in range(1, get_mpi_size()):
                 get_mpi_comm().send("Training done", dest=i, tag=24)
@@ -666,11 +769,14 @@ class Emulator(BaseClass):
                 GP.kernel = emulator_state['quantities'][quantity]['GPs'][i]['kernel']
                 
             emulator.finalize_training(new_kernel=False)
+
         
 
-
-
-
+        # 4. do a diagonal uncorrelated error correlation matrix
+        total_GPs = 0
+        for quantity, emulator in self.emulators.items():
+            total_GPs += len(emulator.GPs)
+        self.correlation_matrix = np.diag(np.ones(total_GPs))
 
 
 
@@ -775,8 +881,9 @@ class Emulator(BaseClass):
                         my_training_quantity = quantity
                         my_PCA_number = i
                         break
-
-            self.debug("Quantity to be trained: %s on PCA component %d", my_training_quantity, my_PCA_number)
+            
+            if my_training_quantity is not None:
+                self.debug("Quantity to be trained: %s on PCA component %d", my_training_quantity, my_PCA_number)
 
             # if there is no quantity to be trained, return False
             if my_training_quantity is None:
@@ -941,6 +1048,8 @@ class Emulator(BaseClass):
 
         self.emulate_counter += 1
 
+        self.test_output_state = output_state
+
         # end timer
         self.increment("emulate")
 
@@ -1049,7 +1158,7 @@ class Emulator(BaseClass):
 
     # function to get N samples from the same input parameters
     # @profile
-    def emulate_samples(self, parameters, RNGkey,noise = 0):
+    def emulate_samples(self, parameters, RNGkey,noise = 0.0):
         # add Sphinx documentation
         """
         Emulate N samples of the quantities for the given parameters.
@@ -1077,7 +1186,7 @@ class Emulator(BaseClass):
                     ...
                 }
                 "loglike": {'name_of_experiment': 123, 'name_of_experiment2': 456},
-                "total_loglike": 123456,
+                "total_loglike": [123456],
             }
         jax.random.PRNGKey
             The updated random number generator key.
@@ -1129,7 +1238,7 @@ class Emulator(BaseClass):
         return output_states, RNGkey
 
     # @partial(jax.jit, static_argnums=0)
-    def emulate_samples_jit(self, parameters, RNGkey, noise = 0):
+    def emulate_samples_jit(self, parameters, RNGkey, noise = 0.0):
         # Prepare list of N output states
         state = {'parameters': {}, 'quantities':{}, 'loglike': {}, 'total_loglike': None} 
         state['parameters'] = parameters
@@ -1138,15 +1247,18 @@ class Emulator(BaseClass):
         # Emulate the quantities for the given parameters.
         input_data = jnp.array([[parameters[key][0] for key in self.input_parameters]])
 
+        # sample from the correlation matrix of the PCA components
+        initial_samples = jax.random.normal(RNGkey, (self.hyperparameters['N_quality_samples'], self.correlation_matrix.shape[0]))
+        _ = 0
         for quantity, emulator in self.emulators.items():
-            emulator_output, RNGkey = emulator.sample_prediction(input_data, N=self.hyperparameters['N_quality_samples'],noise=noise, RNGkey=RNGkey)
-            
+            emulator_output, RNGkey = emulator.sample_prediction(input_data, N=self.hyperparameters['N_quality_samples'],noise = noise, initial_samples = initial_samples[:,_:_+emulator.num_GPs], RNGkey=RNGkey)
+            _ += emulator.num_GPs
             for i in range(self.hyperparameters['N_quality_samples']):
                 output_states[i]['quantities'][quantity] = emulator_output[i,:]
 
         return output_states, RNGkey
 
-    def emulate_samples_nojit(self, parameters, RNGkey, noise = 0):
+    def emulate_samples_nojit(self, parameters, RNGkey, noise = 0.0):
         # Prepare list of N output states
         state = {'parameters': {}, 'quantities':{}, 'loglike': {}, 'total_loglike': None} 
         state['parameters'] = parameters
@@ -1155,9 +1267,13 @@ class Emulator(BaseClass):
         # Emulate the quantities for the given parameters.
         input_data = jnp.array([[parameters[key][0] for key in self.input_parameters]])
 
+        # sample from the correlation matrix of the PCA components
+        initial_samples = jax.random.normal(RNGkey, (self.hyperparameters['N_quality_samples'], self.correlation_matrix.shape[0]))
+
+        _ = 0
         for quantity, emulator in self.emulators.items():
-            emulator_output, RNGkey = emulator.sample_prediction(input_data, N=self.hyperparameters['N_quality_samples'],noise = noise, RNGkey=RNGkey)
-            
+            emulator_output, RNGkey = emulator.sample_prediction(input_data, N=self.hyperparameters['N_quality_samples'],noise = noise, initial_samples = initial_samples[:,_:_+emulator.num_GPs], RNGkey=RNGkey)
+            _ += emulator.num_GPs
             for i in range(self.hyperparameters['N_quality_samples']):
                 output_states[i]['quantities'][quantity] = emulator_output[i,:]
 
@@ -1252,6 +1368,7 @@ class Emulator(BaseClass):
         if not self.trained:
             self.continuous_successful_calls = 0
             self.quality_check_unsuccessful_counter += 1
+            print("WHAT?")
             return False
 
         # check for nans in the loglikes
@@ -1259,7 +1376,7 @@ class Emulator(BaseClass):
             self.quality_check_unsuccessful_counter += 1
             # send warning
             self.warning("Loglike is NaN!!! Please ensure that your pipeline is working correctly.")
-            self.log("Loglike is NaN!!! Please ensure that your pipeline is working correctly.")
+            self.write_to_log("Loglike is NaN!!! Please ensure that your pipeline is working correctly.")
             return False
         
         
@@ -1278,40 +1395,21 @@ class Emulator(BaseClass):
             self.quality_check_unsuccessful_counter += 1
             _ = "Loglikes are too far away from best-fit point. Not using OLE; "+"; ".join([key+ ': ' +str(value) for key, value in parameters.items()]) + " Max loglike: %f, Reference loglike: %f, delta loglikes: " % (max_loglike,mean_loglike) + " ".join([str(loglike) for loglike in loglikes]) + "\n"
             self.write_to_log(_)
+            self.counter_burn_in = 0
             return False
 
         # as long as mean_loglike is bugged we pass the correct one as the first point
-        # BUG: fix refernce loglike (apears to be fixed)
         # mean_loglike = loglikes[0]
 
 
         # if the emulator is trained, we check the quality criterium
         # we check whether the loglikes are within the quality criterium
         if not self.likelihood_collection_differentiable:
-            
-            # old estimator
-            # here we need to cut outlier of the chisquare distribution.
-            #N_cut = max(1, int(self.hyperparameters['tail_cut_fraction'] * self.hyperparameters['N_quality_samples']))
-
-            #std_loglike_precut = jnp.std(loglikes) # we use the standard deviation of the mean as the error
-            # Thus we gonna cut the N_cut smallest values
-            #loglikes = jnp.sort(loglikes)[N_cut:]
-
-            
-            #std_loglike = jnp.std(loglikes) # we use the standard deviation of the mean as the error
-            # this scaling is wierd as more samples lead to a smaller error, but even if we know the mean very well, how is this important. 
-            # We are then very certain tha the meam is the mean so ... 
-            #if (std_loglike_precut - std_loglike)/std_loglike_precut * 100 > 85:
-            #    print("error reduced byt cut ",(std_loglike_precut - std_loglike)/std_loglike_precut * 100)
-
             # new estimator here
             # this is based on using that we rolled all points at the 1 sigma level and thus we can use them to estimate the posterior
             # one sigma assuming that we stay in the tangent-space of the likeleehood
-         
-            #loglikesNew = loglikes[1:]
             variances_loglikes = ( loglikes - mean_loglike )**2
             std_loglike = jnp.sqrt(jnp.median(variances_loglikes))
-
 
         else:
             std_loglike = loglikes[0]
@@ -1320,27 +1418,61 @@ class Emulator(BaseClass):
         delta_loglike = jnp.abs(mean_loglike - max_loglike)
 
         # write testing to log
+        # here we now want double check the performance by running the full likelihood code. However, we randomly draw if this is necessary. We would like to draw new points, such that only 'full_test_time_fraction' of the time we run the full theory code.
+        if len(self.test_cache.states) < self.hyperparameters['std_correction_factor_update_threshold']:
+            chance_for_full_test = 0.1
+        elif ('full_test' in self.subtimer) and ('likelihood' in self.subtimer) and ('emulate' in self.subtimer):
+            chance_for_full_test = self.hyperparameters['full_test_time_fraction']*(self.subtimer["likelihood"].get_time_avg() + self.subtimer["emulate"].get_time_avg())/self.subtimer["full_test"].get_time_avg()
+        elif ('theory_code' in self.subtimer) and ('likelihood' in self.subtimer) and ('emulate' in self.subtimer):
+            chance_for_full_test = self.hyperparameters['full_test_time_fraction']*(self.subtimer["likelihood"].get_time_avg() + self.subtimer["emulate"].get_time_avg())/self.subtimer["theory_code"].get_time_avg()
+        else:
+            chance_for_full_test = self.hyperparameters['full_test_time_fraction']/100.0 # otherwise assume ratio of about 100
+        
+        if jax.random.uniform(jax.random.PRNGKey(time.time_ns())) < chance_for_full_test:
+            self.debug("Running full test on emulator performance")
+            self.start("full_test")
+            self.test_std_loglike = std_loglike
+            self.test_mean_loglike = mean_loglike
+            self.running_full_test = True
+            return False
 
         # if the mean loglike is above the maximum found loglike we only check the constant term
+        if (self.burn_in_flag) and (self.counter_burn_in > self.hyperparameters['burn_in_trigger']):
+            self.info("Burn-in phase finished. Tightening quality criterium.")
+            self.write_to_log("Burn-in phase finished. Tightening quality criterium.\n")
+            self.burn_in_flag = False
+
+        if self.burn_in_flag:
+            constant_term = self.hyperparameters['quality_threshold_constant_early']
+            linear_term = self.hyperparameters['quality_threshold_linear_early']
+            quadratic_term = self.hyperparameters['quality_threshold_quadratic_early']
+        else:
+            constant_term = self.hyperparameters['quality_threshold_constant']
+            linear_term = self.hyperparameters['quality_threshold_linear']
+            quadratic_term = self.hyperparameters['quality_threshold_quadratic']
+
+
         if mean_loglike > max_loglike:
-            if std_loglike > self.hyperparameters['quality_threshold_constant']:
+            if std_loglike > constant_term:
                 self.debug("Emulator quality criterium NOT fulfilled")
                 _ = "Quality criterium NOT fulfilled; "+"; ".join([key+ ': ' +str(value) for key, value in parameters.items()]) + " Max loglike: %f, Reference loglike: %f, delta loglikes: " % (max_loglike,mean_loglike) + " ".join([str(loglike) for loglike in loglikes]) + "\n"
                 if write_log: 
                     self.write_to_log(_)
                 self.quality_check_unsuccessful_counter += 1
+                self.counter_burn_in +=1
                 return False
         else:
             # calculate the absolute difference between the mean loglike and the maximum loglike
             delta_loglike = jnp.abs(mean_loglike - max_loglike)
             
             # the full criterium 
-            if std_loglike > self.hyperparameters['quality_threshold_constant'] + self.hyperparameters['quality_threshold_linear']*delta_loglike + self.hyperparameters['quality_threshold_quadratic']*delta_loglike**2:
+            if std_loglike/self.std_correction_factor > constant_term + linear_term*delta_loglike + quadratic_term*delta_loglike**2:
                 self.debug("Emulator quality criterium NOT fulfilled")
                 _ = "Quality criterium NOT fulfilled; "+"; ".join([key+ ': ' +str(value) for key, value in parameters.items()]) + " Max loglike: %f, Reference loglike: %f, delta loglikes: " % (max_loglike,mean_loglike) + " ".join([str(loglike) for loglike in loglikes]) + "\n"
                 if write_log: 
                     self.write_to_log(_)
                 self.quality_check_unsuccessful_counter += 1
+                self.counter_burn_in +=1
                 return False
 
         self.debug("Emulator quality criterium fulfilled")
@@ -1354,6 +1486,7 @@ class Emulator(BaseClass):
             self.max_loglike_encountered = mean_loglike
 
         self.quality_check_successful_counter += 1
+        self.counter_burn_in +=1
         return True
     
     def require_quality_check(self, parameters):
@@ -1376,6 +1509,10 @@ class Emulator(BaseClass):
             self.write_to_log("Quality check not required. Test emulator is False \n")
             self.continuous_successful_calls += 1
             return False
+        
+        if self.hyperparameters['testing_strategy'] == 'test_all':
+            self.debug("Quality check required.")
+            return True        
 
         # if we test all calls until the first 'test_early_points' points were consecutively successful. Stop testing afterwards.
         if (self.hyperparameters['testing_strategy'] == 'test_early') and (self.continuous_successful_calls > self.hyperparameters['test_early_points']):

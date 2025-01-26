@@ -244,7 +244,7 @@ class GP_predictor(BaseClass):
         return output_data, output_std, output_err_tol
 
     # @partial(jit, static_argnums=0)
-    def sample_prediction(self, parameters, N=1, noise = 0, RNGkey=random.PRNGKey(time.time_ns())):
+    def sample_prediction(self, parameters, N=1, noise = 0.0, initial_samples = None, RNGkey=random.PRNGKey(time.time_ns())):
         # Predict the quantity for the given parameters.
         # First we normalize the parameters.
         parameters_normalized = self.data_processor.normalize_input_data(parameters)
@@ -252,8 +252,8 @@ class GP_predictor(BaseClass):
         # Then we predict the output data for the normalized parameters.
         output_data_compressed = jnp.zeros((N, self.num_GPs))
         for i in range(self.num_GPs):
-            _, RNGkey = self.GPs[i].sample(parameters_normalized, noise=noise ,RNGkey=RNGkey)
-            output_data_compressed = output_data_compressed.at[:, [i]].set(
+            _, RNGkey = self.GPs[i].sample(parameters_normalized, noise=noise , initial_samples=initial_samples[:,i] , RNGkey=RNGkey)
+            output_data_compressed = output_data_compressed.at[:, i].set(
                 _
             )  # this is the time consuming part
 
@@ -382,9 +382,19 @@ class GP_predictor(BaseClass):
         if (
             (self.hyperparameters["plotting_directory"] is not None)
             and (self.hyperparameters["testset_fraction"] is not None)
-            and (get_mpi_rank() == 0)
+            # and (get_mpi_rank() == 0)
         ):
             self.run_tests()
+            self.testset_errors = jnp.zeros((self.num_GPs, self.GPs[0].test_D.n))
+            for i in range(self.num_GPs):
+                for j in range(self.GPs[0].test_D.n):
+                    self.testset_errors = self.testset_errors.at[i, j].set(self.GPs[i].test_D.y[j][0] - self.GPs[i].testset_means[j])
+
+            # save the testset errors as a numpy array
+            np.save(
+                self.hyperparameters['working_directory'] + self.hyperparameters["plotting_directory"] + "/testset_errors_" + self.quantity_name + ".npy",
+                self.testset_errors,
+            )
 
         pass
 
@@ -445,10 +455,20 @@ class GP_predictor(BaseClass):
         if (
             (self.hyperparameters["plotting_directory"] is not None)
             and (self.hyperparameters["testset_fraction"] is not None)
-            and (get_mpi_rank() == 0)
-
+            # and (get_mpi_rank() == 0)
         ):
             self.run_tests()
+            
+            self.testset_errors = jnp.zeros((self.num_GPs, self.GPs[0].test_D.n))
+            for i in range(self.num_GPs):
+                for j in range(self.GPs[0].test_D.n):
+                    self.testset_errors = self.testset_errors.at[i, j].set(self.GPs[i].test_D.y[j][0] - self.GPs[i].testset_means[j])
+
+            # save the testset errors as a numpy array
+            np.save(
+                self.hyperparameters['working_directory'] + self.hyperparameters["plotting_directory"] + "/testset_errors_" + self.quantity_name + ".npy",
+                self.testset_errors,
+            )
 
         pass
 
@@ -491,7 +511,7 @@ class GP_predictor(BaseClass):
                 self.hyperparameters['working_directory'] + self.hyperparameters["plotting_directory"] + "/predictions/"
             ):
                 os.makedirs(
-                    self.hyperparameters['working_directory'] + self.hyperparameters["plotting_directory"] + "/predictions/"
+                    self.hyperparameters['working_directory'] + self.hyperparameters["plotting_directory"] + "/predictions/", exist_ok=True
                 )
 
             # plot the prediction
@@ -571,6 +591,9 @@ class GP(BaseClass):
         for key, value in kwargs.items():
             self.hyperparameters[key] = value
 
+        self.num_init = 0
+        self.num_max = 0
+
         pass
 
     def __del__(self):
@@ -597,9 +620,13 @@ class GP(BaseClass):
 
         # set the number of iterations
         if self.hyperparameters["num_iters"] is None:
-            self.hyperparameters["num_iters"] = int(self.D.n * self.hyperparameters["num_epochs_per_dp"])
+            self.num_init = int(self.D.n * self.hyperparameters["num_epochs_per_dp"])
+        else:
+            self.num_init = self.hyperparameters["num_iters"]
         if self.hyperparameters["max_num_iters"] is None:
-            self.hyperparameters["max_num_iters"] = int(self.D.n * self.hyperparameters["max_num_epochs_per_dp"])
+            self.num_max = int(self.D.n * self.hyperparameters["max_num_epochs_per_dp"])
+        else:
+            self.num_max = self.hyperparameters["max_num_iters"]
 
         # if we have a test fraction, then we will split the data into a training and a test set
         if (self.hyperparameters["testset_fraction"] is not None) and (get_mpi_rank() == 0):
@@ -780,7 +807,7 @@ class GP(BaseClass):
             converged = False
             self.history = np.array([])
             self.optimizer = ox.adam(learning_rate=lr)
-            num_init = self.hyperparameters["num_iters"]
+            num_init = self.num_init
             if new_kernel:
                 while not converged:
                     self.posterior, history = gpx.fit(
@@ -802,7 +829,7 @@ class GP(BaseClass):
                         if mean_loss1 > mean_loss2-self.hyperparameters["early_stopping"]:
                             converged = True
 
-                    if len(self.history) > self.hyperparameters["max_num_iters"]:
+                    if len(self.history) > self.num_max:
                         # give warning
                         self.warning("GP training did not converge within max_num_iters")
                         converged = True
@@ -811,17 +838,19 @@ class GP(BaseClass):
 
             self.opt_posterior = self.posterior
 
-        self._compute_inverse_kernel_matrix()
+        # Actually to be done in finalize_training
+        # self._compute_inverse_kernel_matrix()
 
         # some debugging output
         if (self.hyperparameters["plotting_directory"] is not None):
+            self._compute_inverse_kernel_matrix()
             # creat directory if not exist
             import os
 
             if not os.path.exists(
                 self.hyperparameters['working_directory'] + self.hyperparameters["plotting_directory"] + "/loss/"
             ):
-                os.makedirs(self.hyperparameters['working_directory'] + self.hyperparameters["plotting_directory"] + "/loss/")
+                os.makedirs(self.hyperparameters['working_directory'] + self.hyperparameters["plotting_directory"] + "/loss/", exist_ok=True)
             loss_plot(
                 self.history,
                 self._name,
@@ -1036,7 +1065,7 @@ class GP(BaseClass):
     
 
     # @partial(jit, static_argnums=0)
-    def sample(self, input_data, noise = 0,RNGkey=random.PRNGKey(time.time_ns())):
+    def sample(self, input_data, noise = 0.0, initial_samples = None, RNGkey=random.PRNGKey(time.time_ns())):
         # Predict the output data for the given input data.
 
         N = self.hyperparameters["N_quality_samples"]
@@ -1080,11 +1109,10 @@ class GP(BaseClass):
         #remove the white noise, noise = 0 meand no white noise, noise = 1 is full noise
 
         #pre_std = std
-        std -=  (1.-noise) *jnp.sqrt(self.hyperparameters["white_noise_level"])
+        std = jnp.sqrt( jnp.abs(std**2 - (1.-noise) *jnp.sqrt(self.hyperparameters["white_noise_level"])) )
         
-        std = jnp.abs(std) 
         # Generate the random samples and apply transformation
-        samples = 2. * jax.random.randint(key=subkey, shape=(N, 1), minval=0, maxval=2) - 1.
+        samples = initial_samples # 2. * jax.random.randint(key=subkey, shape=(N, 1), minval=0, maxval=2) - 1.
         scaled_samples = samples * std + ac
 
         # Prepend `ac` to the transformed array
@@ -1124,38 +1152,35 @@ class GP(BaseClass):
     # Some debugging functions
     def run_test_set_tests(self):
         # This function is used to test the test set.
-        means = jnp.zeros(self.test_D.n)
-        stds = jnp.zeros(self.test_D.n)
-        err_tols = jnp.zeros(self.test_D.n)
+        self.testset_means = jnp.zeros(self.test_D.n)
+        self.testset_stds = jnp.zeros(self.test_D.n)
+        self.testset_err_tols = jnp.zeros(self.test_D.n)
 
         # predict the test set
         for i in range(self.test_D.n):
             mean, std, err_tol = self.predict_value_and_std(jnp.array([self.test_D.X[i]]))
-            means = means.at[i].set(mean)
-            stds = stds.at[i].set(std)
-            err_tols = err_tols.at[i].set(err_tol)
+            self.testset_means = self.testset_means.at[i].set(mean)
+            self.testset_stds = self.testset_stds.at[i].set(std)
+            self.testset_err_tols = self.testset_err_tols.at[i].set(err_tol)
             self.debug(
                 "Predicted: %f True: %f Error: %f"
                 % (mean, self.test_D.y[i].sum(), mean - self.test_D.y[i].sum())
             )
-
-        # calculate the mean squared error
-        mse = jnp.mean((mean - self.test_D.y) ** 2)
 
         # test that the directory exists
         if not os.path.exists(
             self.hyperparameters['working_directory'] + self.hyperparameters["plotting_directory"] + "/test_set_prediction/"
         ):
             os.makedirs(
-                self.hyperparameters['working_directory'] + self.hyperparameters["plotting_directory"] + "/test_set_prediction/"
+                self.hyperparameters['working_directory'] + self.hyperparameters["plotting_directory"] + "/test_set_prediction/", exist_ok=True
             )
 
         # plot the mean and the std
         plot_pca_components_test_set(
             jnp.array(self.test_D.y)[:, 0],
-            means,
-            stds,
-            err_tols,
+            self.testset_means,
+            self.testset_stds,
+            self.testset_err_tols,
             self._name,
             self.hyperparameters['working_directory'] 
             + self.hyperparameters["plotting_directory"]
