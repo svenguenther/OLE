@@ -5,6 +5,7 @@ import time
 import logging
 import cobaya as my_cobaya
 from cobaya.theory import Theory
+from cobaya.samplers.mcmc import MCMC
 from cobaya.log import LoggedError, always_stop_exceptions
 
 from cobaya.component import Timer
@@ -14,12 +15,14 @@ import copy
 import gc
 
 global CAMB_flag_to_skip_CAMB_transfers
+EMULATOR_UPDATED_FLAG = False
 CAMB_flag_to_skip_CAMB_transfers = False # This ugly flag because CAMB is split into 2 theory codes...
 
 
 def check_cache_and_compute(self, params_values_dict,
                                 dependency_params=None, want_derived=False, cached=True):
     global CAMB_flag_to_skip_CAMB_transfers
+    global EMULATOR_UPDATED_FLAG
     for param in params_values_dict.keys():
         self.theory_params[param] = params_values_dict[param]
 
@@ -197,23 +200,25 @@ def check_cache_and_compute(self, params_values_dict,
 
                 # Be aware! This is recursive! Thus, we need to flag this out
                 self.skip_theory_state_from_emulator = state
+
                 likelihoods = list(self.provider.model._loglikes_input_params(self.provider.params, cached=False, return_derived = False))
 
                 emulator_state['total_loglike'] = np.array([sum(likelihoods)])
 
                 # import sys
                 # sys.exit()
-                added = self.emulator.add_state(emulator_state)
+                added, EMULATOR_UPDATED_FLAG = self.emulator.add_state(emulator_state)
 
                 # if the emulator is not trained, train it, if enough states are available
                 if not self.emulator.trained:
                     if len(self.emulator.data_cache.states) >= self.emulator.hyperparameters['min_data_points']:
                         # force_acceptance = True # OLD
                         self.emulator.train()
+                        EMULATOR_UPDATED_FLAG = True
 
                         self.log.info("Emulator trained")
 
-                    gc.collect()       
+                    gc.collect()  
 
     # transform each element in state["params"] to a float. Otherwise the cache wont work.
     for key, value in state["params"].items():
@@ -227,6 +232,10 @@ def check_cache_and_compute(self, params_values_dict,
 
     self._states.appendleft(_)
     self._current_state = state
+
+    if EMULATOR_UPDATED_FLAG:
+        # delete cache
+        self._states.clear()
 
     # if we want to use the emulator here, we need to initialize it here
     if self.emulate:
@@ -290,6 +299,7 @@ def test_emulator(self,emulator_state):
 
         # compute the likelihoods
         emulator_sample_loglikes = []
+        self.emulator.start("likelihood_testing")
         for emulator_sample_state in emulator_sample_states:
 
             # Translate the emulator state to the cobaya state
@@ -301,6 +311,7 @@ def test_emulator(self,emulator_state):
             emulator_sample_loglikes.append(sum(likelihoods))
 
         emulator_sample_loglikes = np.array(emulator_sample_loglikes)
+        self.emulator.increment("likelihood_testing")
 
         # we also need the reference likelihood which is going to be used eventually
         predictions = self.emulator.emulate(emulator_state['parameters'])
@@ -309,8 +320,10 @@ def test_emulator(self,emulator_state):
         # Be aware! This is recursive! Thus, we need to flag this out
         self.skip_theory_state_from_emulator = predictions_cobaya_state
 
+        self.emulator.start("likelihood")
         reference_loglike = sum(self.provider.model._loglikes_input_params(self.provider.params, cached = False, return_derived = False))
-
+        self.emulator.increment("likelihood")
+        
         # check whether the emulator is good enough
         if not self.emulator.check_quality_criterium(emulator_sample_loglikes, parameters=emulator_state['parameters'], reference_loglike = reference_loglike):
             return False, None
@@ -378,6 +391,31 @@ Theory.test_emulator = test_emulator
 Theory.check_cache_and_compute = check_cache_and_compute
 Theory.emulate_samples = emulate_samples
 
+
+
+def metropolis_accept(self, logp_trial, logp_current):
+    """
+    Symmetric-proposal Metropolis-Hastings test.
+
+    Returns
+    -------
+    ``True`` or ``False``.
+    """
+    global EMULATOR_UPDATED_FLAG
+
+    # if EMULATOR_UPDATED_FLAG:
+    #     EMULATOR_UPDATED_FLAG = False
+    #     print("FORCES ACCEPT!")
+    #     return True
+    
+    if logp_trial == -np.inf:
+        return False
+    if logp_trial > logp_current:
+        return True
+    posterior_ratio = (logp_current - logp_trial) / self.temperature
+    return self._rng.standard_exponential() > posterior_ratio
+
+MCMC.metropolis_accept = metropolis_accept
 
 #
 #  Auxiliary functions

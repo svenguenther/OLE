@@ -25,9 +25,6 @@ os.environ['NPROC'] = '1'
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '0'
 os.environ['OPENBLAS_NUM_THREADS'] = '1'
 
-
-
-
 from copy import deepcopy
 from copy import copy
 
@@ -263,8 +260,8 @@ class Emulator(BaseClass):
         #         "quantity2": [element1, element2, ...],
         #         ...
         #     },
-        #     "loglike": {'name_of_experiment': 123, 'name_of_experiment2': 456},
-        #     "total_loglike": 123456,
+        #     "loglike": {'name_of_experiment': [123], 'name_of_experiment2': [456]},
+        #     "total_loglike": [123456],
         # }
             
         # remove the parameters which are not in the input_parameters list
@@ -434,8 +431,6 @@ class Emulator(BaseClass):
 
     # @profile
     def add_state(self, state):
-        # start timer
-        self.start("add_state")
 
         # new state
         new_state = deepcopy(state)
@@ -447,7 +442,6 @@ class Emulator(BaseClass):
 
         # check if we are in the full test mode. Actually for example in the differentiable pipeline case, there is n full tet here.
         if self.running_full_test:
-            self.increment("add_state")            
             new_state['std_loglike'] = self.test_std_loglike
             new_state['mean_loglike'] = self.test_mean_loglike
             if self.test_output_state is None:
@@ -460,6 +454,9 @@ class Emulator(BaseClass):
             self.update_correlation_matrix()
             self.increment("full_test")
             return False, False
+
+        # start timer
+        self.start("add_state")
 
         # Add a state to the emulator. This means that the state is added to the data cache and the emulator is retrained.
         # when debugging the emulator, we do not want further data points
@@ -633,6 +630,9 @@ class Emulator(BaseClass):
 
     # @profile
     def train(self):
+        global EMULATOR_UPDATED_FLAG
+        EMULATOR_UPDATED_FLAG = True
+
         self.start("train")
 
 
@@ -1139,7 +1139,7 @@ class Emulator(BaseClass):
             for likelihood_name, likelihood in self.likelihood_collection.items():
                 output_state['loglike'][likelihood_name] = likelihood.loglike(output_state)
 
-            output_state['total_loglike'] = sum(output_state['loglike'].values())
+            output_state['total_loglike'] = jnp.array([sum(output_state['loglike'].values())])
 
             return output_state['total_loglike'][0]
 
@@ -1230,10 +1230,6 @@ class Emulator(BaseClass):
 
         # increment timer
         self.increment("emulate_samples")
-
-        # start the likelihood_testing counter
-        self.start("likelihood_testing")
-
 
         return output_states, RNGkey
 
@@ -1358,11 +1354,6 @@ class Emulator(BaseClass):
     
     def check_quality_criterium(self, loglikes, parameters, reference_loglike = None, write_log = True):
         
-        # stop the likelihood counter
-        self.increment("likelihood_testing")
-        # correct for the emulator runtime
-        self.subtimer["likelihood_testing"].time_sum -= self.subtimer["emulate"].last_round
-
         # check whether the emulator is good enough to be used
         # if the emulator is not yet trained, we return False
         if not self.trained:

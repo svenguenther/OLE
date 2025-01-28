@@ -198,6 +198,8 @@ if __name__ == '__main__':
             self.all_likelihoods = []
             self.indexing = {} # this gives a mapping from the output of the OLE wrapper to the output of the CLASS code
 
+            np.set_printoptions(precision=8)
+
             # Emulator related attributes
             self.emulator = None
 
@@ -325,10 +327,9 @@ if __name__ == '__main__':
                     OLE_state['quantities'][key] = value
 
             # add parameters from data
+            np.set_printoptions(precision=8)
             for key in data.get_mcmc_parameters(['cosmo']):
-                OLE_state['parameters'][key] = \
-                    np.array([data.mcmc_parameters[key]['current'] * \
-                              data.mcmc_parameters[key]['scale']])
+                OLE_state['parameters'][key] = np.array([data.mcmc_parameters[key]['current'] * data.mcmc_parameters[key]['scale']*1.0])
 
             return OLE_state
 
@@ -370,10 +371,9 @@ if __name__ == '__main__':
                             'total_loglike': None}
 
             # fill parameters from data
+            np.set_printoptions(precision=8)
             for key in data.get_mcmc_parameters(['cosmo']):
-                OLE_state['parameters'][key] = \
-                    np.array([data.mcmc_parameters[key]['current'] * \
-                              data.mcmc_parameters[key]['scale']])
+                OLE_state['parameters'][key] = np.array([data.mcmc_parameters[key]['current'] * data.mcmc_parameters[key]['scale']])
 
             # check if we reuqire a quality check
             if self.emulator.require_quality_check(OLE_state['parameters']):
@@ -383,6 +383,9 @@ if __name__ == '__main__':
                 #emulator_sample_states = self.emulator.emulate_samples(emulator_state['parameters'])
                 local_key = jax.random.PRNGKey(time.time_ns())
                 emulator_sample_states, _ = self.emulator.emulate_samples(OLE_state['parameters'], local_key)
+
+                # start the likelihood_testing counter
+                self.emulator.start("likelihood_testing")
 
                 # compute the likelihoods
                 emulator_sample_loglikes = []
@@ -401,15 +404,23 @@ if __name__ == '__main__':
 
                 emulator_sample_loglikes = np.array(emulator_sample_loglikes)
 
+                # increment the likelihood_testing counter
+                self.emulator.increment("likelihood_testing")
+
                 # we also need the reference likelihood which is going to be used eventually
                 predictions = self.emulator.emulate(OLE_state['parameters'])
                 MP_sample_state = self.OLE_state_to_MP_state(predictions)
 
+
+
                 reference_loglike = 0.0
+                
+                self.emulator.start("likelihood_testing")
                 for likelihood in dictvalues(data.lkl):
                     self.current_likelihood = likelihood.name
                     value = likelihood.loglkl(self, data)
                     reference_loglike += value
+                self.emulator.increment("likelihood_testing")
 
                 # check whether the emulator is good enough
                 if not self.emulator.check_quality_criterium(emulator_sample_loglikes, parameters=OLE_state['parameters'], reference_loglike = reference_loglike):
@@ -683,7 +694,7 @@ if __name__ == '__main__':
                               data.mcmc_parameters[key]['scale']])
 
             # get initial output
-            initial_state['total_loglike'] = np.array(loglike)
+            initial_state['total_loglike'] = np.array([loglike])
 
             from OLE.emulator import Emulator
             cosmo.emulator = Emulator(**data.emulator_settings)
@@ -693,7 +704,7 @@ if __name__ == '__main__':
         elif emulation_success is not None:
             if not emulation_success:
                 emulator_state = cosmo.MP_state_to_OLE_state(data, cosmo.attributes_with_relevant_output)
-                emulator_state['total_loglike'] = np.array(loglike)
+                emulator_state['total_loglike'] = np.array([loglike])
                 added_flag = cosmo.emulator.add_state(emulator_state)
 
         # if the emulator is not trained, train it, if enough states are available

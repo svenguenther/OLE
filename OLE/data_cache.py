@@ -36,8 +36,8 @@ import numpy as np
 #         "quantity2": [element1, element2, ...],
 #         ...
 #     },
-#     "loglike": {'likelihood1': 0.0, 'likelihood2': 0.0, ...}
-#     "total_loglike": 0.0
+#     "loglike": {'likelihood1': [0.0], 'likelihood2': [0.0], ...}
+#     "total_loglike": [0.0]
 # }
 
 
@@ -153,7 +153,7 @@ class DataCache(BaseClass):
 
         # check if delta loglike is exceeded
         # returns True if the state is added to the cache, False otherwise
-        new_loglike = new_state["total_loglike"]
+        new_loglike = new_state["total_loglike"][0]
 
         self.max_loglike = self.get_max_loglike()
 
@@ -171,14 +171,16 @@ class DataCache(BaseClass):
         # check if the new loglike is larger than the maximum loglike
         if (self.max_loglike - new_loglike) > self.hyperparameters["delta_loglike"]:
             self.debug("delta_loglike exceeded")
+            print("delta_loglike exceeded")
             return False
 
         # check if the new data point is already in the cache
+        np.set_printoptions(precision=8)
         for state in self.states:
             if str(state["parameters"]) == str(new_state["parameters"]):
                 # update the loglike if the new loglike is larger
-                if new_loglike > state["total_loglike"]:
-                    state["total_loglike"] = new_loglike
+                if new_loglike > state["total_loglike"][0]:
+                    state["total_loglike"] = [new_loglike]
                     self.debug("updated loglike in cache")
                 self.debug("state already in cache")
                 return False
@@ -189,7 +191,7 @@ class DataCache(BaseClass):
             min_loglike = min(self.get_loglikes())
             if new_loglike > min_loglike:
                 for i, state in enumerate(self.states):
-                    if state["total_loglike"] == min_loglike:
+                    if state["total_loglike"][0] == min_loglike:
                         self.states.pop(i)  #
                         break
 
@@ -246,7 +248,7 @@ class DataCache(BaseClass):
 
     def get_loglikes(self):
         # returns all loglikes     
-        return jnp.array([state["total_loglike"] for state in self.states])
+        return jnp.array([state["total_loglike"][0] for state in self.states])
     
     def get_max_loglike(self):
 
@@ -283,19 +285,19 @@ class DataCache(BaseClass):
 
             # here we need to remove states if the cache is full
             if len(old) > self.hyperparameters["cache_size"]:
-                min_loglike = min([state["total_loglike"] for state in old])
+                min_loglike = min([state["total_loglike"][0] for state in old])
                 for i, state in enumerate(old):
-                    if state["total_loglike"] == min_loglike:
+                    if state["total_loglike"][0] == min_loglike:
                         old.pop(i)
                         break
 
             # remove states whose loglike is to far away from the maximum loglike
-            max_loglike = max([state["total_loglike"] for state in old])
+            max_loglike = max([state["total_loglike"][0] for state in old])
 
             valid_indices = []
             for i, state in enumerate(old):
                 if not (
-                    abs(state["total_loglike"] - max_loglike)
+                    abs(state["total_loglike"][0] - max_loglike)
                     > self.hyperparameters["delta_loglike"]
                 ):
                     # remove index from mask
@@ -505,7 +507,7 @@ class TestCache(BaseClass):
 
         # check if delta loglike is exceeded
         # returns True if the state is added to the cache, False otherwise
-        new_loglike = new_state["total_loglike"]
+        new_loglike = new_state["total_loglike"][0]
 
         self.max_loglike = self.get_max_loglike()
 
@@ -526,11 +528,12 @@ class TestCache(BaseClass):
             return False
 
         # check if the new data point is already in the cache
+        np.set_printoptions(precision=8)
         for state in self.states:
             if str(state["parameters"]) == str(new_state["parameters"]):
                 # update the loglike if the new loglike is larger
-                if new_loglike > state["total_loglike"]:
-                    state["total_loglike"] = new_loglike
+                if new_loglike > state["total_loglike"][0]:
+                    state["total_loglike"][0] = new_loglike
                     self.debug("updated loglike in cache")
                 self.debug("state already in cache")
                 return False
@@ -594,7 +597,7 @@ class TestCache(BaseClass):
 
     def get_loglikes(self):
         # returns all loglikes     
-        return jnp.array([state["total_loglike"] for state in self.states])
+        return jnp.array([state["total_loglike"][0] for state in self.states])
     
     def get_max_loglike(self):
 
@@ -631,19 +634,19 @@ class TestCache(BaseClass):
 
             # here we need to remove states if the cache is full
             if len(old) > self.hyperparameters["test_cache_size"]:
-                min_loglike = min([state["total_loglike"] for state in old])
+                min_loglike = min([state["total_loglike"][0] for state in old])
                 for i, state in enumerate(old):
-                    if state["total_loglike"] == min_loglike:
+                    if state["total_loglike"][0] == min_loglike:
                         old.pop(i)
                         break
 
             # remove states whose loglike is to far away from the maximum loglike
-            max_loglike = max([state["total_loglike"] for state in old])
+            max_loglike = max([state["total_loglike"][0] for state in old])
 
             valid_indices = []
             for i, state in enumerate(old):
                 if not (
-                    abs(state["total_loglike"] - max_loglike)
+                    abs(state["total_loglike"][0] - max_loglike)
                     > self.hyperparameters["delta_loglike"]
                 ):
                     # remove index from mask
