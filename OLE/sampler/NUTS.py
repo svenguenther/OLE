@@ -35,6 +35,10 @@ class NUTSSampler(Sampler):
         super().__init__(name, **kwargs)
     
     def initialize(self, **kwargs):
+        emulator_settings = kwargs['emulator_settings'] if 'emulator_settings' in kwargs else {}
+        emulator_settings['testing_strategy'] = 'test_all'
+        # update kwargs
+        kwargs['emulator_settings'] = emulator_settings
         super().initialize(**kwargs)
 
         # read the hyperparameters and add some NUTS specific hyperparameters
@@ -291,7 +295,7 @@ class NUTSSampler(Sampler):
         self.logp_and_grad = jax.jit(jax.value_and_grad(self.emulate_total_logposterior_from_normalized_parameters_differentiable))     # this is the differentiable loglike
         
         if not self.emulator.likelihood_collection_differentiable: # if we do not have differentaibel likelihoods, we need to sample from the emulator
-            self.logp_sample = jax.jit(self.sample_emulate_total_logposterior_from_normalized_parameters_differentiable)  
+            self.logp_sample = self.sample_emulate_total_logposterior_from_normalized_parameters 
 
         self.theta0 = self.transform_parameters_into_normalized_eigenspace(bestfit_shift)
 
@@ -347,6 +351,7 @@ class NUTSSampler(Sampler):
                 thetas[i+1] = thetas[i] # If everything fails, the new sample is our last position
                 start = time.time()
 
+                self.emulator.start('NUTS')
                 while s == 1:
                     # Choose a direction
                     RNG, v = self._draw_direction(RNG)
@@ -368,6 +373,8 @@ class NUTSSampler(Sampler):
                 elif i+1 == self.M_adapt + 1:
                     eps = eps_bar
 
+                self.emulator.increment('NUTS')
+
                 # Check if the new sample is inside the prior
                 parameters_untransformed = {'parameters': {key: jnp.array([self.retranform_parameters_from_normalized_eigenspace(thetas[i+1])[j]]) for j, key in enumerate(self.parameter_dict.keys())}}
                 check_logprior = self.compute_logprior(parameters_untransformed)
@@ -379,6 +386,8 @@ class NUTSSampler(Sampler):
 
 
             self.debug("Sample %d/%d, time: %f"%(i+1, self.M_adapt + nsteps +1, time.time()-start))
+
+
 
             start = time.time()
             # sample multiple points from the emulator and check the performance
@@ -406,7 +415,7 @@ class NUTSSampler(Sampler):
 
                     else:
                         loglikes = jnp.array([self.compute_loglike_uncertainty_for_differentiable_likelihood_from_normalized_parameters(thetas[i+1])])
-
+                    self.emulator.increment("likelihood_testing")
 
                     # remove this after enough testing
                     #for quantity, emulatorX in self.emulator.emulators.items():
@@ -419,19 +428,24 @@ class NUTSSampler(Sampler):
                     # we need to compute the logposterior for checking the quality of the emulator
                     self.emulator.start('emulate')
                     reference_loglike, _ = self.logp_and_grad(thetas[i+1])
-                    self.emulator.emulate_counter += 1
                     self.emulator.increment('emulate')
+                    self.emulator.emulate_counter += 1
+                    self.emulator.print_status()
 
 
                     # check whether the emulator is good enough
                     if not self.emulator.check_quality_criterium(jnp.array(loglikes), reference_loglike=reference_loglike, parameters=state['parameters']):
                         
-                        
+                        self.emulator.start('theory_code')
                         state = self.theory.compute(state)
+                        self.emulator.increment('theory_code')
+
+                        self.emulator.start('likelihood')
                         for key in self.likelihood_collection.keys():
                             state = self.likelihood_collection[key].loglike_state(state)
                         logprior = self.compute_logprior(state)
-                        
+                        self.emulator.increment('likelihood')
+
                         state['total_loglike'] = jnp.array([jnp.array(list(state['loglike'].values())).sum() + logprior])
                         a,rejit_required = self.emulator.add_state(state)
 
@@ -441,7 +455,13 @@ class NUTSSampler(Sampler):
                         if rejit_required:
                             self.logp_and_grad = jax.jit(jax.value_and_grad(self.emulate_total_logposterior_from_normalized_parameters_differentiable))     # this is the differentiable loglike
                             if not self.emulator.likelihood_collection_differentiable: # if we do not have differentaibel likelihoods, we need to sample from the emulator
-                                self.logp_sample = jax.jit(self.sample_emulate_total_logposterior_from_normalized_parameters_differentiable)                    # this samples N realizations from the emulator to estimate the uncertainty
+                                self.logp_sample = self.sample_emulate_total_logposterior_from_normalized_parameters                  # this samples N realizations from the emulator to estimate the uncertainty
+                            
+                            # self._leapfrog = jax.jit(self._leapfrog)
+                            self._init_build_tree = jax.jit(self._init_build_tree)
+                            self._update_build_tree = jax.jit(self._update_build_tree)
+                            self._init_iteration = jax.jit(self._init_iteration)
+                            self._draw_theta = jax.jit(self._draw_theta)
                     else:
                         
                         # if self.emulator.hyperparameters['test_noise_levels_counter'] > 0 and self.emulator.hyperparameters['white_noise_ratio'] != 0.:
@@ -512,7 +532,12 @@ class NUTSSampler(Sampler):
         key, subkey = random.split(key)
         r = random.normal(subkey, shape=theta.shape)
 
+        self.emulator.start('emulate')
         logp, gradlogp = self.logp_and_grad(theta)
+        self.emulator.emulate_counter += 1
+        self.emulator.increment('emulate')
+        self.emulator.print_status()
+
 
         if self.debug_mode:
             theta_untransformed = self.retranform_parameters_from_normalized_eigenspace(theta)
@@ -533,7 +558,12 @@ class NUTSSampler(Sampler):
             
         
         # Then decide in which direction to move
+        self.emulator.start('emulate')
         logp0, _ = self.logp_and_grad(theta)
+        self.emulator.emulate_counter += 1
+        self.emulator.increment('emulate')
+        self.emulator.print_status()
+
 
         if self.debug_mode:
             theta_untransformed = self.retranform_parameters_from_normalized_eigenspace(theta)
@@ -576,7 +606,12 @@ class NUTSSampler(Sampler):
             Gradient of the log probability evaluated
             at the new position.
         """
+        self.emulator.start('emulate')
         logp, gradlogp = self.logp_and_grad(theta)
+        self.emulator.emulate_counter += 1
+        self.emulator.increment('emulate')
+        self.emulator.print_status()
+
 
         if self.debug_mode:
             theta_untransformed = self.retranform_parameters_from_normalized_eigenspace(theta)
@@ -585,7 +620,12 @@ class NUTSSampler(Sampler):
         
         r = r + .5 * eps * gradlogp
         theta = theta + eps * r
+
+        self.emulator.start('emulate')
         logp, gradlogp = self.logp_and_grad(theta)
+        self.emulator.emulate_counter += 1
+        self.emulator.increment('emulate')
+        self.emulator.print_status()
 
         if self.debug_mode:
             theta_untransformed = self.retranform_parameters_from_normalized_eigenspace(theta)
@@ -619,7 +659,12 @@ class NUTSSampler(Sampler):
         """
         key, *subkeys = random.split(key, 3)
         r = random.normal(subkeys[0], shape=self.theta0.shape)
+
+        self.emulator.start('emulate')
         logprob, _ = self.logp_and_grad(theta)
+        self.emulator.emulate_counter += 1
+        self.emulator.increment('emulate')
+        self.emulator.print_status()
 
         if self.debug_mode:
             theta_untransformed = self.retranform_parameters_from_normalized_eigenspace(theta)

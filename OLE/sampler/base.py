@@ -1119,6 +1119,34 @@ class Sampler(BaseClass):
         loglikes = self.sample_emulate_logposterior_from_parameters_differentiable(parameters, N=N, RNGkey=RNGkey, noise = noise)
         
         return loglikes
+    
+    def sample_emulate_logposterior_from_normalized_parameters(self, parameters, N=1, RNGkey=jax.random.PRNGKey(int(time.time())), noise = 0.):
+        """
+        This function samples the logposteriors for given normalized parameters from the emulator in order to test its performance.
+
+        Parameters
+        --------------
+        parameters : ndarray
+            The normalized parameters for which the logposterior is computed.
+        N : int
+            The number of samples.
+        RNGkey : jax.random.PRNGKey
+            The random key for the sampling.
+        noise : float
+            The noise level for the sampling.
+
+        Returns
+        --------------
+        ndarray :
+            The logposteriors for the states.
+        """
+
+        # rescale the parameters
+        parameters = self.retranform_parameters_from_normalized_eigenspace(parameters)
+
+        loglikes = self.sample_emulate_logposterior_from_parameters(parameters, N=N, RNGkey=RNGkey, noise = noise)
+        
+        return loglikes
 
 
 
@@ -1181,6 +1209,66 @@ class Sampler(BaseClass):
         #     self.write_to_log(_)
         
         return loglikes
+    
+    def sample_emulate_logposterior_from_parameters(self, parameters, N=1, RNGkey=jax.random.PRNGKey(time.time_ns()), noise = 0.):
+        """
+        This function samples the logposteriors for given parameters from the emulator in order to test its performance.
+
+        Parameters
+        --------------
+        parameters : ndarray
+            The normalized parameters for which the logposterior is computed.
+        N : int
+            The number of samples.
+        RNGkey : jax.random.PRNGKey
+            The random key for the sampling.
+        noise : float
+            The noise level for the sampling.
+
+        Returns
+        --------------
+        ndarray :
+            The logposteriors for the states.
+        """
+
+        self.start("sample_emulate_logposterior_from_parameters")
+
+        # Run the sampler.
+        state = {'parameters': {}, 'quantities': {}, 'loglike': {}, 'total_loglike': None}
+
+        # translate the parameters to the state
+        for i, key in enumerate(self.parameter_dict.keys()):
+            state['parameters'][key] = jnp.array([parameters[i]])
+
+        # add constant parameters to the state
+        for key in self.parameter_dict_constant.keys():
+            if 'value' in list(self.parameter_dict_constant[key].keys()):
+                state['parameters'][key] = jnp.array([self.parameter_dict_constant[key]['value']])
+
+        # compute logprior
+        logprior = self.compute_logprior(state)
+        self.debug("logprior: %f for parameters: %s", logprior, state['parameters'])
+
+        self.debug("emulator available - check emulation performance")
+
+        states, RNGkey = self.emulator.emulate_samples(state['parameters'], RNGkey, noise = noise)
+
+        loglikes = jnp.zeros(N)
+        for i in range(N):
+            state = states[i]
+            for likelihood in self.likelihood_collection.keys():
+                state = self.likelihood_collection[likelihood].loglike_state(state)
+            state['total_loglike'] = jnp.array([jnp.array(list(state['loglike'].values())).sum() + logprior])
+            loglikes = loglikes.at[i].set(state['total_loglike'][0])
+
+        self.increment("sample_emulate_logposterior_from_parameters")
+
+        # Currently not working. TODO: SG: Fix that
+        # if type(states[0]['loglike'][0]) != jax._src.interpreters.ad.JVPTracer:
+        #     _ = "Sampled Logposterior: " + " ".join(str([_[0] for _ in loglikes])) + ' at ' + " ".join([str(key) + ": " + str(value[0]) for key, value in states[0]['parameters'].items()]) + "\n"
+        #     self.write_to_log(_)
+        
+        return loglikes
 
     
     def emulate_total_logposterior_from_normalized_parameters_differentiable(self, parameters):
@@ -1198,12 +1286,28 @@ class Sampler(BaseClass):
         res = [_.sum() for _ in self.sample_emulate_logposterior_from_normalized_parameters_differentiable(parameters, N=N , noise = noise)]
         return res
     
+    def sample_emulate_total_logposterior_from_normalized_parameters(self, parameters, noise = 0.0):
+        """
+        This function samples the total loglikelihood for given normalized parameters from the emulator in order to test its performance.
+        """
+        N = self.emulator.hyperparameters['N_quality_samples']
+        res = [_.sum() for _ in self.sample_emulate_logposterior_from_normalized_parameters(parameters, N=N , noise = noise)]
+        return res
+    
     def sample_emulate_total_logposterior_from_parameters_differentiable(self, parameters, noise = 0.0):
         """
         This function samples the total loglikelihood for given parameters from the emulator in order to test its performance.
         """
         N = self.emulator.hyperparameters['N_quality_samples']
         res = [_.sum() for _ in self.sample_emulate_logposterior_from_parameters_differentiable(parameters, N=N , noise = noise)]
+        return res
+    
+    def sample_emulate_total_logposterior_from_parameters(self, parameters, noise = 0.0):
+        """
+        This function samples the total loglikelihood for given parameters from the emulator in order to test its performance.
+        """
+        N = self.emulator.hyperparameters['N_quality_samples']
+        res = [_.sum() for _ in self.sample_emulate_logposterior_from_parameters(parameters, N=N , noise = noise)]
         return res
 
     def emulate_total_minuslogposterior_from_normalized_parameters_differentiable(self, parameters):

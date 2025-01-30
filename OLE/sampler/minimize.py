@@ -167,7 +167,7 @@ class MinimizeSampler(Sampler):
                     #     self.uncertainty = self.compute_loglike_uncertainty_for_differentiable_likelihood_from_normalized_parameters(self.res.x)
                     # else:
                     #     loglikes_withNoise = self.sample_emulate_total_logposterior_from_parameters_differentiable(self.bestfit,noise = 1.)
-                    loglikes_withNoise = self.sample_emulate_total_logposterior_from_parameters_differentiable(self.bestfit)
+                    loglikes_withNoise = self.sample_emulate_total_logposterior_from_parameters(self.bestfit)
                     self.uncertainty = np.std(loglikes_withNoise)
                 else:
                     self.uncertainty = 0.0            
@@ -198,7 +198,7 @@ class MinimizeSampler(Sampler):
                         else:
                             # we need to send a warning.
                             minimum_checked = True
-                            self.warning("Quality criterium not fulfilled for best fit after adding a new state to the emulator. Improve the performance by reducing the variance_per_bin!")
+                            self.warning("Quality criterium not fulfilled for best fit after adding a new state to the emulator.")
 
                     else:
                         self.info("Minimum checked. Finished minimization")

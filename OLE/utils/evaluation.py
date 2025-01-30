@@ -5,7 +5,7 @@ import datetime
 import os
 import gc
 
-event_dict = {'likelihood': 'likelihood evaluation', 'theory_code': 'CLASS', 'add_state': 'Cache interaction', 'train': 'train emulator', 'emulate_samples': 'sample testing states', 'likelihood_testing':'run likelihood for testing', 'emulate':'evaluate emulator', 'update': 'updating emulator'}
+event_dict = {'NUTS': 'NUTS', 'full_test': 'CLASS Test', 'likelihood': 'likelihood evaluation', 'theory_code': 'CLASS', 'add_state': 'Cache interaction', 'train': 'train emulator', 'emulate_samples': 'sample testing states', 'likelihood_testing':'run likelihood for testing', 'emulate':'evaluate emulator', 'update': 'updating emulator'}
 
 # change style of plots
 # use serif 
@@ -325,7 +325,7 @@ def plot_timings(logfile_path, plot_dir='./', use_timestamps=True):
     #
 
     # first we want to plot the timings of the emulator. Here we plot on the xaxis the timestamp and on the yaxis the total time spent in the different parts of the code
-    fig,ax = plt.subplots(1,1,figsize=(10,5))
+    fig,ax = plt.subplots(1,1,figsize=(10,4))
     
     # plot total time spent
     total_seconds = (ts_end - ts_start).total_seconds()
@@ -343,7 +343,7 @@ def plot_timings(logfile_path, plot_dir='./', use_timestamps=True):
             total_times = [status['timings'][event]['total_time'] for status in status_events if event in status['timings']]
             ax.plot(ts, total_times, label=event_dict[event])
     else:
-        for event in ['likelihood','theory_code','train','update','emulate']:
+        for event in ['likelihood','theory_code','train','update','emulate', 'NUTS', 'full_test']:
             if use_timestamps:
                 ts = [status['timestamp'] for status in status_events if event in status['timings']]
             else:
@@ -401,7 +401,7 @@ def plot_timings(logfile_path, plot_dir='./', use_timestamps=True):
     ax.set_title("Timings of the emulator")
     ax.grid(True)
     plt.tight_layout()
-    plt.savefig(plot_dir + "timings.png")
+    plt.savefig(plot_dir + "timings.pdf")
 
 
 
@@ -410,7 +410,7 @@ def plot_timings(logfile_path, plot_dir='./', use_timestamps=True):
     #
 
     # first we want to plot the timings of the emulator. Here we plot on the xaxis the timestamp and on the yaxis the total time spent in the different parts of the code
-    fig,ax = plt.subplots(1,1,figsize=(10,5))
+    fig,ax = plt.subplots(1,1,figsize=(10,4))
 
     if False:
         for event in list(status_events[-1]['timings'].keys()):
@@ -422,7 +422,7 @@ def plot_timings(logfile_path, plot_dir='./', use_timestamps=True):
             relative_times = [status['timings'][event]['total_time']/time_from_beginning[i] for i,status in enumerate(status_events) if event in status['timings']]
             ax.plot(ts, relative_times, label=event_dict[event])
     else:
-        for event in ['likelihood','theory_code','train','update','emulate']:
+        for event in ['likelihood','theory_code','train','update','emulate', 'NUTS', 'full_test']:
             time_from_beginning = [(status['timestamp']-ts_start).total_seconds() for status in status_events]
             if use_timestamps:
                 ts = [status['timestamp'] for status in status_events if event in status['timings']]
@@ -468,7 +468,7 @@ def plot_timings(logfile_path, plot_dir='./', use_timestamps=True):
     ax.set_title("Timings of the emulator")
     ax.grid(True)
     plt.tight_layout()
-    plt.savefig(plot_dir + "timings_relative.png")
+    plt.savefig(plot_dir + "timings_relative.pdf")
 
 
 def plot_parameter(logfile_paths, parameter, plot_dir='./', min_index=0, max_index=-1):
@@ -511,7 +511,7 @@ def plot_parameter(logfile_paths, parameter, plot_dir='./', min_index=0, max_ind
         event['index'] = all_events.index(event)
 
     # now we want to plot the parameter values
-    fig,ax = plt.subplots(1,1,figsize=(10,5))
+    fig,ax = plt.subplots(1,1,figsize=(10,4))
 
     adding_events = [event for event in all_events if event['type'] == 'adding_event']
     not_adding_events = [event for event in all_events if event['type'] == 'not_adding_events']
@@ -545,7 +545,7 @@ def plot_parameter(logfile_paths, parameter, plot_dir='./', min_index=0, max_ind
 
     plt.tight_layout()
 
-    plt.savefig(plot_dir + "parameter_" + parameter + ".png")
+    plt.savefig(plot_dir + "parameter_" + parameter + ".pdf")
 
 def plot_1d_cache_video(i, all_events, parameter, delta_loglike, first_training_timestamp, plot_dir, training_events):
 
@@ -553,7 +553,7 @@ def plot_1d_cache_video(i, all_events, parameter, delta_loglike, first_training_
     # remove infinities
     loglikes = [loglike if loglike != float("inf") else max(loglikes) for loglike in loglikes]
     
-    fig,ax = plt.subplots(1,1,figsize=(10,5))
+    fig,ax = plt.subplots(1,1,figsize=(10,4))
 
     max_loglike = all_events[i]['max_loglike']
 
@@ -1011,13 +1011,13 @@ def plot_errors_in_max_sigma_equals_zero_mode(logfile_paths, plot_dir='./', qual
     acc_flag = std_loglike < acc_std
 
     # make plot std_loglike vs acc_std
-    fig,ax = plt.subplots(1,1,figsize=(10,5))
+    fig,ax = plt.subplots(1,1,figsize=(10,4))
     ax.scatter(std_loglike, acc_std)
     ax.plot([0, max(std_loglike)], [0, max(std_loglike)], color='black', linestyle='--')
     ax.set_xlabel("std_loglike")
     ax.set_ylabel("acc_std")
     plt.tight_layout()
-    plt.savefig(plot_dir + "std_loglike_vs_acc_std.png")
+    plt.savefig(plot_dir + "std_loglike_vs_acc_std.pdf")
 
     # add acc_flag to event
     for i,event in enumerate(not_using_events):
@@ -1034,7 +1034,7 @@ def plot_errors_in_max_sigma_equals_zero_mode(logfile_paths, plot_dir='./', qual
     delta_loglike = 100
 
     # now we want to plot the loglike differences
-    fig,ax = plt.subplots(1,1,figsize=(10,5))
+    fig,ax = plt.subplots(1,1,figsize=(10,4))
     ax.scatter([event['reference_loglike'] - event['not_adding_event']['loglike'] for event in all_events if event['acc_flag']], [event['not_adding_event']['loglike'] for event in all_events if event['acc_flag']], label="Accepted points")
     ax.scatter([event['reference_loglike'] - event['not_adding_event']['loglike'] for event in all_events if not event['acc_flag']], [event['not_adding_event']['loglike'] for event in all_events if not event['acc_flag']], label="Unaccepted points")
     ax.axvline(0, color='black', linestyle='--')
@@ -1045,14 +1045,14 @@ def plot_errors_in_max_sigma_equals_zero_mode(logfile_paths, plot_dir='./', qual
 
     plt.tight_layout()
 
-    plt.savefig(plot_dir + "errors_in_max_sigma_equals_zero_mode.png")
+    plt.savefig(plot_dir + "errors_in_max_sigma_equals_zero_mode.pdf")
 
     inv_acc_flag = [not _ for _ in acc_flag]
 
     norm_devs = np.array([event['reference_loglike'] - event['not_adding_event']['loglike'] for event in all_events])/std_loglike
 
     # now do the same plot but scale the x-axis by the std_loglike
-    fig,ax = plt.subplots(1,1,figsize=(10,5))
+    fig,ax = plt.subplots(1,1,figsize=(10,4))
     mean = np.mean(norm_devs)
     std = np.std(norm_devs[abs(norm_devs)<50.0])
     print(max(norm_devs))
@@ -1069,4 +1069,4 @@ def plot_errors_in_max_sigma_equals_zero_mode(logfile_paths, plot_dir='./', qual
     ax.set_xlim(-10,10)
     plt.tight_layout()
 
-    plt.savefig(plot_dir + "errors_in_max_sigma_equals_zero_mode_scaled_by_std_loglike.png")
+    plt.savefig(plot_dir + "errors_in_max_sigma_equals_zero_mode_scaled_by_std_loglike.pdf")
