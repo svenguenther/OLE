@@ -392,7 +392,7 @@ class GP_predictor(BaseClass):
 
             # save the testset errors as a numpy array
             np.save(
-                self.hyperparameters['working_directory'] + self.hyperparameters["plotting_directory"] + "/testset_errors_" + self.quantity_name + ".npy",
+                os.path.join(self.hyperparameters['working_directory'], self.hyperparameters["plotting_directory"], "testset_errors_" + self.quantity_name + ".npy"),
                 self.testset_errors,
             )
 
@@ -466,7 +466,7 @@ class GP_predictor(BaseClass):
 
             # save the testset errors as a numpy array
             np.save(
-                self.hyperparameters['working_directory'] + self.hyperparameters["plotting_directory"] + "/testset_errors_" + self.quantity_name + ".npy",
+                os.path.join(self.hyperparameters['working_directory'], self.hyperparameters["plotting_directory"], "testset_errors_" + self.quantity_name + ".npy"),
                 self.testset_errors,
             )
 
@@ -508,10 +508,10 @@ class GP_predictor(BaseClass):
 
             # check that plotting_dir/preictions/ exists
             if not os.path.exists(
-                self.hyperparameters['working_directory'] + self.hyperparameters["plotting_directory"] + "/predictions/"
+                os.path.join(self.hyperparameters['working_directory'], self.hyperparameters["plotting_directory"], "predictions")
             ):
                 os.makedirs(
-                    self.hyperparameters['working_directory'] + self.hyperparameters["plotting_directory"] + "/predictions/", exist_ok=True
+                    os.path.join(self.hyperparameters['working_directory'], self.hyperparameters["plotting_directory"], "predictions"), exist_ok=True
                 )
 
             # plot the prediction
@@ -522,13 +522,14 @@ class GP_predictor(BaseClass):
                 err_tol,
                 self.quantity_name,
                 self.data_processor.input_data_raw[jnp.array(test_indices[i])],
+                os.path.join(
                 self.hyperparameters['working_directory'] 
-                + self.hyperparameters["plotting_directory"]
-                + "/predictions/"
-                + self.quantity_name
+                , self.hyperparameters["plotting_directory"]
+                , "predictions"
+                , self.quantity_name
                 + "_prediction_"
                 + str(i)
-                + ".png",
+                + ".png"),
                 self.data_processor.data_covmat,
             )
 
@@ -848,17 +849,18 @@ class GP(BaseClass):
             import os
 
             if not os.path.exists(
-                self.hyperparameters['working_directory'] + self.hyperparameters["plotting_directory"] + "/loss/"
+                os.path.join(self.hyperparameters['working_directory'], self.hyperparameters["plotting_directory"], "loss")
             ):
-                os.makedirs(self.hyperparameters['working_directory'] + self.hyperparameters["plotting_directory"] + "/loss/", exist_ok=True)
+                os.makedirs(os.path.join(self.hyperparameters['working_directory'], self.hyperparameters["plotting_directory"], "loss"), exist_ok=True)
             loss_plot(
                 self.history,
                 self._name,
+                os.path.join(
                 self.hyperparameters['working_directory'] 
-                + self.hyperparameters["plotting_directory"]
-                + "/loss/"
-                + self._name
-                + "_loss.png",
+                , self.hyperparameters["plotting_directory"]
+                , "loss"
+                , self._name
+                + "_loss.png"),
             )
 
             # plot a slice of the trained GP
@@ -876,11 +878,12 @@ class GP(BaseClass):
                 x,
                 y,
                 std,
+                os.path.join(
                 self.hyperparameters['working_directory'] 
-                + self.hyperparameters["plotting_directory"]
-                + "/loss/"
-                + self._name
-                + "_slice.png",
+                , self.hyperparameters["plotting_directory"]
+                , "loss"
+                , self._name
+                + "_slice.png"),
             )
 
             if (self.hyperparameters["testset_fraction"] is not None) and (get_mpi_rank() == 0):
@@ -1169,10 +1172,10 @@ class GP(BaseClass):
 
         # test that the directory exists
         if not os.path.exists(
-            self.hyperparameters['working_directory'] + self.hyperparameters["plotting_directory"] + "/test_set_prediction/"
+            os.path.join(self.hyperparameters['working_directory'], self.hyperparameters["plotting_directory"], "test_set_prediction")
         ):
             os.makedirs(
-                self.hyperparameters['working_directory'] + self.hyperparameters["plotting_directory"] + "/test_set_prediction/", exist_ok=True
+                os.path.join(self.hyperparameters['working_directory'], self.hyperparameters["plotting_directory"], "test_set_prediction"), exist_ok=True
             )
 
         # plot the mean and the std
@@ -1182,11 +1185,12 @@ class GP(BaseClass):
             self.testset_stds,
             self.testset_err_tols,
             self._name,
+            os.path.join(
             self.hyperparameters['working_directory'] 
-            + self.hyperparameters["plotting_directory"]
-            + "/test_set_prediction/"
-            + self._name
-            + ".png",
+            , self.hyperparameters["plotting_directory"]
+            , "test_set_prediction"
+            , self._name
+            + ".png"),
         )
 
         pass

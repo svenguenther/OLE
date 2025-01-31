@@ -126,7 +126,7 @@ class Emulator(BaseClass):
 
             # only relevant for cobaya
             'cobaya_state_file': None, # TODO: put this somewhere else. This is only used in the cobaya wrapper
-            'jit_threshold': 20, # number of samples to be emulated before we jit the emulator to accelerate it TODO: put this somewhere else
+            'jit_threshold': 60, # number of samples to be emulated before we jit the emulator to accelerate it TODO: put this somewhere else
 
             # learn about the actual emulation task to estimate 'quality_threshold_quadratic'.
             'N_sigma': 4,
@@ -609,7 +609,7 @@ class Emulator(BaseClass):
             emulator_state["parameter_std"] = emulator.data_processor.input_stds
 
         # pickle the emulator state with a lock. Overwrite if it already exists. Create it if it does not exist.
-        with open(self.hyperparameters['working_directory'] + self.hyperparameters['emulator_state_file'] , 'wb') as f:
+        with open(os.path.join(self.hyperparameters['working_directory'], self.hyperparameters['emulator_state_file']), 'wb') as f:
             pickle.dump(emulator_state, f)
 
 
@@ -623,8 +623,8 @@ class Emulator(BaseClass):
             data['input_data_normalized'] = emulator.data_processor.input_data_normalized
             data[quantity] = emulator.data_processor.output_data_emulator
 
-        with fasteners.InterProcessLock(self.hyperparameters['working_directory'] + self.hyperparameters["normalized_cache_file"] + ".lock"):
-            with open(self.hyperparameters['working_directory'] + self.hyperparameters["normalized_cache_file"], "wb") as fp:
+        with fasteners.InterProcessLock(os.path.join(self.hyperparameters['working_directory'], self.hyperparameters["normalized_cache_file"] + ".lock")):
+            with open(os.path.join(self.hyperparameters['working_directory'], self.hyperparameters['normalized_cache_file']), "wb") as fp:
                 pickle.dump(data, fp)
 
 
@@ -719,8 +719,8 @@ class Emulator(BaseClass):
             training_complete = False
             while not training_complete:
                 # open emulators state file and check if all quantities are trained
-                with fasteners.InterProcessLock(self.hyperparameters['working_directory'] + self.hyperparameters['emulator_state_file'] + ".lock"):
-                    with open(self.hyperparameters['working_directory'] + self.hyperparameters['emulator_state_file'], 'rb') as f:
+                with fasteners.InterProcessLock(os.path.join(self.hyperparameters['working_directory'], self.hyperparameters['emulator_state_file'] + ".lock")):
+                    with open(os.path.join(self.hyperparameters['working_directory'], self.hyperparameters['emulator_state_file']), 'rb') as f:
                         emulator_state = pickle.load(f)
                         training_complete = True
                         for quantity, emulator_instance in emulator_state['quantities'].items():
@@ -741,13 +741,13 @@ class Emulator(BaseClass):
 
         # now we can load the weights from the emulator state file and update the emulators with the compressed data
         # 1. load the emulator state file
-        with fasteners.InterProcessLock(self.hyperparameters['working_directory'] + self.hyperparameters['emulator_state_file'] + ".lock"):
-            with open(self.hyperparameters['working_directory'] + self.hyperparameters['emulator_state_file'], 'rb') as f:
+        with fasteners.InterProcessLock(os.path.join(self.hyperparameters['working_directory'], self.hyperparameters['emulator_state_file'] + ".lock")):
+            with open(os.path.join(self.hyperparameters['working_directory'], self.hyperparameters['emulator_state_file']), 'rb') as f:
                 emulator_state = pickle.load(f)
 
         # 2. load the compressed data
-        with fasteners.InterProcessLock(self.hyperparameters['working_directory'] + self.hyperparameters["normalized_cache_file"] + ".lock"):
-            with open(self.hyperparameters['working_directory'] + self.hyperparameters["normalized_cache_file"], "rb") as fp:
+        with fasteners.InterProcessLock(os.path.join(self.hyperparameters['working_directory'], self.hyperparameters["normalized_cache_file"] + ".lock")):
+            with open(os.path.join(self.hyperparameters['working_directory'], self.hyperparameters["normalized_cache_file"]), "rb") as fp:
                 data = pickle.load(fp)
 
         # 3. update the emulators with the compressed data
@@ -855,7 +855,7 @@ class Emulator(BaseClass):
             parameters = jnp.array(self.data_cache.get_parameters()[0])
 
             for i in range(len(parameters[0])):
-                plot_loglikes(loglikes[:], parameters[:,i], self.input_parameters[i], self.hyperparameters['working_directory'] + self.hyperparameters['plotting_directory']+'/loglike_'+str(i)+'.png')
+                plot_loglikes(loglikes[:], parameters[:,i], self.input_parameters[i], os.path.join(self.hyperparameters['working_directory'], self.hyperparameters['plotting_directory'],'loglike_'+str(i)+'.png'))
         pass
 
         self.increment("train")
@@ -870,8 +870,8 @@ class Emulator(BaseClass):
         my_PCA_number = None
 
         # load the emulator state file
-        with fasteners.InterProcessLock(self.hyperparameters['working_directory'] + self.hyperparameters['emulator_state_file'] + ".lock"):
-            with open(self.hyperparameters['working_directory'] + self.hyperparameters['emulator_state_file'], 'rb') as f:
+        with fasteners.InterProcessLock(os.path.join(self.hyperparameters['working_directory'], self.hyperparameters['emulator_state_file'] + ".lock")):
+            with open(os.path.join(self.hyperparameters['working_directory'], self.hyperparameters['emulator_state_file']), 'rb') as f:
                 emulator_state = pickle.load(f)
 
             # check which quantities are to be trained
@@ -893,14 +893,14 @@ class Emulator(BaseClass):
             emulator_state['quantities'][my_training_quantity]['GPs'][my_PCA_number]['status'] = 1
 
             # pickle the emulator state with a lock. Overwrite it
-            with open(self.hyperparameters['working_directory'] + self.hyperparameters['emulator_state_file'] , 'wb') as f:
+            with open(os.path.join(self.hyperparameters['working_directory'], self.hyperparameters['emulator_state_file']) , 'wb') as f:
                 pickle.dump(emulator_state, f)
 
         # load the data from the cache.
         self.debug("Loading data from normalized cache")
 
-        with fasteners.InterProcessLock(self.hyperparameters['working_directory'] + self.hyperparameters["normalized_cache_file"] + ".lock"):
-            with open(self.hyperparameters['working_directory'] + self.hyperparameters["normalized_cache_file"], "rb") as fp:
+        with fasteners.InterProcessLock(os.path.join(self.hyperparameters['working_directory'], self.hyperparameters["normalized_cache_file"] + ".lock")):
+            with open(os.path.join(self.hyperparameters['working_directory'], self.hyperparameters["normalized_cache_file"]), "rb") as fp:
                 data = pickle.load(fp)
 
         parameters = data['input_data_normalized']
@@ -920,15 +920,15 @@ class Emulator(BaseClass):
         self.my_test_GP.train()
 
         # store the weights to the emulator state file and set its flag to 2
-        with fasteners.InterProcessLock(self.hyperparameters['working_directory'] + self.hyperparameters['emulator_state_file'] + ".lock"):
-            with open(self.hyperparameters['working_directory'] + self.hyperparameters['emulator_state_file'], 'rb') as f:
+        with fasteners.InterProcessLock(os.path.join(self.hyperparameters['working_directory'], self.hyperparameters['emulator_state_file'] + ".lock")):
+            with open(os.path.join(self.hyperparameters['working_directory'] , self.hyperparameters['emulator_state_file']), 'rb') as f:
                 emulator_state = pickle.load(f)
 
             emulator_state['quantities'][my_training_quantity]['GPs'][my_PCA_number]['status'] = 2
             emulator_state['quantities'][my_training_quantity]['GPs'][my_PCA_number]['kernel'] = self.my_test_GP.opt_posterior.prior.kernel
             
             # pickle the emulator state with a lock. Overwrite it
-            with open(self.hyperparameters['working_directory'] + self.hyperparameters['emulator_state_file'] , 'wb') as f:
+            with open(os.path.join(self.hyperparameters['working_directory'], self.hyperparameters['emulator_state_file']) , 'wb') as f:
                 pickle.dump(emulator_state, f)
 
         # a = time.time()
@@ -1359,7 +1359,6 @@ class Emulator(BaseClass):
         if not self.trained:
             self.continuous_successful_calls = 0
             self.quality_check_unsuccessful_counter += 1
-            print("WHAT?")
             return False
 
         # check for nans in the loglikes
@@ -1421,6 +1420,7 @@ class Emulator(BaseClass):
         
         if jax.random.uniform(jax.random.PRNGKey(time.time_ns())) < chance_for_full_test:
             self.debug("Running full test on emulator performance")
+            self.write_to_log("Running full test on emulator performance\n")
             self.start("full_test")
             self.test_std_loglike = std_loglike
             self.test_mean_loglike = mean_loglike
@@ -1630,7 +1630,7 @@ class Emulator(BaseClass):
         if self.hyperparameters['logfile'] is None:
             return
         
-        file_name = self.hyperparameters['working_directory'] + self.hyperparameters['logfile']+'_'+str(get_mpi_rank())+'.log'
+        file_name = os.path.join(self.hyperparameters['working_directory'], self.hyperparameters['logfile']+'_'+str(get_mpi_rank())+'.log')
         # check if file/directory exists, otherwise create it
         if not os.path.exists(os.path.dirname(file_name)):
             os.makedirs(os.path.dirname(file_name))
