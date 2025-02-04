@@ -129,7 +129,7 @@ class Emulator(BaseClass):
             'jit_threshold': 60, # number of samples to be emulated before we jit the emulator to accelerate it TODO: put this somewhere else
 
             # learn about the actual emulation task to estimate 'quality_threshold_quadratic'.
-            'N_sigma': 4,
+            'N_sigma': 3.0,
             'dimensionality': None, # if we give the dimensionality, the code estimates where we need to be accruate in the quality criterium (inside of N_sigma). Thus, we can estimate the quality_threshold_quadratic, in a way, that it becomes dominant over the linear at this point!
 
             # max sigma for the quality criterium. If this is set, we will use the emulator only if we are 'reasonably' close to the best fit posterior. 
@@ -1019,21 +1019,29 @@ class Emulator(BaseClass):
         # if we jit the emulator, we use the jit version of the emulator
         if self.hyperparameters['jit'] and (self.continuous_successful_calls > self.hyperparameters['jit_threshold']):
             if self.rejit_flag_emulator: # if the emulator was updated/retrained, we rejit the emulator
-                # if there is a old jitted function, we delete it
-                if hasattr(self, 'jitted_emulation_function'):
-                    jax.clear_backends()
+                # check if there are new data points in the cache
+                if self.data_cache.check_for_new_points():
+                    # new data points in the cache, we need to update the emulator
+                    self.update()
+                    # reset the continuous successful calls
+                    self.continuous_successful_calls = 0
+                    output_state_emulator = self.emulate_nojit(parameters)                
+                else:
+                    # if there is a old jitted function, we delete it
+                    if hasattr(self, 'jitted_emulation_function'):
+                        jax.clear_backends()
+                        jax.clear_caches()
+                        self.jitted_emulation_function.clear_cache()
+                        self.jitted_emulation_function = None
+                        # del self.jitted_emulation_function
+                        # clear memory
+                        jax.clear_caches()
+                        jax.clear_backends()
+                        gc.collect()
+                    self.jitted_emulation_function = jax.jit(self.emulate_jit)
+                    output_state_emulator = self.jitted_emulation_function(parameters)
+                    self.rejit_flag_emulator = False
                     jax.clear_caches()
-                    self.jitted_emulation_function.clear_cache()
-                    self.jitted_emulation_function = None
-                    # del self.jitted_emulation_function
-                    # clear memory
-                    jax.clear_caches()
-                    jax.clear_backends()
-                    gc.collect()
-                self.jitted_emulation_function = jax.jit(self.emulate_jit)
-                output_state_emulator = self.jitted_emulation_function(parameters)
-                self.rejit_flag_emulator = False
-                jax.clear_caches()
             else:
                 output_state_emulator = self.jitted_emulation_function(parameters)
         else:
@@ -1202,22 +1210,28 @@ class Emulator(BaseClass):
         # use jit or no jit version of the function
         if self.hyperparameters['jit'] and (self.continuous_successful_calls > self.hyperparameters['jit_threshold']):
             if self.rejit_flag_sampling: # if the emulator was updated/retrained, we rejit the emulator
+                if self.data_cache.check_for_new_points():
+                    # new data points in the cache, we need to update the emulator
+                    self.update()
+                    # reset the continuous successful calls
+                    self.continuous_successful_calls = 0
+                    output_states_emulator, RNGkey = self.emulate_samples_nojit(parameters, RNGkey ,noise)
+                else:
+                    if hasattr(self, 'jitted_sampling_function'):
+                        # clear memory
+                        jax.clear_backends()
+                        jax.clear_caches()
+                        self.jitted_sampling_function.clear_cache()
+                        self.jitted_sampling_function = None
+                        del self.jitted_sampling_function
+                        # clear memory
+                        jax.clear_backends()
+                        jax.clear_caches()
+                        gc.collect()
 
-                if hasattr(self, 'jitted_sampling_function'):
-                    # clear memory
-                    jax.clear_backends()
-                    jax.clear_caches()
-                    self.jitted_sampling_function.clear_cache()
-                    self.jitted_sampling_function = None
-                    del self.jitted_sampling_function
-                    # clear memory
-                    jax.clear_backends()
-                    jax.clear_caches()
-                    gc.collect()
-
-                self.jitted_sampling_function = jax.jit(self.emulate_samples_jit)
-                output_states_emulator, RNGkey = self.jitted_sampling_function(parameters, RNGkey,noise)
-                self.rejit_flag_sampling = False
+                    self.jitted_sampling_function = jax.jit(self.emulate_samples_jit)
+                    output_states_emulator, RNGkey = self.jitted_sampling_function(parameters, RNGkey,noise)
+                    self.rejit_flag_sampling = False
             else:
                 output_states_emulator, RNGkey = self.jitted_sampling_function(parameters, RNGkey, noise)
         else:
