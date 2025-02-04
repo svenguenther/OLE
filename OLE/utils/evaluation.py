@@ -10,6 +10,10 @@ event_dict = {'NUTS': 'NUTS', 'full_test': 'CLASS Test', 'likelihood': 'likeliho
 # change style of plots
 # use serif 
 plt.style.use('ggplot')
+plt.rcParams.update({
+    "text.usetex": True,
+    "font.family": "serif",
+})
 
 # This function takes the logfile of an OLE run and creates usful statistics and plots.
 
