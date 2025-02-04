@@ -314,7 +314,7 @@ def load_logfile(logfile_path):
 
     return adding_events, not_adding_events, training_events, successfully_evaluating_events, unsuccessfully_evaluating_events, running_events, not_using_events, updating_events, groundlevel_events, status_events, ts_start, ts_end
 
-def plot_timings(logfile_path, plot_dir='./', use_timestamps=True):
+def plot_timings(logfile_path, plot_dir='./', use_timestamps=True, savefig=True):
 
     adding_events, not_adding_events, training_events, successfully_evaluating_events, unsuccessfully_evaluating_events, running_events, not_using_events, updating_events, groundlevel_events, status_events, ts_start, ts_end = load_logfile(logfile_path)
     # supi dupi, now we have all the events in the lists
@@ -347,22 +347,27 @@ def plot_timings(logfile_path, plot_dir='./', use_timestamps=True):
             total_times = [status['timings'][event]['total_time'] for status in status_events if event in status['timings']]
             ax.plot(ts, total_times, label=event_dict[event])
     else:
-        for event in ['likelihood','theory_code','train','update','emulate', 'NUTS', 'full_test']:
+        for event in ['likelihood','theory_code','train','update','emulate', 'NUTS']:
             if use_timestamps:
                 ts = [status['timestamp'] for status in status_events if event in status['timings']]
             else:
                 ts = [(status['timestamp']-ts_start).total_seconds() for status in status_events if event in status['timings']] 
             total_times = [status['timings'][event]['total_time'] for status in status_events if event in status['timings']]
-            ax.plot(ts, total_times, label=event_dict[event])
+            if len(total_times)>0:
+                ax.plot(ts, total_times, label=event_dict[event])
         
         # add emulate_samples and likelihood_testing for testing
         if use_timestamps:
-            ts = [status['timestamp'] for status in status_events if event in status['timings']]
+            ts = [status['timestamp'] for status in status_events if 'likelihood_testing' in status['timings']]
         else:
-            ts = [(status['timestamp']-ts_start).total_seconds() for status in status_events if event in status['timings']] 
-        total_times = [status['timings']['emulate_samples']['total_time']+status['timings']['likelihood_testing']['total_time'] for status in status_events if event in status['timings']]
+            ts = [(status['timestamp']-ts_start).total_seconds() for status in status_events if 'likelihood_testing' in status['timings']] 
+        total_times = [status['timings']['emulate_samples']['total_time']+status['timings']['likelihood_testing']['total_time'] for status in status_events if 'likelihood_testing' in status['timings']]
+        # additionally add_'full_test' to total times if it is in the timings
+        if 'full_test' in status_events[-1]['timings']:
+            for i in range(len(total_times)):
+                if 'full_test' in status_events[-i]['timings']:
+                    total_times[-i] = total_times[-i]+status_events[-i]['timings']['full_test']['total_time']
         ax.plot(ts, total_times, label='testing emulator')
-    
 
 
     # get unaccounted time at every event
@@ -373,6 +378,12 @@ def plot_timings(logfile_path, plot_dir='./', use_timestamps=True):
         ax.plot([status['timestamp'] for status in status_events], other, label="other")
     else:
         ax.plot([(status['timestamp']-ts_start).total_seconds() for status in status_events], other, label="other")
+
+    if use_timestamps:
+        ts = [status['timestamp'] for status in status_events]
+    else:
+        ts = [(status['timestamp']-ts_start).total_seconds() for status in status_events] 
+
 
     # display 20 uniformly distributed timestamps between ts_start and ts_end
     if use_timestamps:
@@ -386,6 +397,8 @@ def plot_timings(logfile_path, plot_dir='./', use_timestamps=True):
     indices = [np.argmin(np.abs(np.array(all_ts_in_seconds)-u)) for u in unif]
     #remove double countings
     indices = list(set(indices))
+
+
     ax.set_xticks([all_ts[i] for i in indices])
     ax.set_xticklabels([all_ts[i] for i in indices], rotation=90)
 
@@ -405,7 +418,8 @@ def plot_timings(logfile_path, plot_dir='./', use_timestamps=True):
     ax.set_title("Timings of the emulator")
     ax.grid(True)
     plt.tight_layout()
-    plt.savefig(plot_dir + "timings.pdf")
+    if savefig:
+        plt.savefig(plot_dir + "timings.pdf")
 
 
 
@@ -414,7 +428,7 @@ def plot_timings(logfile_path, plot_dir='./', use_timestamps=True):
     #
 
     # first we want to plot the timings of the emulator. Here we plot on the xaxis the timestamp and on the yaxis the total time spent in the different parts of the code
-    fig,ax = plt.subplots(1,1,figsize=(10,4))
+    fig2,ax2 = plt.subplots(1,1,figsize=(10,4))
 
     if False:
         for event in list(status_events[-1]['timings'].keys()):
@@ -426,56 +440,65 @@ def plot_timings(logfile_path, plot_dir='./', use_timestamps=True):
             relative_times = [status['timings'][event]['total_time']/time_from_beginning[i] for i,status in enumerate(status_events) if event in status['timings']]
             ax.plot(ts, relative_times, label=event_dict[event])
     else:
-        for event in ['likelihood','theory_code','train','update','emulate', 'NUTS', 'full_test']:
+        for event in ['likelihood','theory_code','train','update','emulate', 'NUTS']:
             time_from_beginning = [(status['timestamp']-ts_start).total_seconds() for status in status_events]
             if use_timestamps:
                 ts = [status['timestamp'] for status in status_events if event in status['timings']]
             else:
                 ts = [(status['timestamp']-ts_start).total_seconds() for status in status_events if event in status['timings']] 
             relative_times = [status['timings'][event]['total_time']/time_from_beginning[i] for i,status in enumerate(status_events) if event in status['timings']]
-            ax.plot(ts, relative_times, label=event_dict[event])
+            if len(relative_times)>0:
+                ax2.plot(ts, relative_times, label=event_dict[event])
         
         # add emulate_samples and likelihood_testing for testing
         if use_timestamps:
             ts = [status['timestamp'] for status in status_events if event in status['timings']]
         else:
-            ts = [(status['timestamp']-ts_start).total_seconds() for status in status_events if event in status['timings']] 
-        relative_times = [(status['timings']['emulate_samples']['total_time']+status['timings']['likelihood_testing']['total_time'])/time_from_beginning[i] for i,status in enumerate(status_events) if event in status['timings']]
-        ax.plot(ts, relative_times, label='testing emulator')
+            ts = [(status['timestamp']-ts_start).total_seconds() for status in status_events if 'likelihood_testing' in status['timings']] 
+        relative_times = [(status['timings']['emulate_samples']['total_time']+status['timings']['likelihood_testing']['total_time'])/time_from_beginning[i] for i,status in enumerate(status_events) if 'likelihood_testing' in status['timings']]
+        # additionally add_'full_test' to total times if it is in the timings
+        if 'full_test' in status_events[-1]['timings']:
+            for i in range(len(relative_times)):
+                if 'full_test' in status_events[-i]['timings']:
+                    relative_times[-i] = relative_times[-i]+status_events[-i]['timings']['full_test']['total_time']/time_from_beginning[-i]
+        ax2.plot(ts, relative_times, label='testing emulator')
 
     # get unaccounted time at every event
     other = [((status['timestamp']-ts_start).total_seconds()-sum([status['timings'][event]['total_time'] for event in status['timings'] if event!='add_state']))/time_from_beginning[i] for i,status in enumerate(status_events)]
 
     # plot unaccounted time
     if use_timestamps:
-        ax.plot([status['timestamp'] for status in status_events], other, label="other")#, linestyle="--", color="red")
+        ax2.plot([status['timestamp'] for status in status_events], other, label="other")#, linestyle="--", color="red")
     else:
-        ax.plot([(status['timestamp']-ts_start).total_seconds() for status in status_events], other, label="other")
+        ax2.plot([(status['timestamp']-ts_start).total_seconds() for status in status_events], other, label="other")
 
     
     # display 20 uniformly distributed timestamps between ts_start and ts_end
-    ax.set_xticks([all_ts[i] for i in indices])
-    ax.set_xticklabels([all_ts[i] for i in indices], rotation=90)
+    ax2.set_xticks([all_ts[i] for i in indices])
+    ax2.set_xticklabels([all_ts[i] for i in indices], rotation=90)
 
 
-    ax.set_ylim(0, 1)
+    ax2.set_ylim(0, 1)
     if use_timestamps:
-        ax.set_xlim(ts_start, ts_end)
+        ax2.set_xlim(ts_start, ts_end)
     else:
-        ax.set_xlim(0, total_seconds)
-    ax.legend(ncol=3)
+        ax2.set_xlim(0, total_seconds)
+    ax2.legend(ncol=3)
     if use_timestamps:
-        ax.set_xlabel("Timestamp")
+        ax2.set_xlabel("Timestamp")
     else:
-        ax.set_xlabel("Time [s]")
-    ax.set_ylabel("Fraction of cumulated runtime")
-    ax.set_title("Timings of the emulator")
-    ax.grid(True)
+        ax2.set_xlabel("Time [s]")
+    ax2.set_ylabel("Fraction of cumulated runtime")
+    ax2.set_title("Timings of the emulator")
+    ax2.grid(True)
     plt.tight_layout()
-    plt.savefig(plot_dir + "timings_relative.pdf")
+    if savefig:
+        plt.savefig(plot_dir + "timings_relative.pdf")
+
+    return fig, ax, fig2, ax2
 
 
-def plot_parameter(logfile_paths, parameter, plot_dir='./', min_index=0, max_index=-1):
+def plot_parameter(logfile_paths, parameter, plot_dir='./', min_index=0, max_index=-1, savefig=True):
     # append all events from all logfiles
     for i, logfile_path in enumerate(logfile_paths):
 
@@ -549,9 +572,12 @@ def plot_parameter(logfile_paths, parameter, plot_dir='./', min_index=0, max_ind
 
     plt.tight_layout()
 
-    plt.savefig(plot_dir + "parameter_" + parameter + ".pdf")
+    if savefig:
+        plt.savefig(plot_dir + "parameter_" + parameter + ".pdf")
 
-def plot_1d_cache_video(i, all_events, parameter, delta_loglike, first_training_timestamp, plot_dir, training_events):
+    return fig, ax
+
+def plot_1d_cache_video(i, all_events, parameter, delta_loglike, first_training_timestamp, plot_dir, training_events, savefig=True):
 
     loglikes = [event['loglike'] for event in all_events]
     # remove infinities
