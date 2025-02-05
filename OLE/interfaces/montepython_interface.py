@@ -63,17 +63,43 @@ if __name__ == '__main__':
     # deepcopy all callable methods of the Class class
     callable_methods = {}
 
-    CLASS_functions_class_1 = ['Omega_m', 'h', 'T_cmb'] # no input, float output
-    CLASS_functions_class_2 = ['z_of_r']  # input: np.array, output: tuple( np.array, np.array) 
-    CLASS_functions_class_3 = ['get_pk', 'get_pk_lin', 'get_Pk_cb_m_ratio', 'get_pk_cb_lin']  # input: np.array, output: N-d np.array
-    CLASS_functions_class_4 = ['angular_distance', 'pk_lin', 'pk_cb_lin', 'sigma_cb', 'sigma', 'Hubble'] # input: dict/array/float, output: float
-    CLASS_functions_class_5 = ['lensed_cl'] # input: int, output: cl_dict
-    CLASS_functions_class_6 = ['get_current_derived_parameters'] # input: list of strings, output: dict with floats
+    CLASS_functions_no_in_float_out = ['Omega_m','Omega_r','Omega_Lambda',
+                               'Omega_g','Omega_b', 'h', 'T_cmb','age',
+                               'n_s','tau_reio','theta_s_100','theta_star_100',
+                               'omega_b','Neff','k_eq','z_eq','sigma8',
+                               'S8','sigma8_cb','rs_drag','z_reio','T_cmb',
+                               'Omega0_m','Omega0_k','Omega0_cdm','Omega0_idm',
+                               ] # no input, float output
+    CLASS_functions_no_in_array_out = ['spectral_distortion_amplitudes'] # no input, array output
+    CLASS_functions_no_in_tuple_out = ['spectral_distortion']  # no input, output: tuple( np.array, np.array) 
+    CLASS_functions_array_in_tuple_out = ['z_of_r']  # input: np.array, output: tuple( np.array, np.array) 
+    CLASS_functions_array_in_array_out = ['get_pk','get_pk_cb', 'get_pk_lin','get_pk_all', 
+                               'get_Pk_cb_m_ratio', 'get_pk_cb_lin','luminosity_distance',
+                               'get_tk','nonlinear_scale','nonlinear_scale_cb',
+                               'fourier_hmcode_sigma8','fourier_hmcode_sigma8_cb',
+                               'fourier_hmcode_sigmadisp','fourier_hmcode_sigmadisp_cb',
+                               'fourier_hmcode_sigmadisp100','fourier_hmcode_sigmadisp100_cb',
+                               'fourier_hmcode_sigmaprime','fourier_hmcode_sigmaprime_cb',
+                               'get_pk_array','get_pk_cb_array']  # input: np.array, output: N-d np.array
+    CLASS_functions_any_in_flaot_out = ['angular_distance','pk','pk_cb', 'pk_lin', 
+                               'pk_cb_lin','pk_tilt', 'sigma_cb', 'sigma', 
+                               'Hubble','fourier_hmcode_window_nfw',
+                               'angular_distance_from_to','comoving_distance',
+                               'scale_independent_growth_factor',
+                               'scale_independent_growth_factor_f',
+                               'scale_dependent_growth_factor_f',
+                               'scale_independent_f_sigma8','z_of_tau',
+                               'effective_f_sigma8','effective_f_sigma8_spline',
+                               'Hubble','Om_m','Om_b','Om_cdm','Om_ncdm',
+                               'ionization_fraction','baryon_temperature'] # input: dict/array/float, output: float
+    CLASS_functions_Cl_dict = ['lensed_cl','raw_cl','density_cl'] # input: int, output: cl_dict
+    CLASS_functions_list_string_in_dict_out = ['get_current_derived_parameters'] # input: list of strings, output: dict with floats
+
     
     
     
 
-    ALL_CLASS_functions = CLASS_functions_class_1 + CLASS_functions_class_2 + CLASS_functions_class_3 + CLASS_functions_class_4 + CLASS_functions_class_5 + CLASS_functions_class_6
+    ALL_CLASS_functions = CLASS_functions_no_in_float_out + CLASS_functions_no_in_array_out + CLASS_functions_no_in_tuple_out + CLASS_functions_array_in_tuple_out + CLASS_functions_array_in_array_out + CLASS_functions_any_in_flaot_out + CLASS_functions_Cl_dict + CLASS_functions_list_string_in_dict_out
 
 
     for name in dir(classy.Class):
@@ -217,15 +243,10 @@ if __name__ == '__main__':
             # This function reads the original output of the CLASS code and transforms it into the OLE format. 
             # It might give extra information about the transformation such as shape etc...
 
-            if attribute in CLASS_functions_class_1:
+            if attribute in CLASS_functions_no_in_float_out:
                 return res[0], None
             
-            elif attribute in CLASS_functions_class_2:
-                # split the output into two arrays
-                out1, out2 = np.split(res, 2)
-                return (out1,out2), None
-            
-            elif attribute in CLASS_functions_class_3:
+            elif attribute in CLASS_functions_no_in_array_out:
                 # get entry with the same arg_hash
                 res_shape = info[1]['shape']
 
@@ -234,10 +255,29 @@ if __name__ == '__main__':
 
                 return res, None
             
-            elif attribute in CLASS_functions_class_4:
+            elif attribute in CLASS_functions_no_in_tuple_out:
+                # split the output into two arrays
+                out1, out2 = np.split(res, 2)
+                return (out1,out2), None
+            
+            elif attribute in CLASS_functions_array_in_tuple_out:
+                # split the output into two arrays
+                out1, out2 = np.split(res, 2)
+                return (out1,out2), None
+            
+            elif attribute in CLASS_functions_array_in_array_out:
+                # get entry with the same arg_hash
+                res_shape = info[1]['shape']
+
+                # reshape the output
+                res = res.reshape(res_shape)
+
+                return res, None
+            
+            elif attribute in CLASS_functions_any_in_flaot_out:
                 return res[0], None
 
-            elif attribute in CLASS_functions_class_5:
+            elif attribute in CLASS_functions_Cl_dict:
                 # split the output into the different keys
                 out = {}
                 for i, key in enumerate(info[1]['keys']):
@@ -245,7 +285,7 @@ if __name__ == '__main__':
 
                 return out, info
             
-            elif attribute in CLASS_functions_class_6:
+            elif attribute in CLASS_functions_list_string_in_dict_out:
                 # split the output into the different keys
                 out = {}
                 for i, key in enumerate(info[1]['keys']):
@@ -264,14 +304,10 @@ if __name__ == '__main__':
             # This function reads the original output of the CLASS code and transforms it into the OLE format. 
             # It might give extra information about the transformation such as shape etc...
 
-            if attribute in CLASS_functions_class_1:
+            if attribute in CLASS_functions_no_in_float_out:
                 return np.array([res]), None
             
-            elif attribute in CLASS_functions_class_2:
-                out = np.hstack([res[0],res[1]])
-                return out, None
-            
-            elif attribute in CLASS_functions_class_3:
+            elif attribute in CLASS_functions_no_in_array_out:
                 # save shape of the output
                 res_shape = res.shape
 
@@ -280,17 +316,34 @@ if __name__ == '__main__':
 
                 return res, {'shape': res_shape}
             
-            elif attribute in CLASS_functions_class_4:
+            elif attribute in CLASS_functions_no_in_tuple_out:
+                out = np.hstack([res[0],res[1]])
+                return out, None
+            
+            elif attribute in CLASS_functions_array_in_tuple_out:
+                out = np.hstack([res[0],res[1]])
+                return out, None
+            
+            elif attribute in CLASS_functions_array_in_array_out:
+                # save shape of the output
+                res_shape = res.shape
+
+                # flatten the output
+                res = res.flatten()
+
+                return res, {'shape': res_shape}
+            
+            elif attribute in CLASS_functions_any_in_flaot_out:
                 return np.array([res]), None
             
-            elif attribute in CLASS_functions_class_5:
+            elif attribute in CLASS_functions_Cl_dict:
                 info = {'keys': list(res.keys()), 'max_l': max(res['ell'])}
                 # flatten the out
                 res = np.hstack([res[key] for key in info['keys']])
 
                 return res, info
             
-            elif attribute in CLASS_functions_class_6:
+            elif attribute in CLASS_functions_list_string_in_dict_out:
                 info = {'keys': list(res.keys())}
                 res = np.array([res[key] for key in info['keys']])
 
