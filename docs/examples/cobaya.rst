@@ -41,8 +41,8 @@ For efficiency reasons it is recommended to use `oversampling` in the early burn
 However, once the emulator is trained, the inference pipeline should be run without oversampling since the runtime of the emulator is much faster than the runtime of the likelihood.
 By default cobaya will meassure the runtime of each component and adjust the oversampling accordingly, which does not work for OLE which is slow in the beginning but becomes very fast once trained.
 
-Further efficiency can be gained by running the emulator in parrallel via MPI. Note however, that the runtime will be dominated by the likelihood (usually when you use for example Planck likelihoods etc.).
-Since they are not well parrallelized, it is recommended to use many chains but only with 1-2 cores per MPI task. OLE will use a shared cache for all chains in order to be as data efficient as possible.
+Further efficiency can be gained by running the emulator in parallel via MPI. Note however, that the runtime will be dominated by the likelihood (usually when you use for example Planck likelihoods etc.).
+Since they are not well parallelized, it is recommended to use many chains but only with 1-2 cores per MPI task. OLE will use a shared cache for all chains in order to be as data efficient as possible. For this, ensure you have installed ``mpi4py``.
 
 When using the Cobaya interface with cosmological codes, such as CAMB or CLASS, we require a specific way of importing the interface. You find this in the examples directory of the OLE repository.
 

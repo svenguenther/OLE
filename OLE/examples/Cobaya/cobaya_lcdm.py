@@ -206,21 +206,26 @@ info = {
 # run MCMC
 updated_info, sampler = cobaya.run(info)
 
-
+getdist_available = False
 # make some nice triangle plot
-import getdist.plots as gdplt
-import getdist
+try:
+    import getdist.plots as gdplt
+    import getdist
+    getdist_available = True
+except:
+    print('getdist not installed, no analysis done')
 
-gdplot = gdplt.get_subplot_plotter()
+if getdist_available:
+    gdplot = gdplt.get_subplot_plotter()
 
-# load samples from ./chains
-samples = getdist.loadMCSamples('chains/test_1', settings={'ignore_rows': 0.1})
+    # load samples from ./chains
+    samples = getdist.loadMCSamples('chains/test_1', settings={'ignore_rows': 0.1})
 
-# make triangle plot
-gdplot.triangle_plot(samples, ['h', 'logA', 'n_s', 'omega_b', 'omega_cdm', 'tau_reio', 'A_planck'], filled=True)
+    # make triangle plot
+    gdplot.triangle_plot(samples, ['h', 'logA', 'n_s', 'omega_b', 'omega_cdm', 'tau_reio', 'A_planck'], filled=True)
 
-# store figure
-gdplot.export('triangle_plot.png')
+    # store figure
+    gdplot.export('triangle_plot.png')
 
 
 

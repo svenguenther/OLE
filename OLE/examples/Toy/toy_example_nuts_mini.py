@@ -190,6 +190,13 @@ chain = my_sampler.chain
 
 # make corner
 import numpy as np
-import corner
-fig = corner.corner(np.array(chain))
-plt.savefig('corner_nuts.png')
+corner_installed = False
+try:
+    import corner
+    corner_installed = True
+except:
+    print("Package 'corner' not install, skipping plot")
+
+if corner_installed:
+    fig = corner.corner(np.array(chain))
+    plt.savefig('corner_nuts.png')

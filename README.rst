@@ -17,7 +17,7 @@ It follows combines the idea of emulating computationally expensive codes with t
 
 * A explicit likelihood is available
 
-* The dimensionality of the theory code does not exceed about 20
+* The dimensionality of the theory code input does not exceed about 20
 
 
 
@@ -38,9 +38,16 @@ Installation
 To install OLÉ run::
 
     git clone git@github.com:svenguenther/OLE.git
-    pip install ./OLE
+    cd OLE
+    pip install .
 
-If you plan to use OLE with MontePython, you should change the variable ``MP_path`` in ``OLE/interfaces/montepython_interface.py`` to redirect to your ``MontePython/montepython`` directory.
+While not a strict requirement, ``mpi4py`` is recommended for running multiple parallel chains. You can either install this manually, or by installing OLÉ with
+
+    pip install .[MPI]
+
+If you plan to make modifications to OLÉ, it is recommended to install OLÉ in editable mode by including the ``-e`` flag when pip installing.
+
+If you plan to use OLE with MontePython, you should change the contents of the file ``MP_PATH`` in ``OLE/interfaces/`` to redirect to your ``MontePython`` directory.
 
 Documentation
 -------------
@@ -51,7 +58,7 @@ The documentation is available at `ReadTheDocs <https://ole.readthedocs.io>`_.
 Examples
 -------------
 
-Examples on the different features cam be found in the `example directory <https://github.com/svenguenther/OLE/tree/main/OLE/examples>`_. 
+Examples on the different features cas be found in the `example directory <https://github.com/svenguenther/OLE/tree/main/OLE/examples>`_. 
 
 .. image:: https://github.com/svenguenther/OLE/raw/main/docs/logos/TTK_logo.png
    :alt: RWTH Aachen

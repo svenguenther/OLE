@@ -16,7 +16,7 @@ You can use the MontePython interface in the same way as you would use MontePyth
 This allows you to use the MontePython interface in the same way as you would use MontePython. 
 Note however, that the interface is developed for MontePython v3.6.0 and might not work with other versions.
 
-The param_file are the same as in MontePython, with the exception that you can now also use the emulator settings in the param file.
+The param_file has the same format as in MontePython, with the exception that you can now also use the emulator settings in the parameter file.
 This might look like this ::
 
     ...

@@ -155,9 +155,7 @@ data.emulator_settings['working_directory'] = './MontePython_test_Planck2018'
 # data.emulator_settings['testset_fraction'] = 0.1
 
 data.emulator_settings['logfile'] = 'logfile'
-
 data.emulator_settings['min_variance_per_bin'] = 1e-4
-
 data.emulator_settings['skip_emulation_quantities'] = ['bb','tp','pp','T_cmb', 'ell']
 
 # accuracy parameters for loglike:
