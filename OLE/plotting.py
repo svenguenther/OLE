@@ -11,7 +11,7 @@ import copy
 
 plot_format = "png"
 
-COLUMN_WIDTH_INCH = 3.464
+COLUMN_WIDTH_INCHES = 3.464
 
 
 def set_plot_style():
