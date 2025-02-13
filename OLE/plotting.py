@@ -3,12 +3,54 @@ Plotting
 """
 
 import matplotlib.pyplot as plt
+from matplotlib import rc
 import numpy as np
 import gc
 import jax.numpy as jnp
 import copy
 
 plot_format = "png"
+
+COLUMN_WIDTH_INCH = 3.464
+
+
+def set_plot_style():
+    """
+    Sets the plotting style. Important to unify things across figures and machines and generally makes plots prettier.
+    Thank you to Federico Bianchini for this template!
+    """
+    # rc('font',**{'family':'sans-serif','sans-serif':['Helvetica']})
+    # plt.rcParams.update({
+    # "text.usetex": True,
+    # "font.family": "serif"
+    # })
+    rc("text", usetex=True)
+    # rc('font',**{'family':'sans-serif','sans-serif':['Helvetica']})
+    # plt.rcParams['font.family'] = 'sans-serif'
+    # plt.rcParams['font.sans-serif'] = ['Tahoma']
+    # plt.rcParams['mathtext.fontset'] = 'cm'
+    # rc('font',**{'family':'sans-serif'})#,'dejavuserif':['Computer Modern']})
+    # plt.rcParams["mathtext.fontset"] = "dejavuserif"
+    plt.rcParams["axes.linewidth"] = 1.5
+    plt.rcParams["axes.labelsize"] = 10
+    plt.rcParams["axes.titlesize"] = 12
+    plt.rcParams["xtick.labelsize"] = 8  # 12
+    plt.rcParams["ytick.labelsize"] = 8  # 12
+    plt.rcParams["xtick.major.size"] = 4  # 7
+    plt.rcParams["ytick.major.size"] = 4  # 7
+    plt.rcParams["xtick.minor.size"] = 2  # 4
+    plt.rcParams["ytick.minor.size"] = 2  # 4
+    plt.rcParams["legend.fontsize"] = 10
+    plt.rcParams["legend.frameon"] = False
+
+    plt.rcParams["xtick.major.width"] = 1
+    plt.rcParams["ytick.major.width"] = 1
+    plt.rcParams["xtick.minor.width"] = 1
+    plt.rcParams["ytick.minor.width"] = 1
+    plt.clf()
+    plt.close()
+    # sns.set(rc('font',**{'family':'serif','serif':['Computer Modern']}))
+    # sns.set_style("ticks", {'figure.facecolor': 'grey'})
 
 
 def covmat_diagonal_plot(covmat, title, file_name):
@@ -293,7 +335,9 @@ def plot_pca_components_test_set(true, pred, pred_std, err_tol, title, file_name
     plt.figure()
     plt.grid()
     plt.title(title)
-    plt.errorbar(true, true - pred, yerr=pred_std, fmt="o", label="Prediction and total error")
+    plt.errorbar(
+        true, true - pred, yerr=pred_std, fmt="o", label="Prediction and total error"
+    )
     plt.errorbar(true, true - pred, yerr=err_tol, fmt="o", label="White Noise Level")
     plt.legend()
     plt.xlabel("True")
@@ -350,7 +394,7 @@ def plot_prediction_test(
             fmt="o",
             label="White Noise",
         )
-        
+
         ax[0].errorbar([0], true * norm_factor, fmt="o", label="True")
 
         # plot masked residuals
@@ -368,7 +412,6 @@ def plot_prediction_test(
             fmt="o",
             label="White Noise",
         )
-        
 
         # plot masked residuals
         ax[2].errorbar(
@@ -406,7 +449,7 @@ def plot_prediction_test(
             (prediction + err_tol) * norm_factor * mask,
             alpha=0.5,
             label="White Noise",
-        )        
+        )
         ax[0].plot(range(len(true[0])), true[0] * norm_factor, label="True")
 
         # make residuals
@@ -435,7 +478,13 @@ def plot_prediction_test(
             range(len(true[0])), (true[0] - prediction) * mask / std, label="Residuals"
         )
         ax[2].fill_between(range(len(true[0])), -1, 1, alpha=0.5, label="1$\sigma$")
-        ax[2].fill_between(range(len(true[0])), -err_tol/std, err_tol/std, alpha=0.5, label="White Noise")
+        ax[2].fill_between(
+            range(len(true[0])),
+            -err_tol / std,
+            err_tol / std,
+            alpha=0.5,
+            label="White Noise",
+        )
 
     ax[2].set_xlabel("Data index")
     ax[0].set_ylabel("Prediction")
