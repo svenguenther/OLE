@@ -19,7 +19,7 @@ These settings are independent of the sampling method.
      - ``1000``
      - Maximum size of stored training data points. If more data points are to be added, the one with the smallest loglikelihood is removed.
    * - ``min_data_points``
-     - ``60``
+     - ``80``
      - Number of minimal states in the cache before the emulator can be trained. This is an important parameter. If it is selected too small, the emulator will require too many retrainings. If too large, the initial data collection phase of OLE is unnecessary long.
    * - ``cache_file``
      - ``cache.pkl``
@@ -37,7 +37,7 @@ These settings are independent of the sampling method.
      - ``None``
      - As an alternative to the ``delta_loglike`` we can compute an educated guess for this parameter by computing the delta loglike of a gaussian distribution of dimension ``dimenstionality`` from its best fit point to ``N_sigma``. Thus, if the posterior would be gaussian, points in the cache would lay inside a ``N_sigma`` contour but all points outside would be classifies as outlier. If no ``dimenstionality`` is given ``delta_loglike`` is used. Imporant for eficiency!
    * - ``N_sigma``
-     - ``4.0``
+     - ``3.0``
      - See ``dimensionality``. Important parameter for efficiency.
 
 
@@ -51,10 +51,10 @@ These parameters are used to specify the PCA compression of the data.
      - default
      - description
    * - ``min_variance_per_bin``
-     - ``5e-5``
+     - ``5e-6``
      - The level of compression of each observable is determined by the number of PCA components. Therefore, we increase the number of PCA components until the explained variance per bin times the bin size exceeds the parameters value. The value of ``1e-4`` can be interpreted in a way that for each observable the systematic uncertainty due to insufficient projection of the PCA will lead to a relative error (of the normalized observables) of ``1e-2``. Thus, it is a maximal achievable precision of the emulator. If it is selected too large an error message appears that indicates possible biases. Here we can directly trade between speed and accuracy. For highly correlated quantities it is adviseable to reduce this number by 1-2 magnitudes! This is an important parameter.
    * - ``max_output_dimensions``
-     - ``30``
+     - ``40``
      - The maximal number of PCA components. Unlikely to exceed that
    * - ``data_covmat_directory``
      - ``None``
@@ -144,7 +144,7 @@ Uncertainty qualification related to the precision criterium of the emulator and
      - The emulator should only be used in the vicinity of the best-fit where it is trained. If the loglike is far away (like during burn-in) it should not be used.
    * - ``N_quality_samples``   
      - ``5``
-     - Number of samples which are drawn from the emulator to estimate the performance of the emulator. The runtime is about linear in that parameter! From this number of samples we compute the mean loglikelihood $m$  and its standard deviation $\sigma_m$. In general we want the emulator to be very precise at the best fit point with its loglikelihood $b$ and less accurate for points more away. We accept the prediction of the emulator if $\sigma_m < \mathrm{quality.threshold.constant} +  \mathrm{quality.threshold.linear}*(b-m) +  \mathrm{quality.threshold.quadratic} * (b-m)^2 $
+     - Number of samples which are drawn from the emulator to estimate the performance of the emulator. The runtime is about linear in that parameter! From this number of samples we compute the mean loglikelihood $m$  and its standard deviation $\sigma_m$. In general we want the emulator to be very precise at the best fit point with its loglikelihood $b$ and less accurate for points more away. We accept the prediction of the emulator if $$\sigma_m < \mathrm{quality.threshold.constant} +  \mathrm{quality.threshold.linear}*(b-m) +  \mathrm{quality.threshold.quadratic} * (b-m)^2 $$
    * - ``quality_threshold_constant``
      - ``0.1``
      - See ``N_quality_samples``
@@ -153,6 +153,18 @@ Uncertainty qualification related to the precision criterium of the emulator and
      - See ``N_quality_samples``. Note that this factor can be reformulated in a precision criterium of your confidence bounds (for a gaussian distribution). If we set this factor to ``0.01`` the emulator can estimate the position of the N sigma contour to a precision of ``N*0.01``.
    * - ``quality_threshold_quadratic``
      - ``0.0001``
+     - See ``N_quality_samples``. In general we want the quadratic term to be state the absolute ignorance outside the relevant parameter space. To provide you with a better handle this parameter is overwritten if one provides values for ``dimensionality`` and ``N_sigma``. In this case, the contribution of ``quality_threshold_quadratic`` starts to dominate over the constant and linear term exactly at ``N_sigma``.
+   * - ``burn_in_trigger``
+     - ``100``
+     - During the burn-in of the MCMC the emulator should not yet deploy the high accuracy settings since it needs to wait for all cahins to leave burn-in. Thus, we deploy reduced precision settings. It will switched to high accuracy when there are ``burn_in_trigger`` consecutive points inside the ``max_sigma`` region.
+   * - ``quality_threshold_constant_early``
+     - ``1.0``
+     - See ``N_quality_samples``
+   * - ``quality_threshold_linear_early``
+     - ``0.3``
+     - See ``N_quality_samples``. Note that this factor can be reformulated in a precision criterium of your confidence bounds (for a gaussian distribution). If we set this factor to ``0.01`` the emulator can estimate the position of the N sigma contour to a precision of ``N*0.01``.
+   * - ``quality_threshold_quadratic_early``
+     - ``0.001``
      - See ``N_quality_samples``. In general we want the quadratic term to be state the absolute ignorance outside the relevant parameter space. To provide you with a better handle this parameter is overwritten if one provides values for ``dimensionality`` and ``N_sigma``. In this case, the contribution of ``quality_threshold_quadratic`` starts to dominate over the constant and linear term exactly at ``N_sigma``.
    * - ``quality_points_radius``
      - ``0.0``
@@ -188,8 +200,11 @@ Other:
      - ``True``
      - Flag if we want to use 'jax.jit' to accelerate the emulator by just-in-time compilation.
    * - ``jit_threshold``
-     - ``20``
+     - ``60``
      - Using 'jit' gives a small overhead due to compiling the code. In the early phase when there are a lot of new data points it can be ineffcient to do that every time. Thus, we can wait for a certain number of successful emulator calls until we jit the emulator.
+   * - ``check_cache_for_new_points``
+     - ``1000``
+     - Every ``check_cache_for_new_points`` emulator calls the cache is checked for new points. If new points are found the emulator is retrained. This is important if the emulator is used in a MCMC where the emulator is called multiple times for the same point. If the emulator is used in a MCMC it is recommended to set this to a large number.
 
 
 Debugging. Very recommended when investigating a new problem:

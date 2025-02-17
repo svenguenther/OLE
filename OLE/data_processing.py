@@ -68,11 +68,13 @@ class data_processor(BaseClass):
 
         defaulthyperparameters = {
             # explained variance cutoff is the minimum explained variance which is required for the PCA compression. Once this value is reached, the PCA compression is stopped.
-            "min_variance_per_bin": 3e-6,
+            "min_variance_per_bin": 5e-6,
             # this should also inform the error of the GPs to remain consistent. Or alternatively since we specify error params,
             # those might also set this parameter
             # maximal number of dimensions of the compressed data
             "max_output_dimensions": 40,
+            # however, this number has to be smaller than the min_data_points
+            "min_data_points": 80,
             # working directory
             "working_directory": './',
             # plotting directory
@@ -123,6 +125,10 @@ class data_processor(BaseClass):
 
         self.input_data_normalized = None
         self.output_data_normalized = None
+
+        # check if 'max_output_dimensions' is smaller than 'min_data_points'
+        if self.hyperparameters["max_output_dimensions"] > self.hyperparameters["min_data_points"]:
+            self.hyperparameters["max_output_dimensions"] = self.hyperparameters["min_data_points"]
 
         pass
 
@@ -176,6 +182,9 @@ class data_processor(BaseClass):
         n_eigenvalues = min(
             self.hyperparameters["max_output_dimensions"], self.output_size
         )
+
+        # ensure that we got enough data points to perform the PCA
+        n_eigenvalues = min(n_eigenvalues, self.output_data_normalized.shape[0])
 
         # use PCA of Scipy to calculate the eigenvectors and eigenvalues
         pca = skd.PCA(n_components=n_eigenvalues)

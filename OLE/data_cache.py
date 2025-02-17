@@ -67,7 +67,7 @@ class DataCache(BaseClass):
             # It should prevent the cache from storing states which are outliers.
             "delta_loglike": 50,
             # learn about the actual emulation task to estimate the 'delta_loglike'.
-            "N_sigma": 4,
+            "N_sigma": 3.0,
             "dimensionality": None,  # if we give the dimensionality, the code estimates 'delta_loglike' to ensure that all data cache points are within N_sigma of the likelihood.
         }
 
@@ -415,7 +415,7 @@ class TestCache(BaseClass):
             # It should prevent the cache from storing states which are outliers.
             "delta_loglike": 50,
             # learn about the actual emulation task to estimate the 'delta_loglike'.
-            "N_sigma": 4,
+            "N_sigma": 3.0,
             "dimensionality": None,  # if we give the dimensionality, the code estimates 'delta_loglike' to ensure that all data cache points are within N_sigma of the likelihood.
         }
 

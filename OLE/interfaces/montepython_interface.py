@@ -240,7 +240,7 @@ if __name__ == '__main__':
             return super().__getattribute__(name)
         
         def transform_from_OLE_to_CLASSY(self, attribute, res, info):
-            # This function reads the original output of the CLASS code and transforms it into the OLE format. 
+            # This function reads the original output of the OLE code and transforms it into the CLASS format. 
             # It might give extra information about the transformation such as shape etc...
 
             if attribute in CLASS_functions_no_in_float_out:
