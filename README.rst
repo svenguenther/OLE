@@ -41,7 +41,7 @@ To install OLÉ run::
     cd OLE
     pip install .
 
-While not a strict requirement, ``mpi4py`` is recommended for running multiple parallel chains. You can either install this manually, or by installing OLÉ with
+While not a strict requirement, ``mpi4py`` is recommended for running multiple parallel chains. You can either install this manually, or by installing OLÉ with::
 
     pip install .[MPI]
 
