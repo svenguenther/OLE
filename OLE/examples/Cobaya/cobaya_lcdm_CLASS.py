@@ -1,69 +1,11 @@
 # This is an example of a cobaya runfile for a simple LCDM model.
 #
-
-
-
-
 import importlib
 import importlib.util
 import sys
 import os
 
-# Since we would like to use hte cobaya intrinsic 'boltzmannbase' theory, we need to adapt the source code of the cobaya intrinsic 'boltzmannbase' theory to use the OLE theory interface.
-# 
-# For all other cases, e.g. we define our own cobaya - Theory class, we can use the OLE theory interface directly.
-# We do this by replacing "from cobaya.theory import Theory" by "from OLE.interfaces.cobaya_interface import Theory
-
-spec = importlib.util.find_spec('cobaya.theories.cosmo.boltzmannbase', 'cobaya')
-source = spec.loader.get_source('cobaya.theories.cosmo.boltzmannbase')
-
-# write replace function to let boltzmannbase not import 'from cobaya.theory import Theory', but 'from OLE.theory import Theory'
-def replace(source):
-    source = source.replace("from cobaya.theory import Theory", "from OLE.interfaces.cobaya_interface import Theory")
-    return source
-
-source = replace(source)
-module = importlib.util.module_from_spec(spec)
-codeobj = compile(source, module.__spec__.origin, 'exec')
-exec(codeobj, module.__dict__)
-sys.modules['cobaya'].theories.cosmo.boltzmannbase = module
-
-import cobaya 
-cobaya.theories.cosmo.boltzmannbase = module
-importlib.reload(cobaya)
-
-
-
-
-# Additionally, due to some incompatibility of the logging systems, we do need to manually silence some of the logging output of the jax and matplotlib libraries.
-import logging
-logger = logging.getLogger('root')
-logger.disabled = True
-logger = logging.getLogger('jax._src.dispatch')
-logger.disabled = True
-logger = logging.getLogger('jax._src.compiler')
-logger.disabled = True
-logger = logging.getLogger('jax.experimental.host_callback')
-logger.disabled = True
-logger = logging.getLogger('jax._src.xla_bridge')
-logger.disabled = True
-logger = logging.getLogger('jax._src.interpreters.pxla')
-logger.disabled = True
-logger = logging.getLogger('matplotlib.font_manager')
-logger.disabled = True
-logger = logging.getLogger('jax._src.interpreters.pxla')
-logger.disabled = True
-
-
-
-
-
-
-
-
-
-
-
+from OLE.interfaces.cobaya_interface import *
 
 
 # Define your default info dictionary of cobaya.
@@ -98,22 +40,18 @@ info = {
                     "non linear": "halofit",
                     "lensing":"yes",
                     "compute damping scale":"yes",
-                    'N_ncdm' : 1,
-                    'm_ncdm' : 0.06,
-                    'T_ncdm' : 0.71611,
-                    'N_ur': 2.0328,
-                    # "N_ur": 3.044,
+                    # 'N_ncdm' : 1,
+                    # 'm_ncdm' : 0.06,
+                    # 'T_ncdm' : 0.71611,
+                    # 'N_ur': 2.0328,
+                    "N_ur": 3.044,
                 },
                 'emulate' : True, 
                 'ignore_obsolete': True,
 
                 'emulator_settings': {
                     # directory to store the emulator files
-                    'working_directory': './chains_emulator/',
-
-                    # load the cache from previous runs if possible. If set to false, the cache is overwritten.
-                    'load_cache': True,
-                    'share_cache': True,
+                    'working_directory': 'chains_emulator',
 
                     # accuracy parameters for loglike:
                     'quality_threshold_constant': 0.1,
@@ -187,7 +125,7 @@ info = {
             # However, in the later stages (actually the time consuming ones), the runtime will be dominated by the runtime of the likelihood. In those cases we lose efficiency by oversampling.
             "oversample_power": 0.0, 
             "proposal_scale":2.1,
-            "Rminus1_stop": 0.01,
+            "Rminus1_stop": 0.001,
             "max_tries": 24000,
             "covmat": os.path.expanduser("./lcdm.covmat"),
             },

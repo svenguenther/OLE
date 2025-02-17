@@ -18,6 +18,55 @@ global CAMB_flag_to_skip_CAMB_transfers
 EMULATOR_UPDATED_FLAG = False
 CAMB_flag_to_skip_CAMB_transfers = False # This ugly flag because CAMB is split into 2 theory codes...
 
+try:
+    import importlib
+    import importlib.util
+    import sys
+
+    # Since we would like to use hte cobaya intrinsic 'boltzmannbase' theory, we need to adapt the source code of the cobaya intrinsic 'boltzmannbase' theory to use the OLE theory interface.
+    # 
+    # For all other cases, e.g. we define our own cobaya - Theory class, we can use the OLE theory interface directly.
+    # We do this by replacing "from cobaya.theory import Theory" by "from OLE.interfaces.cobaya_interface import Theory
+
+    spec = importlib.util.find_spec('cobaya.theories.cosmo.boltzmannbase', 'cobaya')
+    source = spec.loader.get_source('cobaya.theories.cosmo.boltzmannbase')
+
+    # write replace function to let boltzmannbase not import 'from cobaya.theory import Theory', but 'from OLE.theory import Theory'
+    def replace(source):
+        source = source.replace("from cobaya.theory import Theory", "from OLE.interfaces.cobaya_interface import Theory")
+        return source
+
+    source = replace(source)
+    module = importlib.util.module_from_spec(spec)
+    codeobj = compile(source, module.__spec__.origin, 'exec')
+    exec(codeobj, module.__dict__)
+    sys.modules['cobaya'].theories.cosmo.boltzmannbase = module
+
+    import cobaya 
+    cobaya.theories.cosmo.boltzmannbase = module
+    importlib.reload(cobaya)
+
+    # Additionally, due to some incompatibility of the logging systems, we do need to manually silence some of the logging output of the jax and matplotlib libraries.
+    import logging
+    logger = logging.getLogger('root')
+    logger.disabled = True
+    logger = logging.getLogger('jax._src.dispatch')
+    logger.disabled = True
+    logger = logging.getLogger('jax._src.compiler')
+    logger.disabled = True
+    logger = logging.getLogger('jax.experimental.host_callback')
+    logger.disabled = True
+    logger = logging.getLogger('jax._src.xla_bridge')
+    logger.disabled = True
+    logger = logging.getLogger('jax._src.interpreters.pxla')
+    logger.disabled = True
+    logger = logging.getLogger('matplotlib.font_manager')
+    logger.disabled = True
+    logger = logging.getLogger('jax._src.interpreters.pxla')
+    logger.disabled = True
+except:
+    print("Could not replace the cobaya.theory import. This is not a problem if you are not using the boltzmannbase theory.")
+
 
 def check_cache_and_compute(self, params_values_dict,
                                 dependency_params=None, want_derived=False, cached=True):
@@ -35,7 +84,7 @@ def check_cache_and_compute(self, params_values_dict,
     params_values_dict can be safely modified and stored.
     """
     if (self._name == 'camb.transfers') and CAMB_flag_to_skip_CAMB_transfers:
-        self._current_state = {'params': {}, 'derived': {}}
+        self._current_state = {'params': {}, 'derived': {}, 'results': {}}
         return True
     
     # This is a flag which is used when we want to compute the delta_loglikelihood for the emulator
@@ -323,7 +372,7 @@ def test_emulator(self,emulator_state):
         self.emulator.start("likelihood")
         reference_loglike = sum(self.provider.model._loglikes_input_params(self.provider.params, cached = False, return_derived = False))
         self.emulator.increment("likelihood")
-        
+
         # check whether the emulator is good enough
         if not self.emulator.check_quality_criterium(emulator_sample_loglikes, parameters=emulator_state['parameters'], reference_loglike = reference_loglike):
             return False, None
@@ -407,7 +456,16 @@ def metropolis_accept(self, logp_trial, logp_current):
     #     EMULATOR_UPDATED_FLAG = False
     #     print("FORCES ACCEPT!")
     #     return True
-    
+
+    if self.current_point.weight >51:
+        if logp_trial == -np.inf:
+            return False
+        else:
+            self.current_point.weight = 0.1
+            return True
+
+
+
     if logp_trial == -np.inf:
         return False
     if logp_trial > logp_current:

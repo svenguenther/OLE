@@ -555,7 +555,7 @@ def plot_parameter(logfile_paths, parameter, plot_dir='./', min_index=0, max_ind
     ax.scatter([event['index'] for event in adding_events], [event['parameter_values'][event['parameter_names'].index(parameter)] for event in adding_events], label="CLASS call added to cache", color="black", s=10, marker="x", zorder=15)
 
     # plot yellow dot for not using events
-    ax.scatter([event['index'] for event in not_using_events], [event['parameter_values'][event['parameter_names'].index(parameter)] for event in not_using_events], label="Run CLASS for outlier", color="yellow", s=10)
+    ax.scatter([event['index'] for event in not_using_events], [event['parameter_values'][event['parameter_names'].index(parameter)] for event in not_using_events], label="Run CLASS for outlier", color="purple", s=10)
 
     # plot blue dot for running events
     ax.scatter([event['index'] for event in running_events], [event['parameter_values'][event['parameter_names'].index(parameter)] for event in running_events], label="Using emulator without testing", color="blue", s=3)
@@ -564,7 +564,7 @@ def plot_parameter(logfile_paths, parameter, plot_dir='./', min_index=0, max_ind
     ax.scatter([event['index'] for event in successfully_evaluating_events], [event['parameter_values'][event['parameter_names'].index(parameter)] for event in successfully_evaluating_events], label="Using emulator with testing", color="green", s=3)
 
     # plot red dot for unsuccessfully evaluating events
-    ax.scatter([event['index'] for event in unsuccessfully_evaluating_events], [event['parameter_values'][event['parameter_names'].index(parameter)] for event in unsuccessfully_evaluating_events], label="Testing of emulator failed", color="red", s=3)
+    ax.scatter([event['index'] for event in unsuccessfully_evaluating_events], [event['parameter_values'][event['parameter_names'].index(parameter)] for event in unsuccessfully_evaluating_events], label="Testing of emulator failed", color="red", s=7)
     
     ax.set_xlabel("Step")
     ax.set_ylabel(parameter)
