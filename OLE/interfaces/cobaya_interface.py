@@ -457,7 +457,7 @@ def metropolis_accept(self, logp_trial, logp_current):
     #     print("FORCES ACCEPT!")
     #     return True
 
-    if self.current_point.weight >51:
+    if self.current_point.weight >420:
         if logp_trial == -np.inf:
             return False
         else:
