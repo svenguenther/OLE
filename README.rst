@@ -58,7 +58,7 @@ The documentation is available at `ReadTheDocs <https://ole.readthedocs.io>`_.
 Examples
 -------------
 
-Examples on the different features cas be found in the `example directory <https://github.com/svenguenther/OLE/tree/main/OLE/examples>`_. 
+Examples on the different features can be found in the `example directory <https://github.com/svenguenther/OLE/tree/main/OLE/examples>`_. 
 
 .. |ttk| image:: https://github.com/svenguenther/OLE/raw/main/docs/logos/TTK_logo.png
    :alt: RWTH Aachen
