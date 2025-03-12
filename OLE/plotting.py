@@ -19,12 +19,9 @@ def set_plot_style():
     Sets the plotting style. Important to unify things across figures and machines and generally makes plots prettier.
     Thank you to Federico Bianchini for this template!
     """
-    # rc('font',**{'family':'sans-serif','sans-serif':['Helvetica']})
-    # plt.rcParams.update({
-    # "text.usetex": True,
-    # "font.family": "serif"
-    # })
-    rc("text", usetex=True)
+    rc("font", **{"family": "sans-serif", "sans-serif": ["Helvetica"]})
+    plt.rcParams.update({"text.usetex": True, "font.family": "serif"})
+    # rc("text", usetex=True)
     # rc('font',**{'family':'sans-serif','sans-serif':['Helvetica']})
     # plt.rcParams['font.family'] = 'sans-serif'
     # plt.rcParams['font.sans-serif'] = ['Tahoma']

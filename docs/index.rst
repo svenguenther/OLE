@@ -30,6 +30,7 @@
    examples/quickstart
    examples/cobaya
    examples/montepython
+   examples/NUTS
 
 .. toctree::
    :hidden:
