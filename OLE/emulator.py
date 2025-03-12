@@ -463,7 +463,7 @@ class Emulator(BaseClass):
         if (self.hyperparameters['max_sigma'] == 0.0) and self.trained:
             state_added = False
         else:
-            state_added = self.data_cache.add_state(new_state)
+            state_added = self.data_cache.add_state(new_state, self.trained)
 
         if state_added:
             # write to log that the state was added

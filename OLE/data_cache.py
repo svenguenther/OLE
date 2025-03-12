@@ -69,6 +69,14 @@ class DataCache(BaseClass):
             # learn about the actual emulation task to estimate the 'delta_loglike'.
             "N_sigma": 3.0,
             "dimensionality": None,  # if we give the dimensionality, the code estimates 'delta_loglike' to ensure that all data cache points are within N_sigma of the likelihood.
+        
+            # maximal (over-)contribtuion of each chain to the initial training set.
+            # We would like that all chains add a few data points to the initial training such that we are not biased by a single chain.
+            # However, we cannot really wait for all chains to overcome the burn-in in time. 
+            # Therefore, we allow each chain to contribute 'initial_training_data_fraction_per_chain' times it 'min_data_points'/number_of_chains to the initial training set.
+            'initial_training_data_fraction_per_chain': 2.0,
+
+            'min_data_points': 80, # we need this for the computation of the max states per chain
         }
 
         self.hyperparameters = defaulthyperparameters
@@ -129,6 +137,8 @@ class DataCache(BaseClass):
         pass
 
     def initialize(self, ini_state):
+        # add rank to the state
+        ini_state["rank"] = get_mpi_rank()
         self.states.append(ini_state)
 
     def check_for_new_points(self):
@@ -145,11 +155,16 @@ class DataCache(BaseClass):
             return False
 
 
-    def add_state(self, new_state):
+    def add_state(self, new_state, emulator_trained=False):
+        # if we are in the initial phase (thus, the emulator is not trained yet) we need to ensure that not too many states from the same worker are added to the cache
+
         # update cache
         if self.hyperparameters["load_cache"]:
             if os.path.exists(os.path.join(self.hyperparameters["working_directory"], self.hyperparameters["cache_file"])):
                 self.load_cache()
+
+        # add MPI rank to state
+        new_state["rank"] = get_mpi_rank()
 
         # check if delta loglike is exceeded
         # returns True if the state is added to the cache, False otherwise
@@ -194,6 +209,24 @@ class DataCache(BaseClass):
                         self.states.pop(i)  #
                         break
 
+        # check if my worker is overrepresented in the cache
+        if not emulator_trained:
+            N_max_per_worker = int(self.hyperparameters["initial_training_data_fraction_per_chain"] * self.hyperparameters["min_data_points"] / get_mpi_size())
+            N_per_worker = 0
+            indices = []
+            for i, state in enumerate(self.states):
+                if state["rank"] == get_mpi_rank():
+                    N_per_worker += 1
+                    indices.append(i)
+                    
+            # print("My rank is %d, N_max_per_worker is %d and there are %d points from me" % (get_mpi_rank(), N_max_per_worker, N_per_worker))
+            if N_per_worker >= N_max_per_worker:
+                self.debug("Worker %d is overrepresented in the cache" % get_mpi_rank())
+
+                # we will now pop a random state of the same worker
+                i = np.random.choice(indices)
+                self.states.pop(i)
+                return False
 
         self.debug("Added state to cache: %s", new_state["parameters"])
 
