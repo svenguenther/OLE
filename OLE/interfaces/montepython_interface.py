@@ -765,6 +765,9 @@ if __name__ == '__main__':
             if len(cosmo.emulator.data_cache.states) >= cosmo.emulator.hyperparameters['min_data_points']:
                 cosmo.emulator.train()
 
+                # change the sampling method to 'global' sampling to accelerate the MCMC itself :)
+                data.jumping = 'global'
+
 
         return loglike/data.command_line.temperature
 
