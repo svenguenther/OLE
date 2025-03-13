@@ -68,10 +68,59 @@ except:
     print("Could not replace the cobaya.theory import. This is not a problem if you are not using the boltzmannbase theory.")
 
 
+
+EMULATOR_INITIALLY_TRAINED_FLAG = False
+from cobaya.samplers.mcmc.proposal import BlockedProposer
+# The 'emulator_settings' key is a dictionary which contains the settings for the emulator. If not given the default settings are used which can be found in the corresponding OLE python files.
+def OLE_callback_function(self):
+    global EMULATOR_INITIALLY_TRAINED_FLAG
+    if EMULATOR_INITIALLY_TRAINED_FLAG:
+        sampled_params_list = list(self.model.parameterization.sampled_params())
+        blocks_indices = [[sampled_params_list.index(p) for p in b] for b in self.blocks]
+        # append all lists to one
+        blocks_indices = [item for sublist in blocks_indices for item in sublist]
+        self.blocks = tuple([[sampled_params_list[i] for i in blocks_indices]])
+        self.oversampling_factors = [1]
+
+        self.drag = False
+
+        self.proposer = BlockedProposer(
+                [blocks_indices], self._rng,
+                oversampling_factors=self.oversampling_factors,
+                i_last_slow_block=(self.i_last_slow_block if self.drag else None),
+                proposal_scale=self.proposal_scale)
+        
+        self.set_proposer_initial_covmat(load=True)
+
+        self.cycle_length = sum(len(b) * o for b, o in
+                                    zip([blocks_indices], self.oversampling_factors))
+
+        if self.oversample_thin:
+            self.current_point.output_thin = int(
+                np.round(
+                    sum(
+                        len(b) * o for b, o in zip(
+                            self.blocks,
+                            self.oversampling_factors,
+                        )
+                    ) / self.model.prior.d()
+                )
+            )        
+
+        for number in self._quants_d_units:
+            number.set_scale(self.cycle_length // self.current_point.output_thin)
+
+        EMULATOR_INITIALLY_TRAINED_FLAG = False
+
+
+
+
+
 def check_cache_and_compute(self, params_values_dict,
                                 dependency_params=None, want_derived=False, cached=True):
     global CAMB_flag_to_skip_CAMB_transfers
     global EMULATOR_UPDATED_FLAG
+    global EMULATOR_INITIALLY_TRAINED_FLAG
     for param in params_values_dict.keys():
         self.theory_params[param] = params_values_dict[param]
 
@@ -264,6 +313,7 @@ def check_cache_and_compute(self, params_values_dict,
                         # force_acceptance = True # OLD
                         self.emulator.train()
                         EMULATOR_UPDATED_FLAG = True
+                        EMULATOR_INITIALLY_TRAINED_FLAG = True
 
                         self.log.info("Emulator trained")
 
