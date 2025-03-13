@@ -327,7 +327,7 @@ class DataCache(BaseClass):
                         N_per_worker += 1
                         indices.append(i)
 
-                print('I am rank %d, N_max_per_worker is %d and there are %d points from me' % (get_mpi_rank(), N_max_per_worker, N_per_worker))
+                # print('I am rank %d, N_max_per_worker is %d and there are %d points from me' % (get_mpi_rank(), N_max_per_worker, N_per_worker))
 
                 # print("My rank is %d, N_max_per_worker is %d and there are %d points from me" % (get_mpi_rank(), N_max_per_worker, N_per_worker))
                 if N_per_worker > N_max_per_worker:
