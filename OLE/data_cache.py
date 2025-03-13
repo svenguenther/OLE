@@ -209,30 +209,11 @@ class DataCache(BaseClass):
                         self.states.pop(i)  #
                         break
 
-        # check if my worker is overrepresented in the cache
-        if not emulator_trained:
-            N_max_per_worker = int(self.hyperparameters["initial_training_data_fraction_per_chain"] * self.hyperparameters["min_data_points"] / get_mpi_size())
-            N_per_worker = 0
-            indices = []
-            for i, state in enumerate(self.states):
-                if state["rank"] == get_mpi_rank():
-                    N_per_worker += 1
-                    indices.append(i)
-                    
-            # print("My rank is %d, N_max_per_worker is %d and there are %d points from me" % (get_mpi_rank(), N_max_per_worker, N_per_worker))
-            if N_per_worker >= N_max_per_worker:
-                self.debug("Worker %d is overrepresented in the cache" % get_mpi_rank())
-
-                # we will now pop a random state of the same worker
-                i = np.random.choice(indices)
-                self.states.pop(i)
-                return False
-
         self.debug("Added state to cache: %s", new_state["parameters"])
 
         # if there exists a chache file, store the cache in the file
         if os.path.exists(os.path.join(self.hyperparameters["working_directory"], self.hyperparameters["cache_file"])):
-            self.synchronize_to_cache(new_state)
+            self.synchronize_to_cache(new_state, emulator_trained=emulator_trained)
         else:
             # add a state to the cache
             self.states.append(new_state)
@@ -304,7 +285,7 @@ class DataCache(BaseClass):
 
         self.debug("Stored cache in file: %s", os.path.join(self.hyperparameters["working_directory"], self.hyperparameters["cache_file"]))
 
-    def synchronize_to_cache(self, new_state):
+    def synchronize_to_cache(self, new_state, emulator_trained=False):
         # This function reads the old states from the cache file, adds the new state and stores the new states in the cache file.
         # This is useful if we want to store the cache from different processes.
 
@@ -334,6 +315,36 @@ class DataCache(BaseClass):
                 ):
                     # remove index from mask
                     valid_indices.append(i)
+
+
+            # check if my worker is overrepresented in the cache
+            if not emulator_trained:
+                N_max_per_worker = int(self.hyperparameters["initial_training_data_fraction_per_chain"] * self.hyperparameters["min_data_points"] / get_mpi_size())
+                N_per_worker = 0
+                indices = []
+                for i, state in enumerate(old):
+                    if state["rank"] == get_mpi_rank():
+                        N_per_worker += 1
+                        indices.append(i)
+
+                print('I am rank %d, N_max_per_worker is %d and there are %d points from me' % (get_mpi_rank(), N_max_per_worker, N_per_worker))
+
+                # print("My rank is %d, N_max_per_worker is %d and there are %d points from me" % (get_mpi_rank(), N_max_per_worker, N_per_worker))
+                if N_per_worker > N_max_per_worker:
+                    self.debug("Worker %d is overrepresented in the cache" % get_mpi_rank())
+
+                    # we will now pop a random state of the same worker
+                    i = np.random.choice(indices)
+
+                    # check that i is not by chance the state with max loglike
+                    if i == np.argmax([state["total_loglike"][0] for state in old]):
+                        self.debug("Popped state with max loglike")
+                        indices.remove(i) 
+                        i = np.random.choice(indices)
+                    
+                    if i in valid_indices:
+                        valid_indices.remove(i)
+
 
             # keep valid states
             old = [old[i] for i in valid_indices]
