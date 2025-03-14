@@ -765,10 +765,11 @@ if __name__ == '__main__':
             if len(cosmo.emulator.data_cache.states) >= cosmo.emulator.hyperparameters['min_data_points']:
                 cosmo.emulator.train()
 
-                # change the sampling method to 'global' sampling to accelerate the MCMC itself :)
-                data.jumping = 'global'
 
-
+        if (data.jumping != 'global') and (cosmo.emulator.rejit_flag_emulator==False):
+            # change the sampling method to 'global' sampling to accelerate the MCMC itself :)
+            data.jumping = 'global'
+                
         return loglike/data.command_line.temperature
 
     # replace sampler.compute_lkl by compute_lkl_OLE
