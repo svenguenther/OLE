@@ -24,6 +24,7 @@ MP_path_filepath = os.path.join(interface_path, 'MP_PATH')
 with open(MP_path_filepath, 'r') as file:
     MP_path = file.read().rstrip()
     MP_path = os.path.join(MP_path,'montepython')
+    print("Loaded MP_PATH = ",MP_path)
 
 # MP_path = '/home/path/to/montepython_public'
 
@@ -513,8 +514,9 @@ if __name__ == '__main__':
         if data.cosmological_module_name == 'CLASS':
             try:
                 classy_path = ''
-                for elem in os.listdir(os.path.join(
-                        data.path['cosmo'], "python", "build")):
+                path_a = os.path.join(data.path['cosmo'],"python","build")
+                path_b = os.path.join(data.path['cosmo'],"build")
+                for elem in os.listdir(path_a if os.path.isdir(path_a) else path_b):
                     if elem.find("lib.") != -1:
                         classy_path = os.path.join(
                             data.path['cosmo'], "python", "build", elem)
@@ -750,6 +752,11 @@ if __name__ == '__main__':
             initial_state['total_loglike'] = np.array([loglike])
 
             from OLE.emulator import Emulator
+            data.emulator_settings.update({
+                       'dimensionality':len(data.get_mcmc_parameters(['varying'])),
+                       'working_directory':data.command_line.folder,
+                       'logfile':os.path.basename(data.command_line.folder)})
+            print("OLE emulator settings: ",data.emulator_settings)
             cosmo.emulator = Emulator(**data.emulator_settings)
             cosmo.emulator.initialize(ini_state=initial_state, **data.emulator_settings)
 
