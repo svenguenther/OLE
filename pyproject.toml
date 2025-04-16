@@ -22,13 +22,14 @@ requires-python = ">=3.10"
 
 dependencies = [
 "numpy",
-"jax",
-"jaxlib",
+"jax==0.4.27",
+"jaxlib==0.4.27",
 "tqdm",
 "gpjax == 0.9.3",
+"flax==0.10.1",
 "scipy",
 "pytreeclass",
-"jaxtyping",
+"jaxtyping==0.2.37",
 "fasteners",
 "emcee",
 "matplotlib",
