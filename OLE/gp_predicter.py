@@ -382,19 +382,9 @@ class GP_predictor(BaseClass):
         if (
             (self.hyperparameters["plotting_directory"] is not None)
             and (self.hyperparameters["testset_fraction"] is not None)
-            # and (get_mpi_rank() == 0)
+            and (get_mpi_rank() == 0)
         ):
             self.run_tests()
-            self.testset_errors = jnp.zeros((self.num_GPs, self.GPs[0].test_D.n))
-            for i in range(self.num_GPs):
-                for j in range(self.GPs[0].test_D.n):
-                    self.testset_errors = self.testset_errors.at[i, j].set(self.GPs[i].test_D.y[j][0] - self.GPs[i].testset_means[j])
-
-            # save the testset errors as a numpy array
-            np.save(
-                os.path.join(self.hyperparameters['working_directory'], self.hyperparameters["plotting_directory"], "testset_errors_" + self.quantity_name + ".npy"),
-                self.testset_errors,
-            )
 
         pass
 
@@ -455,21 +445,9 @@ class GP_predictor(BaseClass):
         if (
             (self.hyperparameters["plotting_directory"] is not None)
             and (self.hyperparameters["testset_fraction"] is not None)
-            # and (get_mpi_rank() == 0)
+            and (get_mpi_rank() == 0)
         ):
             self.run_tests()
-            
-            self.testset_errors = jnp.zeros((self.num_GPs, self.GPs[0].test_D.n))
-            for i in range(self.num_GPs):
-                for j in range(self.GPs[0].test_D.n):
-                    self.testset_errors = self.testset_errors.at[i, j].set(self.GPs[i].test_D.y[j][0] - self.GPs[i].testset_means[j])
-
-            # save the testset errors as a numpy array
-            np.save(
-                os.path.join(self.hyperparameters['working_directory'], self.hyperparameters["plotting_directory"], "testset_errors_" + self.quantity_name + ".npy"),
-                self.testset_errors,
-            )
-
         pass
 
     def train_single_GP(self, input_data, output_data):
@@ -630,7 +608,7 @@ class GP(BaseClass):
             self.num_max = self.hyperparameters["max_num_iters"]
 
         # if we have a test fraction, then we will split the data into a training and a test set
-        if (self.hyperparameters["testset_fraction"] is not None) and (get_mpi_rank() == 0):
+        if (self.hyperparameters["testset_fraction"] is not None):
             self.debug("Splitting data into training and test set")
             np.random.seed(0)
             train_indices, test_indices = np.split(

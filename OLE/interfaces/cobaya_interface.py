@@ -213,7 +213,7 @@ def check_cache_and_compute(self, params_values_dict,
                 self.log.debug("Re-using computed results")
                 self._states.remove(_state)
                 break
-    if not state:
+    if not state: 
         successful_emulation = False
         if self.emulate and (self.emulator is not None):
             # try to emulate a state
@@ -298,7 +298,6 @@ def check_cache_and_compute(self, params_values_dict,
 
                 # Be aware! This is recursive! Thus, we need to flag this out
                 self.skip_theory_state_from_emulator = state
-
                 likelihoods = list(self.provider.model._loglikes_input_params(self.provider.params, cached=False, return_derived = False))
 
                 emulator_state['total_loglike'] = np.array([sum(likelihoods)])
@@ -321,7 +320,7 @@ def check_cache_and_compute(self, params_values_dict,
 
     # transform each element in state["params"] to a float. Otherwise the cache wont work.
     for key, value in state["params"].items():
-        state["params"][key] = float(value)
+        state["params"][key] = np.array(value)
 
     # make this state the current one
     try:
@@ -330,7 +329,7 @@ def check_cache_and_compute(self, params_values_dict,
         _ = state # we do this try because of CAMB FORTRAN things
 
     self._states.appendleft(_)
-    self._current_state = state
+    self._current_state = _
 
     if EMULATOR_UPDATED_FLAG:
         # delete cache
@@ -399,15 +398,22 @@ def test_emulator(self,emulator_state):
         # compute the likelihoods
         emulator_sample_loglikes = []
         self.emulator.start("likelihood_testing")
-        for emulator_sample_state in emulator_sample_states:
+        for i, emulator_sample_state in enumerate(emulator_sample_states):
 
             # Translate the emulator state to the cobaya state
             cobaya_sample_state = translate_emulator_state_to_cobaya_state(self._current_state, emulator_sample_state)
 
             # Be aware! This is recursive! Thus, we need to flag this out
             self.skip_theory_state_from_emulator = cobaya_sample_state
-            likelihoods = list(self.provider.model._loglikes_input_params(self.provider.params, cached = False, return_derived = False))
+
+            params_local = copy.deepcopy(self.provider.params)
+            for para, value in params_local.items():
+                params_local[para] = value*(1.0 + 1e-5*(i+1))
+
+
+            likelihoods = list(self.provider.model._loglikes_input_params(params_local, cached = False, return_derived = False))
             emulator_sample_loglikes.append(sum(likelihoods))
+
 
         emulator_sample_loglikes = np.array(emulator_sample_loglikes)
         self.emulator.increment("likelihood_testing")
@@ -473,7 +479,6 @@ def evaluate_cobaya_pipeline(self,state):
 
     return state
 
-
 # give the theory class the new attribute
 Theory.emulate = False
 Theory.emulator = None
@@ -523,7 +528,7 @@ def metropolis_accept(self, logp_trial, logp_current):
     posterior_ratio = (logp_current - logp_trial) / self.temperature
     return self._rng.standard_exponential() > posterior_ratio
 
-MCMC.metropolis_accept = metropolis_accept
+# MCMC.metropolis_accept = metropolis_accept
 
 #
 #  Auxiliary functions
