@@ -35,7 +35,7 @@ These settings are independent of the sampling method.
      - This parameter discriminates between relevant data points for the cache or outliers. Therefore, all states in the cache with a loglikelihood smaller that the maximum loglikelihood in the cache minus ``delta_loglike`` are to be removed since they are classified as outlier. If ``N_sigma`` and ``dimensionality`` is set, this parameter is omitted. In general it is better to give ``N_sigma`` and ``dimensionality``!
    * - ``dimensionality``
      - ``None``
-     - As an alternative to the ``delta_loglike`` we can compute an educated guess for this parameter by computing the delta loglike of a gaussian distribution of dimension ``dimenstionality`` from its best fit point to ``N_sigma``. Thus, if the posterior would be gaussian, points in the cache would lay inside a ``N_sigma`` contour but all points outside would be classifies as outlier. If no ``dimenstionality`` is given ``delta_loglike`` is used. Imporant for eficiency!
+     - As an alternative to the ``delta_loglike`` we can compute an educated guess for this parameter by computing the delta loglike of a gaussian distribution of dimension ``dimenstionality`` from its best fit point to ``N_sigma``. Thus, if the posterior would be gaussian, points in the cache would lay inside a ``N_sigma`` contour but all points outside would be classifies as outlier. If no ``dimenstionality`` is given ``delta_loglike`` is used. Imporant for efficiency! When using MontePython or Cobaya, it will be automaticially set!
    * - ``N_sigma``
      - ``3.0``
      - See ``dimensionality``. Important parameter for efficiency.
@@ -183,7 +183,7 @@ Other:
      - description
    * - ``working_directory``
      - ``./``
-     - This will be the default directory in which all emulator related files are stored. The cache file, the emulator file, the training data and the log file.
+     - This will be the default directory in which all emulator related files are stored. The cache file, the emulator file, the training data and the log file. If using MontePython or Cobaya, this directory is set to the output directory (if not stated otherwise).
    * - ``emulator_state_file``
      - ``emulator_state.pkl``
      - This is the file the current state of the emulator is stored in. This involves normalization, PCA and GP-kernel parameters.

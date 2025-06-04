@@ -156,6 +156,17 @@ def check_cache_and_compute(self, params_values_dict,
     if self.emulate:
         # force_acceptance = False # OLD
         if self.emulator is None:
+
+            # read out cobaya settings to update OLE settings 
+            # output
+            if 'working_directory' not in self.emulator_settings.keys():
+                global GLOBAL_COBAYA_OUTPUT_DIRECTORY
+                self.emulator_settings['working_directory'] = GLOBAL_COBAYA_OUTPUT_DIRECTORY
+
+            # get the number of total varied parameters
+            if 'dimensionality' not in self.emulator_settings.keys():
+                self.emulator_settings['dimensionality'] = len(self.provider.model.parameterization.sampled_params())
+
             # if self.emulator_settings has the key, 'load_initial_state', we can load the initial state from the emulator
             if 'load_initial_state' in self.emulator_settings.keys():
                 if self.emulator_settings['load_initial_state']:
@@ -407,8 +418,8 @@ def test_emulator(self,emulator_state):
             self.skip_theory_state_from_emulator = cobaya_sample_state
 
             params_local = copy.deepcopy(self.provider.params)
-            for para, value in params_local.items():
-                params_local[para] = value*(1.0 + 1e-5*(i+1))
+            # for para, value in params_local.items():
+            #     params_local[para] = value*(1.0 + 1.e-5*(i+1))
 
 
             likelihoods = list(self.provider.model._loglikes_input_params(params_local, cached = False, return_derived = False))
@@ -621,3 +632,20 @@ def translate_emulator_state_to_cobaya_state(old_cobaya_state, emulator_state):
 
 
     return old_cobaya_state
+
+
+
+
+# Weird Hack to obtain direcory of Cobaya
+from cobaya.sampler import Sampler
+from cobaya.output import OutputDummy, Output
+
+global GLOBAL_COBAYA_OUTPUT_DIRECTORY
+
+@property
+def output(self) -> Output:
+    global GLOBAL_COBAYA_OUTPUT_DIRECTORY
+    GLOBAL_COBAYA_OUTPUT_DIRECTORY = self._output.folder
+    return self._output
+
+Sampler.output = output

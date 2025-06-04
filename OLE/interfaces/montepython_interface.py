@@ -750,6 +750,15 @@ if __name__ == '__main__':
             initial_state['total_loglike'] = np.array([loglike])
 
             from OLE.emulator import Emulator
+
+            # check if 'working_directory' is set in the data.emulator_settings
+            if 'working_directory' not in data.emulator_settings.keys():
+                data.emulator_settings['working_directory'] = data.command_line.folder
+
+            # check if dimensionality set in the data.emulator_settings
+            if 'dimensionality' not in data.emulator_settings.keys():
+                data.emulator_settings['dimensionality'] = len(data.get_mcmc_parameters(['varying']))
+
             cosmo.emulator = Emulator(**data.emulator_settings)
             cosmo.emulator.initialize(ini_state=initial_state, **data.emulator_settings)
 
