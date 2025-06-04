@@ -15,7 +15,6 @@ from OLE.interfaces.cobaya_interface import *
 
 # The 'emulate' key is a boolean which states if the theory should be emulated or not.
 
-# The 'emulator_settings' key is a dictionary which contains the settings for the emulator. If not given the default settings are used which can be found in the corresponding OLE python files.
 info = {
     
         "likelihood": {
@@ -30,8 +29,6 @@ info = {
             "sn.pantheon": {},
         },
 
-
-
         "theory": {
             "classy": {
                 "extra_args": {
@@ -40,32 +37,23 @@ info = {
                     "non linear": "halofit",
                     "lensing":"yes",
                     "compute damping scale":"yes",
-                    # 'N_ncdm' : 1,
-                    # 'm_ncdm' : 0.06,
-                    # 'T_ncdm' : 0.71611,
-                    # 'N_ur': 2.0328,
-                    "N_ur": 3.044,
+                    'N_ncdm' : 1,
+                    'm_ncdm' : 0.06,
+                    'T_ncdm' : 0.71611,
+                    'N_ur': 2.0328,
+                    # "N_ur": 3.044,
                 },
                 'emulate' : True, 
                 'ignore_obsolete': True,
 
                 'emulator_settings': {
-                    # directory to store the emulator files
-                    'working_directory': 'chains_emulator',
-
                     # accuracy parameters for loglike:
                     'quality_threshold_constant': 0.1,
                     'quality_threshold_linear': 0.05,
 
-                    # number of sampled parameters. Here we have 6 cosmological parameters and 21 Planck parameters
-                    'dimensionality': 27,
-
-                    # plotting directory. Uncomment to create plots.
+                    # plotting directory. Uncomment for debugging and to create plots.
                     # 'plotting_directory': 'plots',
                     # 'testset_fraction': 0.1,
-
-                    # name of the logfile
-                    'logfile': 'logfile',
 
                     # veto to predict following quantities. 
                     # The emulator does not know intrinsicially which parameters are expected to be computed since it is build based upon a general cobaya state.
@@ -119,15 +107,12 @@ info = {
         },
     "sampler": { 
         "mcmc": {
-            "drag":False,
-            "learn_proposal": True,
-            # oversampling is an interesting topic. When using the emulator it is nice to have oversampling during the initial burn-in phase.
-            # However, in the later stages (actually the time consuming ones), the runtime will be dominated by the runtime of the likelihood. In those cases we lose efficiency by oversampling.
-            "oversample_power": 0.0, 
-            "proposal_scale":2.1,
-            "Rminus1_stop": 0.001,
-            "max_tries": 24000,
+            "Rminus1_stop": 0.01,
             "covmat": os.path.expanduser("./lcdm.covmat"),
+
+            # This function automaticially switches off oversampling once the emulator is trained.
+            "callback_function": OLE_callback_function,
+            "callback_every": 1,
             },
         },
         'output': 'chains_emulator/test_class',

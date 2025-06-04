@@ -42,14 +42,6 @@ info = {
                 'ignore_obsolete': True,
 
                 'emulator_settings': {
-                    'min_data_points': 60,
-
-                    # the input parameters of the emulator
-                    'working_directory': data_dir+'/OLE_exercices/chains_emulator/output',
-
-                    'N_sigma': 4,
-                    'dimensionality': 27, # the number of total parameters (nuisance + cosmological). The exact number is not required to match but the magntidue is important to optimze OLE.
-
                     # accuracy parameters for loglike:
                     'quality_threshold_constant': 1.0,
                     'quality_threshold_linear': 0.1,
@@ -57,8 +49,6 @@ info = {
                     # uncommend for some nice debugging plots (makes OLE very slow)
                     # 'plotting_directory': data_dir+'/OLE_exercices/plots',
                     # 'testset_fraction': 0.1,
-
-                    'logfile': 'logfile',
 
                     # veto to predict following quantities. 
                     # The emulator does not know intrinsicially which parameters are expected to be computed since it is build based upon a general cobaya state.
@@ -106,20 +96,8 @@ info = {
 
     "sampler": { 
         "mcmc": {
-            'Rminus1_cl_stop': 0.2,
-                      'Rminus1_stop': 0.01,
-                      "learn_proposal": True,
-                      #'covmat': '/home/guenther/software/projects/OLE/OLE/OLE/examples/Cobaya/lcdm_CAMB.covmat',
-                      'drag': False,
-                      "measure_speeds": True,
-
-                      # YOU NEED TO MANUALY SET BLOCKING WHEN USING CAMB. Otherwise the emulator will not work.
-                      'blocking': [ [1, ['ombh2', 'omch2', 'tau', 'H0', 'logA', 'ns']], 
-                                    [1, ['A_planck', 'calib_100T', 'calib_217T', 'A_cib_217', 'xi_sz_cib', 'A_sz', 'ksz_norm', 'gal545_A_100', 'gal545_A_143', 'gal545_A_143_217', 'gal545_A_217', 'ps_A_100_100', 'ps_A_143_143', 'ps_A_143_217', 'ps_A_217_217', 'galf_TE_A_100', 'galf_TE_A_100_143', 'galf_TE_A_100_217', 'galf_TE_A_143', 'galf_TE_A_143_217', 'galf_TE_A_217']]],
-                      
-                      'proposal_scale': 1.9,
-                      'output_every': 1
-      
+            # YOU NEED TO MANUALY SET BLOCKING WHEN USING CAMB. Otherwise the emulator will not work.
+            'blocking': [ [1, ['ombh2', 'omch2', 'tau', 'H0', 'logA', 'ns', 'A_planck', 'calib_100T', 'calib_217T', 'A_cib_217', 'xi_sz_cib', 'A_sz', 'ksz_norm', 'gal545_A_100', 'gal545_A_143', 'gal545_A_143_217', 'gal545_A_217', 'ps_A_100_100', 'ps_A_143_143', 'ps_A_143_217', 'ps_A_217_217', 'galf_TE_A_100', 'galf_TE_A_100_143', 'galf_TE_A_100_217', 'galf_TE_A_143', 'galf_TE_A_143_217', 'galf_TE_A_217']]],
             },
         },
         'output': data_dir+'/OLE_exercices/chains_emulator/CAMB',

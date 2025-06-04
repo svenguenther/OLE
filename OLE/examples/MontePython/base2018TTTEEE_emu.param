@@ -49,8 +49,8 @@ data.over_sampling=[1, 5]
 
 # Cosmological parameters list
 
-data.parameters['omega_b']      = [  2.2377,   None, None,      0.015, 0.01, 'cosmo']
-data.parameters['omega_cdm']    = [ 0.12010,   None, None,     0.0013,    1, 'cosmo']
+data.parameters['omega_b']      = [  2.2377,   None, None,      0.15, 0.01, 'cosmo']
+data.parameters['omega_cdm']    = [ 0.12010,   None, None,     0.013,    1, 'cosmo']
 data.parameters['100*theta_s']  = [ 1.04110,   None, None,    0.00030,    1, 'cosmo']
 data.parameters['ln10^{10}A_s'] = [  3.0447,   None, None,      0.015,    1, 'cosmo']
 data.parameters['n_s']          = [  0.9659,   None, None,     0.0042,    1, 'cosmo']
@@ -137,29 +137,16 @@ data.cosmo_arguments['P_k_max_h/Mpc'] = 1.
 #------ Mcmc parameters ----
 
 data.N=10000
-data.write_step=5
+data.write_step=10
 
 #------ Emulator parameters ----
-data.emulator_settings['min_data_points'] = 80
-
-# load the cache from previous runs if possible. If set to false, the cache is overwritten.
-data.emulator_settings['load_cache'] = True
-data.emulator_settings['share_cache'] = True
-
-# directory to store the emulator files
-data.emulator_settings['working_directory'] = './MontePython_test_Planck2018'
-
 
 # plotting directory. Uncomment to create plots.
 # data.emulator_settings['plotting_directory'] = 'OLE_plots'
 # data.emulator_settings['testset_fraction'] = 0.1
 
-data.emulator_settings['logfile'] = 'logfile'
-data.emulator_settings['min_variance_per_bin'] = 1e-4
 data.emulator_settings['skip_emulation_quantities'] = ['bb','tp','pp','T_cmb', 'ell']
 
 # accuracy parameters for loglike:
 data.emulator_settings['quality_threshold_constant'] = 0.1
-data.emulator_settings['quality_threshold_linear'] = 0.01
-data.emulator_settings['N_sigma'] = 4.0
-data.emulator_settings['dimensionality'] = 27
+data.emulator_settings['quality_threshold_linear'] = 0.1
