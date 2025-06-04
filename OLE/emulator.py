@@ -101,7 +101,7 @@ class Emulator(BaseClass):
             'skip_emulation_quantities': None,
 
             # logfile for emulator
-            'logfile': None,
+            'logfile': 'logfile_OLE',
 
             # Load initial state from cache. Usually, before we can use the emulator we need to have a state in the cache to determine the dimensionality of the quantities.
             # However, if we have a state in the cache, we can load the initial state from the cache. And not a single theory call has to be made.
@@ -601,6 +601,8 @@ class Emulator(BaseClass):
 
             emulator_state['quantities'][quantity]["quantity_mean"] = emulator.data_processor.output_means
             emulator_state['quantities'][quantity]["quantity_std"] = emulator.data_processor.output_stds
+            emulator_state['quantities'][quantity]["const_data_positions"] = emulator.data_processor.const_data_positions
+            emulator_state['quantities'][quantity]["const_data_values"] = emulator.data_processor.const_data_values
             emulator_state['quantities'][quantity]["PCA"] = emulator.data_processor.projection_matrix
             emulator_state['quantities'][quantity]["mean_PCA"] = emulator.data_processor.output_pca_means
             emulator_state['quantities'][quantity]["std_PCA"] = emulator.data_processor.output_pca_stds
@@ -758,6 +760,8 @@ class Emulator(BaseClass):
             emulator.data_processor.input_stds = emulator_state["parameter_std"]
             emulator.data_processor.output_means = emulator_state['quantities'][quantity]["quantity_mean"]
             emulator.data_processor.output_stds = emulator_state['quantities'][quantity]["quantity_std"]
+            emulator.data_processor.const_data_positions = emulator_state['quantities'][quantity]["const_data_positions"]
+            emulator.data_processor.const_data_values = emulator_state['quantities'][quantity]["const_data_values"]
             emulator.data_processor.projection_matrix = emulator_state['quantities'][quantity]["PCA"]
             emulator.data_processor.output_pca_means = emulator_state['quantities'][quantity]["mean_PCA"]
             emulator.data_processor.output_pca_stds = emulator_state['quantities'][quantity]["std_PCA"]

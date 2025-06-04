@@ -124,7 +124,7 @@ class GP_predictor(BaseClass):
         )
 
         # Then we denormalize the output data.
-        output_data = self.data_processor.denormalize_data(output_data_normalized)
+        output_data = self.data_processor.denormalize_data(jnp.array([output_data_normalized]))[0]
 
         return output_data
     
@@ -177,7 +177,7 @@ class GP_predictor(BaseClass):
             output_data_compressed
         )
 
-        output_data = self.data_processor.denormalize_data(output_data_normalized)
+        output_data = self.data_processor.denormalize_data(jnp.array([output_data_normalized]))[0]
 
         return output_data
 
@@ -191,7 +191,7 @@ class GP_predictor(BaseClass):
             output_data_compressed
         )
 
-        output_data = self.data_processor.denormalize_data(output_data_normalized)
+        output_data = self.data_processor.denormalize_data(jnp.array([output_data_normalized]))[0]
 
         return output_data[index]
 
@@ -237,7 +237,7 @@ class GP_predictor(BaseClass):
         )
 
         # Then we denormalize the output data.
-        output_data = self.data_processor.denormalize_data(output_data_normalized)
+        output_data = self.data_processor.denormalize_data(jnp.array([output_data_normalized]))[0]
         output_std = self.data_processor.denormalize_std(output_std_normalized)
         output_err_tol = self.data_processor.denormalize_std(output_err_tol_normalized)
 

@@ -170,6 +170,11 @@ class data_processor(BaseClass):
         else:
             self.output_stds = jnp.std(self.output_data_raw, axis=0)
 
+        # there are some cases in which the stds are 0, e.g. if the data is constant.
+        # Those positions with the corresponding data values are stored and later applied whenever the data is denormalized
+        self.const_data_positions = jnp.where(self.output_stds == 0)[0]
+        self.const_data_values = self.output_means[self.const_data_positions]
+
         # set all stds which are 0 to 1
         self.input_stds = jnp.where(self.input_stds == 0, 1, self.input_stds)
         self.output_stds = jnp.where(self.output_stds == 0, 1, self.output_stds)
@@ -352,6 +357,12 @@ class data_processor(BaseClass):
             output_data_raw = (
                 output_data_normalized * self.output_stds + self.output_means
             )
+
+        const_data_values_broadcasted = jnp.tile(self.const_data_values, (output_data_raw.shape[0], 1))
+
+        output_data_raw = output_data_raw.at[:, self.const_data_positions].set(
+            const_data_values_broadcasted
+        )
 
         return output_data_raw
     
